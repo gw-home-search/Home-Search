@@ -1,0 +1,2880 @@
+{
+  "formatVersion": 1,
+  "datasets": [
+    {
+      "logicalDatabase": "property",
+      "schema": "news",
+      "table": "region_month_signal_import_run",
+      "columns": [
+        "id",
+        "source_kind",
+        "method_version",
+        "dataset_tier",
+        "input_path",
+        "row_count",
+        "snapshot_upsert_count",
+        "evidence_upsert_count",
+        "status",
+        "failure_reason",
+        "started_at",
+        "finished_at",
+        "created_at"
+      ],
+      "keyColumns": [
+        "id"
+      ],
+      "chunkKey": "id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 10,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_footprint_snapshot",
+      "columns": [
+        "id",
+        "pnu",
+        "building_name",
+        "dong_name",
+        "main_purps_cd",
+        "source_building_key",
+        "centroid_lat",
+        "centroid_lng",
+        "geom",
+        "source",
+        "snapshot_version",
+        "created_at",
+        "updated_at"
+      ],
+      "keyColumns": [
+        "id"
+      ],
+      "chunkKey": "id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 20,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_register_collection_campaign",
+      "columns": [
+        "collection_id",
+        "mode",
+        "strategy",
+        "from_complex_id",
+        "to_complex_id",
+        "status",
+        "created_at",
+        "completed_at",
+        "purpose",
+        "target_scope",
+        "selection_seed",
+        "sample_size"
+      ],
+      "keyColumns": [
+        "collection_id"
+      ],
+      "chunkKey": "collection_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 30,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "event_outbox",
+      "columns": [
+        "event_id",
+        "topic_name",
+        "event_type",
+        "schema_version",
+        "occurred_at",
+        "producer",
+        "aggregate_type",
+        "aggregate_id",
+        "aggregate_version",
+        "correlation_id",
+        "causation_id",
+        "trace_id",
+        "payload",
+        "published_at",
+        "attempt_count",
+        "next_attempt_at",
+        "last_error",
+        "created_at"
+      ],
+      "keyColumns": [
+        "event_id"
+      ],
+      "chunkKey": "event_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 40,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "legal_dong_code_import",
+      "columns": [
+        "import_id",
+        "effective_date",
+        "source_sha256",
+        "source_name",
+        "status",
+        "row_count",
+        "created_at",
+        "completed_at"
+      ],
+      "keyColumns": [
+        "import_id"
+      ],
+      "chunkKey": "import_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 50,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "market_news_article",
+      "columns": [
+        "article_id",
+        "provider",
+        "canonical_url_hash",
+        "public_url",
+        "title",
+        "provided_at",
+        "first_seen_at",
+        "last_seen_at",
+        "created_at"
+      ],
+      "keyColumns": [
+        "article_id"
+      ],
+      "chunkKey": "article_id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 60,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "market_news_collection_execution",
+      "columns": [
+        "execution_id",
+        "request_id",
+        "execution_type",
+        "policy_version",
+        "scheduled_at",
+        "overlap_cutoff",
+        "state",
+        "call_budget",
+        "call_count",
+        "planned_work_unit_count",
+        "completed_work_unit_count",
+        "truncated_work_unit_count",
+        "failed_work_unit_count",
+        "skipped_budget_work_unit_count",
+        "raw_item_count",
+        "article_count",
+        "relation_count",
+        "bootstrap_truncated",
+        "started_at",
+        "completed_at",
+        "failure_kind",
+        "created_at"
+      ],
+      "keyColumns": [
+        "execution_id"
+      ],
+      "chunkKey": "execution_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 70,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "market_news_quality_review_set",
+      "columns": [
+        "review_set_id",
+        "policy_version",
+        "status",
+        "sampled_at",
+        "total_sample_count",
+        "minimum_category_count",
+        "covered_sido_count",
+        "direct_complex_count",
+        "same_dong_count",
+        "same_sigungu_count",
+        "complex_challenge_count",
+        "url_sample_count",
+        "source_snapshot_captured_at",
+        "source_snapshot_count"
+      ],
+      "keyColumns": [
+        "review_set_id"
+      ],
+      "chunkKey": "review_set_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 80,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "odcloud_pnu_prefix_alias",
+      "columns": [
+        "id",
+        "canonical_prefix",
+        "source_prefix",
+        "status",
+        "reason",
+        "requested_by",
+        "requested_at",
+        "approved_by",
+        "approved_at",
+        "disabled_by",
+        "disabled_at",
+        "created_at",
+        "updated_at"
+      ],
+      "keyColumns": [
+        "id"
+      ],
+      "chunkKey": "id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 90,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "parcel_coordinate_override",
+      "columns": [
+        "id",
+        "pnu",
+        "apt_seq",
+        "apt_name",
+        "address_text",
+        "latitude",
+        "longitude",
+        "source",
+        "confidence",
+        "status",
+        "reason",
+        "source_payload",
+        "approved_by",
+        "approved_at",
+        "created_at",
+        "updated_at"
+      ],
+      "keyColumns": [
+        "id"
+      ],
+      "chunkKey": "id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 100,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "region",
+      "columns": [
+        "id",
+        "parent_id",
+        "code",
+        "name",
+        "region_type",
+        "center_lat",
+        "center_lng",
+        "created_at",
+        "updated_at",
+        "unit_cnt_sum"
+      ],
+      "keyColumns": [
+        "id"
+      ],
+      "chunkKey": "id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 110,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "rtms_collection_execution",
+      "columns": [
+        "execution_id",
+        "collection_mode",
+        "scope_type",
+        "run_date",
+        "state",
+        "planned_work_unit_count",
+        "started_at",
+        "completed_at",
+        "failure_reason"
+      ],
+      "keyColumns": [
+        "execution_id"
+      ],
+      "chunkKey": "execution_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 120,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "rtms_ingest_run",
+      "columns": [
+        "id",
+        "lawd_cd",
+        "deal_ymd",
+        "status",
+        "page_count",
+        "read_count",
+        "raw_saved_count",
+        "normalized_inserted_count",
+        "duplicate_skipped_count",
+        "match_failed_count",
+        "parse_failed_count",
+        "failure_reason",
+        "started_at",
+        "completed_at",
+        "created_at",
+        "canceled_skipped_count",
+        "execution_correlation_id"
+      ],
+      "keyColumns": [
+        "id"
+      ],
+      "chunkKey": "id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 130,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "news",
+      "table": "region_month_signal_snapshot",
+      "columns": [
+        "id",
+        "region_bucket",
+        "signal_month",
+        "source_kind",
+        "method_version",
+        "dataset_tier",
+        "news_count",
+        "matched_news_count",
+        "direct_evidence_count",
+        "inherited_evidence_count",
+        "policy_positive_score",
+        "policy_negative_score",
+        "redevelopment_score",
+        "transport_score",
+        "supply_risk_score",
+        "sale_market_score",
+        "rental_market_score",
+        "price_up_signal",
+        "price_down_signal",
+        "confidence",
+        "aggregate_note",
+        "import_run_id",
+        "created_at",
+        "updated_at"
+      ],
+      "keyColumns": [
+        "id"
+      ],
+      "chunkKey": "id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 140,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_register_endpoint_snapshot",
+      "columns": [
+        "id",
+        "collection_id",
+        "pnu",
+        "endpoint",
+        "run_date",
+        "page_size",
+        "attempt_no",
+        "status",
+        "total_count",
+        "started_at",
+        "completed_at"
+      ],
+      "keyColumns": [
+        "id"
+      ],
+      "chunkKey": "id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 150,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_register_profile_code_lookup",
+      "columns": [
+        "id",
+        "collection_id",
+        "import_id",
+        "request_id",
+        "original_pnu",
+        "candidate_pnu",
+        "old_result",
+        "new_result",
+        "comparison_status",
+        "old_management_key_hashes",
+        "new_management_key_hashes",
+        "created_at"
+      ],
+      "keyColumns": [
+        "id"
+      ],
+      "chunkKey": "id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 160,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_register_profile_hierarchy_reason",
+      "columns": [
+        "collection_id",
+        "pnu",
+        "reason",
+        "created_at"
+      ],
+      "keyColumns": [
+        "collection_id",
+        "pnu",
+        "reason"
+      ],
+      "chunkKey": "collection_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 170,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_register_profile_parse_run",
+      "columns": [
+        "parse_run_id",
+        "source_collection_id",
+        "parser_version",
+        "status",
+        "started_at",
+        "completed_at",
+        "page_count",
+        "record_count",
+        "failure_reason"
+      ],
+      "keyColumns": [
+        "parse_run_id"
+      ],
+      "chunkKey": "parse_run_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 180,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_register_profile_repair_run",
+      "columns": [
+        "collection_id",
+        "source_collection_id",
+        "request_id",
+        "run_date",
+        "repair_policy_version",
+        "max_requests",
+        "parallelism",
+        "status",
+        "target_count",
+        "request_count",
+        "completed_count",
+        "failure_count",
+        "created_at",
+        "completed_at",
+        "failure_reason"
+      ],
+      "keyColumns": [
+        "collection_id"
+      ],
+      "chunkKey": "collection_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 190,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_register_profile_sample_stratum",
+      "columns": [
+        "collection_id",
+        "stratum",
+        "population_count",
+        "sample_count",
+        "selection_seed",
+        "sampling_weight",
+        "created_at"
+      ],
+      "keyColumns": [
+        "collection_id",
+        "stratum"
+      ],
+      "chunkKey": "collection_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 200,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "legal_dong_code_mapping",
+      "columns": [
+        "import_id",
+        "old_legal_dong_code",
+        "new_legal_dong_code",
+        "effective_date",
+        "created_at"
+      ],
+      "keyColumns": [
+        "import_id",
+        "old_legal_dong_code"
+      ],
+      "chunkKey": "import_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 210,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "market_insight_snapshot",
+      "columns": [
+        "snapshot_id",
+        "period_type",
+        "period_start",
+        "period_end",
+        "scope_type",
+        "region_code",
+        "build_status",
+        "data_cutoff",
+        "source_execution_id",
+        "planned_work_unit_count",
+        "completed_work_unit_count",
+        "partial_work_unit_count",
+        "failed_work_unit_count",
+        "generated_at",
+        "rejection_reason",
+        "missing_registration_date_count",
+        "invalid_registration_date_count",
+        "missing_cancellation_date_count",
+        "invalid_cancellation_date_count",
+        "superseded_by_snapshot_id"
+      ],
+      "keyColumns": [
+        "snapshot_id"
+      ],
+      "chunkKey": "snapshot_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 220,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "market_news_execution_aggregate_correction",
+      "columns": [
+        "correction_id",
+        "execution_id",
+        "recorded_at",
+        "correction_reason",
+        "old_completed_count",
+        "new_completed_count",
+        "old_truncated_count",
+        "new_truncated_count",
+        "old_failed_count",
+        "new_failed_count",
+        "old_skipped_budget_count",
+        "new_skipped_budget_count",
+        "old_raw_item_count",
+        "new_raw_item_count"
+      ],
+      "keyColumns": [
+        "correction_id"
+      ],
+      "chunkKey": "correction_id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 230,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "market_news_execution_failure_correction",
+      "columns": [
+        "correction_id",
+        "execution_id",
+        "recorded_at",
+        "correction_reason",
+        "old_failure_kind",
+        "new_failure_kind"
+      ],
+      "keyColumns": [
+        "correction_id"
+      ],
+      "chunkKey": "correction_id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 240,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "market_news_snapshot",
+      "columns": [
+        "snapshot_id",
+        "execution_id",
+        "policy_version",
+        "scope_type",
+        "region_code",
+        "build_status",
+        "generated_at",
+        "data_cutoff",
+        "superseded_by_snapshot_id",
+        "withdrawn_reason",
+        "item_count"
+      ],
+      "keyColumns": [
+        "snapshot_id"
+      ],
+      "chunkKey": "snapshot_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 250,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "parcel",
+      "columns": [
+        "id",
+        "region_id",
+        "pnu",
+        "address",
+        "latitude",
+        "longitude",
+        "geom",
+        "created_at",
+        "updated_at",
+        "road_address"
+      ],
+      "keyColumns": [
+        "id"
+      ],
+      "chunkKey": "id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 260,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "raw_trade_ingest",
+      "columns": [
+        "id",
+        "source",
+        "source_key",
+        "lawd_cd",
+        "deal_ymd",
+        "page_no",
+        "payload",
+        "payload_hash",
+        "status",
+        "failure_reason",
+        "created_at",
+        "processed_at",
+        "execution_correlation_id",
+        "registration_date_raw",
+        "registration_date",
+        "cancellation_date_raw",
+        "cancellation_date"
+      ],
+      "keyColumns": [
+        "id"
+      ],
+      "chunkKey": "id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 270,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "rtms_collection_work_unit",
+      "columns": [
+        "execution_id",
+        "lawd_cd",
+        "deal_ymd",
+        "state",
+        "rtms_ingest_run_id",
+        "started_at",
+        "completed_at"
+      ],
+      "keyColumns": [
+        "execution_id",
+        "lawd_cd",
+        "deal_ymd"
+      ],
+      "chunkKey": "execution_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 280,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "news",
+      "table": "region_month_signal_evidence",
+      "columns": [
+        "id",
+        "snapshot_id",
+        "source_key",
+        "title",
+        "publisher",
+        "published_date",
+        "url",
+        "citation_url",
+        "topic_tags",
+        "evidence_scope",
+        "created_at"
+      ],
+      "keyColumns": [
+        "id"
+      ],
+      "chunkKey": "id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 290,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_register_profile_analysis_run",
+      "columns": [
+        "analysis_run_id",
+        "collection_id",
+        "parse_run_id",
+        "rules_version",
+        "status",
+        "started_at",
+        "completed_at",
+        "report_manifest",
+        "failure_reason"
+      ],
+      "keyColumns": [
+        "analysis_run_id"
+      ],
+      "chunkKey": "analysis_run_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 300,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_register_profile_sample_pnu",
+      "columns": [
+        "collection_id",
+        "pnu",
+        "stratum",
+        "seed_rank",
+        "sampling_weight",
+        "complex_count",
+        "collection_status",
+        "failure_status",
+        "completed_at",
+        "created_at"
+      ],
+      "keyColumns": [
+        "collection_id",
+        "pnu"
+      ],
+      "chunkKey": "collection_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 310,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_register_raw_page",
+      "columns": [
+        "id",
+        "endpoint_snapshot_id",
+        "request_id",
+        "page_no",
+        "attempt_no",
+        "status",
+        "response_body",
+        "body_sha256",
+        "byte_count",
+        "http_status",
+        "provider_status",
+        "failure_reason",
+        "received_at",
+        "finalized_at"
+      ],
+      "keyColumns": [
+        "id"
+      ],
+      "chunkKey": "id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 320,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "complex",
+      "columns": [
+        "id",
+        "parcel_id",
+        "complex_pk",
+        "apt_seq",
+        "name",
+        "trade_name",
+        "dong_cnt",
+        "unit_cnt",
+        "plat_area",
+        "arch_area",
+        "tot_area",
+        "bc_rat",
+        "vl_rat",
+        "use_date",
+        "created_at",
+        "updated_at",
+        "metadata_status",
+        "metadata_source",
+        "metadata_checked_at",
+        "metadata_failure_reason",
+        "metadata_attempts",
+        "metadata_failure_kind",
+        "metadata_next_attempt_at",
+        "region_id",
+        "metadata_hold_at",
+        "metadata_hold_reason",
+        "metadata_hold_by",
+        "bld_mgm_bld_rgst_pk",
+        "display_name",
+        "search_name",
+        "family_cnt",
+        "ho_cnt",
+        "main_bld_cnt",
+        "atch_bld_cnt",
+        "tot_pkng_cnt",
+        "max_grnd_flr_cnt",
+        "max_ugrnd_flr_cnt",
+        "max_height_m",
+        "ride_use_elvt_cnt",
+        "emgen_use_elvt_cnt",
+        "seismic_design_status",
+        "permit_date",
+        "construction_start_date",
+        "tot_dong_tot_area",
+        "vl_rat_estm_tot_area"
+      ],
+      "keyColumns": [
+        "id"
+      ],
+      "chunkKey": "id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 330,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "complex_coordinate_case",
+      "columns": [
+        "id",
+        "parcel_id",
+        "pnu",
+        "status",
+        "relation_type",
+        "relation_confidence",
+        "reason",
+        "checked_at",
+        "created_at",
+        "updated_at"
+      ],
+      "keyColumns": [
+        "id"
+      ],
+      "chunkKey": "id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 340,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "market_insight_snapshot_execution",
+      "columns": [
+        "snapshot_id",
+        "execution_id",
+        "run_date"
+      ],
+      "keyColumns": [
+        "snapshot_id",
+        "execution_id"
+      ],
+      "chunkKey": "snapshot_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 350,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "market_news_quality_review_snapshot",
+      "columns": [
+        "review_set_id",
+        "snapshot_id",
+        "scope_type",
+        "region_code"
+      ],
+      "keyColumns": [
+        "review_set_id",
+        "snapshot_id"
+      ],
+      "chunkKey": "review_set_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 360,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_register_collection_target",
+      "columns": [
+        "id",
+        "collection_id",
+        "target_ordinal",
+        "complex_id",
+        "pnu",
+        "initial_bc_rat",
+        "initial_vl_rat",
+        "initial_bld_mgm_bld_rgst_pk",
+        "created_at"
+      ],
+      "keyColumns": [
+        "id"
+      ],
+      "chunkKey": "id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 370,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_register_complex_match",
+      "columns": [
+        "id",
+        "collection_id",
+        "complex_id",
+        "pnu",
+        "root_management_key",
+        "scope",
+        "status",
+        "match_path",
+        "projectable",
+        "failure_reason",
+        "evaluated_at"
+      ],
+      "keyColumns": [
+        "id"
+      ],
+      "chunkKey": "id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 380,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_register_profile_comparison",
+      "columns": [
+        "id",
+        "analysis_run_id",
+        "pnu_scope_hash",
+        "field_id",
+        "aggregation_method",
+        "status",
+        "recap_value",
+        "title_value",
+        "difference",
+        "contributor_count",
+        "expected_contributor_count",
+        "created_at"
+      ],
+      "keyColumns": [
+        "id"
+      ],
+      "chunkKey": "id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 390,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_register_profile_complex_match",
+      "columns": [
+        "analysis_run_id",
+        "collection_id",
+        "complex_id",
+        "pnu",
+        "scope_key",
+        "status",
+        "projectable",
+        "failure_reason",
+        "created_at"
+      ],
+      "keyColumns": [
+        "analysis_run_id",
+        "complex_id"
+      ],
+      "chunkKey": "analysis_run_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 400,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_register_profile_field_quality",
+      "columns": [
+        "analysis_run_id",
+        "field_id",
+        "field_scope",
+        "stratum",
+        "source_record_coverage",
+        "building_coverage",
+        "pnu_coverage",
+        "projectable_complex_readiness",
+        "operational_completion",
+        "invalid_rate",
+        "conflict_rate",
+        "wilson_low",
+        "wilson_high",
+        "quality_tier",
+        "meaning_verified",
+        "numerator",
+        "denominator",
+        "created_at"
+      ],
+      "keyColumns": [
+        "analysis_run_id",
+        "field_id",
+        "stratum"
+      ],
+      "chunkKey": "analysis_run_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 410,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_register_profile_parse_page",
+      "columns": [
+        "parse_run_id",
+        "raw_page_id",
+        "status",
+        "provider_status",
+        "total_count",
+        "record_count",
+        "failure_reason",
+        "parsed_at"
+      ],
+      "keyColumns": [
+        "parse_run_id",
+        "raw_page_id"
+      ],
+      "chunkKey": "parse_run_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 420,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_register_profile_projection_run",
+      "columns": [
+        "projection_run_id",
+        "analysis_run_id",
+        "collection_id",
+        "parse_run_id",
+        "projection_version",
+        "minimum_readiness",
+        "status",
+        "complex_snapshot_sha256",
+        "eligible_field_count",
+        "complex_count",
+        "projectable_complex_count",
+        "building_count",
+        "started_at",
+        "completed_at",
+        "failure_reason"
+      ],
+      "keyColumns": [
+        "projection_run_id"
+      ],
+      "chunkKey": "projection_run_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 430,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_register_profile_schema_observation",
+      "columns": [
+        "id",
+        "parse_run_id",
+        "raw_page_id",
+        "endpoint",
+        "observation_type",
+        "source_key",
+        "field_id",
+        "observed_type",
+        "occurrence_count",
+        "sample_value_sha256",
+        "created_at"
+      ],
+      "keyColumns": [
+        "id"
+      ],
+      "chunkKey": "id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 440,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_register_record_snapshot",
+      "columns": [
+        "id",
+        "raw_page_id",
+        "item_index",
+        "pnu",
+        "endpoint",
+        "mgm_bldrgst_pk",
+        "mgm_up_bldrgst_pk",
+        "regstr_gb_cd",
+        "regstr_kind_cd",
+        "new_old_regstr_gb_cd",
+        "main_atch_gb_cd",
+        "bld_nm",
+        "dong_nm",
+        "main_purps_cd",
+        "plat_area",
+        "arch_area",
+        "tot_area",
+        "vl_rat_estm_tot_area",
+        "bc_rat",
+        "vl_rat",
+        "main_bld_cnt",
+        "atch_bld_cnt",
+        "hhld_cnt",
+        "use_apr_day",
+        "crtn_day",
+        "created_at"
+      ],
+      "keyColumns": [
+        "id"
+      ],
+      "chunkKey": "id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 450,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "complex_building_link",
+      "columns": [
+        "id",
+        "complex_id",
+        "building_footprint_id",
+        "status",
+        "confidence",
+        "reason",
+        "source",
+        "created_at",
+        "updated_at"
+      ],
+      "keyColumns": [
+        "id"
+      ],
+      "chunkKey": "id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 460,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "complex_display_coordinate",
+      "columns": [
+        "complex_id",
+        "building_footprint_id",
+        "latitude",
+        "longitude",
+        "coordinate_source",
+        "confidence",
+        "reason",
+        "checked_at",
+        "created_at",
+        "updated_at"
+      ],
+      "keyColumns": [
+        "complex_id"
+      ],
+      "chunkKey": "complex_id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 470,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "complex_metadata_admin_decision",
+      "columns": [
+        "id",
+        "complex_id",
+        "alias_id",
+        "decision_type",
+        "actor",
+        "reason",
+        "created_at"
+      ],
+      "keyColumns": [
+        "id"
+      ],
+      "chunkKey": "id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 480,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "complex_metadata_enrichment_attempt",
+      "columns": [
+        "id",
+        "complex_id",
+        "attempt_no",
+        "status",
+        "source",
+        "failure_kind",
+        "failure_reason",
+        "next_attempt_at",
+        "observed_at",
+        "lookup_path",
+        "requested_pnu",
+        "resolved_source_pnu",
+        "alias_id",
+        "candidate_count",
+        "request_id",
+        "projection_applied"
+      ],
+      "keyColumns": [
+        "id"
+      ],
+      "chunkKey": "id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 490,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "complex_name_alias",
+      "columns": [
+        "id",
+        "complex_id",
+        "alias_type",
+        "alias_name",
+        "normalized_name",
+        "source",
+        "source_key",
+        "first_seen_at",
+        "last_seen_at",
+        "created_at",
+        "updated_at"
+      ],
+      "keyColumns": [
+        "id"
+      ],
+      "chunkKey": "id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 500,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "market_news_collection_work_unit",
+      "columns": [
+        "work_unit_id",
+        "execution_id",
+        "unit_order",
+        "scope_kind",
+        "scope_type",
+        "region_code",
+        "complex_id",
+        "category",
+        "query_text",
+        "cutoff_at",
+        "oldest_provided_at",
+        "last_provider_start",
+        "cutoff_reached",
+        "state",
+        "call_count",
+        "raw_item_count",
+        "failure_kind",
+        "started_at",
+        "completed_at"
+      ],
+      "keyColumns": [
+        "work_unit_id"
+      ],
+      "chunkKey": "work_unit_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 510,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "market_news_major_complex_selection",
+      "columns": [
+        "selection_week",
+        "rank",
+        "complex_id",
+        "region_code",
+        "trade_count_90d",
+        "unit_cnt",
+        "selected_at",
+        "selection_status"
+      ],
+      "keyColumns": [
+        "selection_week",
+        "rank"
+      ],
+      "chunkKey": "selection_week",
+      "chunkKeyType": "date",
+      "chunkRows": 250000,
+      "order": 520,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "market_news_relation",
+      "columns": [
+        "relation_id",
+        "article_id",
+        "policy_version",
+        "category",
+        "relation_type",
+        "region_code",
+        "complex_id",
+        "matched_tokens",
+        "created_at"
+      ],
+      "keyColumns": [
+        "relation_id"
+      ],
+      "chunkKey": "relation_id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 530,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "trade",
+      "columns": [
+        "id",
+        "complex_id",
+        "deal_date",
+        "deal_amount",
+        "floor",
+        "excl_area",
+        "apt_dong",
+        "source",
+        "source_key",
+        "complex_pk",
+        "apt_seq",
+        "raw_ingest_id",
+        "created_at",
+        "updated_at",
+        "deleted_at"
+      ],
+      "keyColumns": [
+        "id",
+        "deal_date"
+      ],
+      "chunkKey": "id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 540,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "trade_match_evidence",
+      "columns": [
+        "id",
+        "raw_ingest_id",
+        "source",
+        "raw_jibun",
+        "normalized_jibun",
+        "sgg_cd",
+        "umd_cd",
+        "land_code",
+        "bonbun",
+        "bubun",
+        "derived_pnu",
+        "pnu_unavailable_reason",
+        "apt_seq",
+        "apt_name",
+        "match_status",
+        "match_path",
+        "matched_complex_id",
+        "matched_complex_pk",
+        "candidate_count",
+        "candidate_complex_ids",
+        "failure_reason",
+        "created_at"
+      ],
+      "keyColumns": [
+        "id"
+      ],
+      "chunkKey": "id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 550,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_ratio_candidate",
+      "columns": [
+        "id",
+        "match_id",
+        "field",
+        "method",
+        "value",
+        "projected_value",
+        "numerator",
+        "denominator",
+        "status",
+        "selected",
+        "reason",
+        "created_at"
+      ],
+      "keyColumns": [
+        "id"
+      ],
+      "chunkKey": "id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 560,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_register_match_evidence",
+      "columns": [
+        "id",
+        "match_id",
+        "evidence_type",
+        "outcome",
+        "evidence_value",
+        "created_at"
+      ],
+      "keyColumns": [
+        "id"
+      ],
+      "chunkKey": "id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 570,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_register_profile_archive_manifest",
+      "columns": [
+        "archive_id",
+        "collection_id",
+        "parse_run_id",
+        "analysis_run_id",
+        "projection_run_id",
+        "archive_uri",
+        "archive_sha256",
+        "archive_byte_count",
+        "source_database_size_bytes",
+        "row_counts",
+        "status",
+        "created_at",
+        "verified_at",
+        "restore_verified_at",
+        "cleaned_at"
+      ],
+      "keyColumns": [
+        "archive_id"
+      ],
+      "chunkKey": "archive_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 580,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_register_profile_projected_quality",
+      "columns": [
+        "projection_run_id",
+        "field_id",
+        "field_scope",
+        "source_record_coverage",
+        "building_coverage",
+        "pnu_coverage",
+        "projectable_complex_readiness",
+        "operational_completion",
+        "invalid_rate",
+        "conflict_rate",
+        "wilson_low",
+        "wilson_high",
+        "quality_tier",
+        "projection_use",
+        "created_at"
+      ],
+      "keyColumns": [
+        "projection_run_id",
+        "field_id"
+      ],
+      "chunkKey": "projection_run_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 590,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_register_profile_publication",
+      "columns": [
+        "publication_id",
+        "source_collection_id",
+        "source_parse_run_id",
+        "source_analysis_run_id",
+        "source_projection_run_id",
+        "rules_version",
+        "parser_version",
+        "status",
+        "expected_site_count",
+        "expected_building_count",
+        "expected_hierarchy_count",
+        "expected_evidence_count",
+        "expected_summary_count",
+        "site_count",
+        "building_count",
+        "hierarchy_count",
+        "evidence_count",
+        "summary_count",
+        "content_sha256",
+        "created_at",
+        "validated_at",
+        "published_at",
+        "superseded_at",
+        "failure_reason"
+      ],
+      "keyColumns": [
+        "publication_id"
+      ],
+      "chunkKey": "publication_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 600,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_register_profile_record",
+      "columns": [
+        "id",
+        "parse_run_id",
+        "raw_page_id",
+        "item_index",
+        "pnu",
+        "endpoint",
+        "mgm_bldrgst_pk",
+        "mgm_up_bldrgst_pk",
+        "regstr_kind_cd",
+        "content_sha256",
+        "created_at"
+      ],
+      "keyColumns": [
+        "id"
+      ],
+      "chunkKey": "id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 610,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "complex_building_register_profile",
+      "columns": [
+        "projection_run_id",
+        "complex_id",
+        "analysis_run_id",
+        "collection_id",
+        "assignment_status",
+        "projectable",
+        "failure_reason",
+        "source_scope_key",
+        "source_root_management_key",
+        "atch_bld_cnt",
+        "bjdong_cd",
+        "bld_nm",
+        "bun",
+        "bylot_cnt",
+        "crtn_day",
+        "fmly_cnt",
+        "hhld_cnt",
+        "ji",
+        "new_plat_plc",
+        "plat_area",
+        "plat_gb_cd",
+        "plat_plc",
+        "pms_day",
+        "road_bjdong_cd",
+        "road_cd",
+        "road_main_no",
+        "road_sub_no",
+        "road_underground_cd",
+        "sigungu_cd",
+        "stcns_day",
+        "tot_dong_tot_area",
+        "use_apr_day",
+        "created_at"
+      ],
+      "keyColumns": [
+        "projection_run_id",
+        "complex_id"
+      ],
+      "chunkKey": "projection_run_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 620,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "market_insight_trade_item",
+      "columns": [
+        "snapshot_id",
+        "metric_type",
+        "rank",
+        "trade_id",
+        "trade_deal_date",
+        "comparison_trade_id",
+        "comparison_trade_deal_date",
+        "complex_id",
+        "deal_amount",
+        "excl_area",
+        "deal_date",
+        "disclosed_at",
+        "previous_amount",
+        "previous_deal_date",
+        "delta_amount",
+        "delta_rate",
+        "current_count",
+        "previous_count",
+        "comparison_sample_count",
+        "captured_trade_status",
+        "canceled_at",
+        "registration_date",
+        "cancellation_date"
+      ],
+      "keyColumns": [
+        "snapshot_id",
+        "metric_type",
+        "rank"
+      ],
+      "chunkKey": "snapshot_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 630,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "market_news_quality_label",
+      "columns": [
+        "review_set_id",
+        "article_id",
+        "relation_id",
+        "sample_stratum",
+        "relevance_correct",
+        "category_correct",
+        "relation_correct",
+        "url_opened",
+        "sampled_at",
+        "reviewed_at",
+        "reviewer_ref",
+        "note"
+      ],
+      "keyColumns": [
+        "review_set_id",
+        "article_id",
+        "relation_id"
+      ],
+      "chunkKey": "review_set_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 640,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "market_news_raw_item",
+      "columns": [
+        "work_unit_id",
+        "provider_start",
+        "provider_rank",
+        "title_raw",
+        "original_link_raw",
+        "link_raw",
+        "description_raw",
+        "pub_date_raw",
+        "received_at",
+        "rejection_reason",
+        "article_id"
+      ],
+      "keyColumns": [
+        "work_unit_id",
+        "provider_start",
+        "provider_rank"
+      ],
+      "chunkKey": "work_unit_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 650,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "market_news_snapshot_item",
+      "columns": [
+        "snapshot_id",
+        "article_id",
+        "relation_id",
+        "category",
+        "sort_rank",
+        "provider_rank"
+      ],
+      "keyColumns": [
+        "snapshot_id",
+        "article_id"
+      ],
+      "chunkKey": "snapshot_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 660,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "trade_source_key_registry",
+      "columns": [
+        "id",
+        "source",
+        "source_key",
+        "raw_ingest_id",
+        "trade_id",
+        "created_at",
+        "trade_deal_date"
+      ],
+      "keyColumns": [
+        "id"
+      ],
+      "chunkKey": "id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 670,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_ratio_candidate_input",
+      "columns": [
+        "candidate_id",
+        "record_snapshot_id",
+        "input_role",
+        "created_at"
+      ],
+      "keyColumns": [
+        "candidate_id",
+        "record_snapshot_id",
+        "input_role"
+      ],
+      "chunkKey": "candidate_id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 680,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_ratio_profile_backfill_import",
+      "columns": [
+        "import_id",
+        "analysis_run_id",
+        "archive_id",
+        "rules_version",
+        "source_file_sha256",
+        "candidate_count",
+        "status",
+        "created_at",
+        "completed_at",
+        "failure_reason"
+      ],
+      "keyColumns": [
+        "import_id"
+      ],
+      "chunkKey": "import_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 690,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_ratio_projection",
+      "columns": [
+        "id",
+        "request_id",
+        "match_id",
+        "candidate_id",
+        "complex_id",
+        "field",
+        "outcome",
+        "previous_value",
+        "source_value",
+        "applied_value",
+        "created_at"
+      ],
+      "keyColumns": [
+        "id"
+      ],
+      "chunkKey": "id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 700,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_register_profile_building",
+      "columns": [
+        "publication_id",
+        "pnu",
+        "management_key",
+        "parent_management_key",
+        "main_atch_gb_cd",
+        "main_atch_gb_cd_nm",
+        "dong_nm",
+        "arch_area",
+        "tot_area",
+        "vl_rat_estm_tot_area",
+        "atch_bld_area",
+        "ho_cnt",
+        "indr_mech_utcnt",
+        "indr_mech_area",
+        "oudr_mech_utcnt",
+        "oudr_mech_area",
+        "indr_auto_utcnt",
+        "indr_auto_area",
+        "oudr_auto_utcnt",
+        "oudr_auto_area",
+        "heit",
+        "grnd_flr_cnt",
+        "ugrnd_flr_cnt",
+        "ride_use_elvt_cnt",
+        "emgen_use_elvt_cnt",
+        "strct_cd",
+        "strct_cd_nm",
+        "etc_strct",
+        "roof_cd",
+        "roof_cd_nm",
+        "etc_roof",
+        "main_purps_cd",
+        "main_purps_cd_nm",
+        "etc_purps",
+        "rserthqk_dsgn_apply_yn",
+        "rserthqk_ability",
+        "engr_grade",
+        "engr_rat",
+        "engr_epi",
+        "gn_bld_grade",
+        "gn_bld_cert",
+        "itg_bld_grade",
+        "itg_bld_cert",
+        "created_at"
+      ],
+      "keyColumns": [
+        "publication_id",
+        "management_key"
+      ],
+      "chunkKey": "publication_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 710,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_register_profile_field_evidence",
+      "columns": [
+        "evidence_id",
+        "publication_id",
+        "scope",
+        "scope_key",
+        "field_id",
+        "value_state",
+        "raw_value",
+        "text_value",
+        "decimal_value",
+        "integer_value",
+        "date_value",
+        "boolean_value",
+        "source_method",
+        "aggregation_method",
+        "public_scope",
+        "quality",
+        "conflict_status",
+        "source_record_key",
+        "created_at"
+      ],
+      "keyColumns": [
+        "evidence_id"
+      ],
+      "chunkKey": "evidence_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 720,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_register_profile_hierarchy",
+      "columns": [
+        "publication_id",
+        "pnu",
+        "source_record_key",
+        "mgm_bldrgst_pk",
+        "mgm_up_bldrgst_pk",
+        "regstr_gb_cd",
+        "regstr_gb_cd_nm",
+        "regstr_kind_cd",
+        "regstr_kind_cd_nm",
+        "new_old_regstr_gb_cd",
+        "new_old_regstr_gb_cd_nm",
+        "rnum",
+        "created_at"
+      ],
+      "keyColumns": [
+        "publication_id",
+        "pnu",
+        "source_record_key"
+      ],
+      "chunkKey": "publication_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 730,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_register_profile_scope_assignment",
+      "columns": [
+        "analysis_run_id",
+        "profile_record_id",
+        "root_management_key",
+        "scope_key",
+        "status",
+        "assignment_reason",
+        "created_at"
+      ],
+      "keyColumns": [
+        "analysis_run_id",
+        "profile_record_id"
+      ],
+      "chunkKey": "analysis_run_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 740,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_register_profile_site",
+      "columns": [
+        "publication_id",
+        "pnu",
+        "root_management_key",
+        "bld_nm",
+        "plat_plc",
+        "new_plat_plc",
+        "sigungu_cd",
+        "bjdong_cd",
+        "plat_gb_cd",
+        "bun",
+        "ji",
+        "splot_nm",
+        "block",
+        "lot",
+        "bylot_cnt",
+        "road_cd",
+        "road_bjdong_cd",
+        "road_underground_cd",
+        "road_main_no",
+        "road_sub_no",
+        "plat_area",
+        "bc_rat",
+        "vl_rat",
+        "tot_dong_tot_area",
+        "hhld_cnt",
+        "fmly_cnt",
+        "main_bld_cnt",
+        "atch_bld_cnt",
+        "tot_pkng_cnt",
+        "pms_day",
+        "stcns_day",
+        "use_apr_day",
+        "crtn_day",
+        "pmsno_year",
+        "pmsno_kik_cd",
+        "pmsno_kik_cd_nm",
+        "pmsno_gb_cd",
+        "pmsno_gb_cd_nm",
+        "created_at"
+      ],
+      "keyColumns": [
+        "publication_id",
+        "pnu",
+        "root_management_key"
+      ],
+      "chunkKey": "publication_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 750,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_register_profile_value",
+      "columns": [
+        "profile_record_id",
+        "field_id",
+        "field_scope",
+        "aggregation_method",
+        "zero_policy",
+        "value_type",
+        "value_state",
+        "raw_value",
+        "text_value",
+        "decimal_value",
+        "integer_value",
+        "date_value",
+        "boolean_value",
+        "created_at"
+      ],
+      "keyColumns": [
+        "profile_record_id",
+        "field_id"
+      ],
+      "chunkKey": "profile_record_id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 760,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "complex_building_register_building",
+      "columns": [
+        "projection_run_id",
+        "complex_id",
+        "source_management_key",
+        "source_parent_management_key",
+        "source_content_sha256",
+        "main_atch_gb_cd",
+        "main_atch_gb_cd_nm",
+        "dong_nm",
+        "atch_bld_area",
+        "ho_cnt",
+        "indr_mech_utcnt",
+        "indr_mech_area",
+        "oudr_mech_utcnt",
+        "oudr_mech_area",
+        "indr_auto_utcnt",
+        "indr_auto_area",
+        "oudr_auto_utcnt",
+        "oudr_auto_area",
+        "heit",
+        "grnd_flr_cnt",
+        "ugrnd_flr_cnt",
+        "ride_use_elvt_cnt",
+        "emgen_use_elvt_cnt",
+        "strct_cd",
+        "strct_cd_nm",
+        "etc_strct",
+        "roof_cd",
+        "roof_cd_nm",
+        "etc_roof",
+        "main_purps_cd",
+        "main_purps_cd_nm",
+        "etc_purps",
+        "rserthqk_dsgn_apply_yn",
+        "engr_rat",
+        "engr_epi",
+        "gn_bld_cert",
+        "itg_bld_cert",
+        "created_at"
+      ],
+      "keyColumns": [
+        "projection_run_id",
+        "complex_id",
+        "source_management_key"
+      ],
+      "chunkKey": "projection_run_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 770,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "complex_building_register_profile_summary",
+      "columns": [
+        "publication_id",
+        "complex_id",
+        "ratio_scope",
+        "ratio_quality",
+        "building_coverage_rate",
+        "floor_area_ratio",
+        "site_area_m2",
+        "building_area_m2",
+        "total_floor_area_m2",
+        "floor_area_ratio_area_m2",
+        "household_scope",
+        "household_quality",
+        "household_count",
+        "family_count",
+        "unit_count",
+        "parking_scope",
+        "parking_quality",
+        "total_parking_count",
+        "parking_per_household",
+        "indoor_mechanical_count",
+        "indoor_mechanical_area_m2",
+        "outdoor_mechanical_count",
+        "outdoor_mechanical_area_m2",
+        "indoor_automatic_count",
+        "indoor_automatic_area_m2",
+        "outdoor_automatic_count",
+        "outdoor_automatic_area_m2",
+        "building_scope",
+        "building_quality",
+        "main_building_count",
+        "attached_building_count",
+        "max_ground_floor_count",
+        "max_underground_floor_count",
+        "max_height_m",
+        "structure_names",
+        "roof_names",
+        "primary_use_names",
+        "elevator_scope",
+        "elevator_quality",
+        "ride_elevator_count",
+        "emergency_elevator_count",
+        "safety_scope",
+        "safety_quality",
+        "seismic_design_status",
+        "seismic_abilities",
+        "date_scope",
+        "date_quality",
+        "permit_date",
+        "construction_start_date",
+        "use_approval_date",
+        "address_scope",
+        "address_quality",
+        "parcel_address",
+        "road_address",
+        "energy_scope",
+        "energy_quality",
+        "energy_efficiency_grades",
+        "energy_saving_rate_min",
+        "energy_saving_rate_max",
+        "energy_epi_min",
+        "energy_epi_max",
+        "green_building_grades",
+        "green_cert_score_min",
+        "green_cert_score_max",
+        "intelligent_building_grades",
+        "intelligent_cert_score_min",
+        "intelligent_cert_score_max",
+        "created_at"
+      ],
+      "keyColumns": [
+        "publication_id",
+        "complex_id"
+      ],
+      "chunkKey": "publication_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 780,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "property",
+      "schema": "public",
+      "table": "building_ratio_profile_candidate_lineage",
+      "columns": [
+        "candidate_id",
+        "import_id",
+        "pnu_scope_hash",
+        "comparison_status",
+        "recap_value",
+        "title_value",
+        "difference",
+        "contributor_count",
+        "expected_contributor_count",
+        "evidence_sha256",
+        "created_at"
+      ],
+      "keyColumns": [
+        "candidate_id"
+      ],
+      "chunkKey": "candidate_id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 790,
+      "conflictPolicy": "update"
+    },
+    {
+      "logicalDatabase": "reference",
+      "schema": "public",
+      "table": "dataset_raw_object",
+      "columns": [
+        "checksum",
+        "content",
+        "byte_length",
+        "collected_at",
+        "storage_backend",
+        "object_key",
+        "object_version_id",
+        "content_type",
+        "checksum_algorithm"
+      ],
+      "keyColumns": [
+        "checksum"
+      ],
+      "chunkKey": "checksum",
+      "chunkKeyType": "text",
+      "chunkRows": 250000,
+      "order": 800,
+      "conflictPolicy": "reject"
+    },
+    {
+      "logicalDatabase": "reference",
+      "schema": "public",
+      "table": "dataset_refresh_run",
+      "columns": [
+        "refresh_run_id",
+        "profile",
+        "trigger_type",
+        "started_at",
+        "finished_at",
+        "status"
+      ],
+      "keyColumns": [
+        "refresh_run_id"
+      ],
+      "chunkKey": "refresh_run_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 810,
+      "conflictPolicy": "reject"
+    },
+    {
+      "logicalDatabase": "reference",
+      "schema": "public",
+      "table": "dataset_source",
+      "columns": [
+        "source_id",
+        "provider",
+        "created_at"
+      ],
+      "keyColumns": [
+        "source_id"
+      ],
+      "chunkKey": "source_id",
+      "chunkKeyType": "text",
+      "chunkRows": 250000,
+      "order": 820,
+      "conflictPolicy": "reject"
+    },
+    {
+      "logicalDatabase": "reference",
+      "schema": "public",
+      "table": "dataset_source_contract",
+      "columns": [
+        "contract_id",
+        "source_id",
+        "contract_fingerprint",
+        "contract",
+        "registered_at"
+      ],
+      "keyColumns": [
+        "contract_id"
+      ],
+      "chunkKey": "contract_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 830,
+      "conflictPolicy": "reject"
+    },
+    {
+      "logicalDatabase": "reference",
+      "schema": "public",
+      "table": "dataset_acquisition",
+      "columns": [
+        "acquisition_id",
+        "source_id",
+        "contract_id",
+        "checksum",
+        "source_date",
+        "collected_at",
+        "status",
+        "raw_row_count",
+        "accepted_row_count",
+        "rejected_row_count",
+        "validated_at",
+        "temporal_basis",
+        "observed_at",
+        "normalized_checksum",
+        "normalization_schema_version"
+      ],
+      "keyColumns": [
+        "acquisition_id"
+      ],
+      "chunkKey": "acquisition_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 840,
+      "conflictPolicy": "reject"
+    },
+    {
+      "logicalDatabase": "reference",
+      "schema": "public",
+      "table": "dataset_publication",
+      "columns": [
+        "publication_id",
+        "source_id",
+        "acquisition_id",
+        "dataset_version",
+        "source_date",
+        "published_at",
+        "raw_checksum",
+        "normalized_checksum",
+        "temporal_basis",
+        "observed_at",
+        "normalization_schema_version"
+      ],
+      "keyColumns": [
+        "publication_id"
+      ],
+      "chunkKey": "publication_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 850,
+      "conflictPolicy": "reject"
+    },
+    {
+      "logicalDatabase": "reference",
+      "schema": "public",
+      "table": "dataset_quality_issue",
+      "columns": [
+        "quality_issue_id",
+        "acquisition_id",
+        "reason_code",
+        "severity",
+        "row_number",
+        "details",
+        "recorded_at"
+      ],
+      "keyColumns": [
+        "quality_issue_id"
+      ],
+      "chunkKey": "quality_issue_id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 860,
+      "conflictPolicy": "reject"
+    },
+    {
+      "logicalDatabase": "reference",
+      "schema": "public",
+      "table": "dataset_refresh_run_item",
+      "columns": [
+        "refresh_run_id",
+        "source_id",
+        "acquisition_id",
+        "started_at",
+        "finished_at",
+        "status",
+        "reason_codes"
+      ],
+      "keyColumns": [
+        "refresh_run_id",
+        "source_id"
+      ],
+      "chunkKey": "refresh_run_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 870,
+      "conflictPolicy": "reject"
+    },
+    {
+      "logicalDatabase": "reference",
+      "schema": "public",
+      "table": "dataset_rejected_row",
+      "columns": [
+        "acquisition_id",
+        "row_number",
+        "reason_code",
+        "row_data",
+        "recorded_at",
+        "source_key",
+        "field_name",
+        "evidence"
+      ],
+      "keyColumns": [
+        "acquisition_id",
+        "row_number",
+        "reason_code"
+      ],
+      "chunkKey": "acquisition_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 880,
+      "conflictPolicy": "reject"
+    },
+    {
+      "logicalDatabase": "reference",
+      "schema": "public",
+      "table": "dataset_staging_row",
+      "columns": [
+        "acquisition_id",
+        "row_number",
+        "row_data",
+        "source_key",
+        "accepted"
+      ],
+      "keyColumns": [
+        "acquisition_id",
+        "row_number"
+      ],
+      "chunkKey": "acquisition_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 890,
+      "conflictPolicy": "reject"
+    },
+    {
+      "logicalDatabase": "reference",
+      "schema": "public",
+      "table": "dataset_activation_event",
+      "columns": [
+        "activation_event_id",
+        "source_id",
+        "publication_id",
+        "action",
+        "activated_at"
+      ],
+      "keyColumns": [
+        "activation_event_id"
+      ],
+      "chunkKey": "activation_event_id",
+      "chunkKeyType": "bigint",
+      "chunkRows": 250000,
+      "order": 900,
+      "conflictPolicy": "reject"
+    },
+    {
+      "logicalDatabase": "reference",
+      "schema": "public",
+      "table": "dataset_snapshot_row",
+      "columns": [
+        "publication_id",
+        "source_key",
+        "row_data"
+      ],
+      "keyColumns": [
+        "publication_id",
+        "source_key"
+      ],
+      "chunkKey": "publication_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 910,
+      "conflictPolicy": "reject"
+    },
+    {
+      "logicalDatabase": "reference",
+      "schema": "reference_projection",
+      "table": "area_fact",
+      "columns": [
+        "publication_id",
+        "source_id",
+        "fact_id",
+        "area_type",
+        "name",
+        "region_code",
+        "region_name",
+        "education_office_code",
+        "education_office_name",
+        "row_reference_date",
+        "geometry",
+        "original_crs",
+        "geometry_checksum",
+        "attributes"
+      ],
+      "keyColumns": [
+        "publication_id",
+        "fact_id"
+      ],
+      "chunkKey": "publication_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 920,
+      "conflictPolicy": "reject"
+    },
+    {
+      "logicalDatabase": "reference",
+      "schema": "reference_projection",
+      "table": "facility_point",
+      "columns": [
+        "publication_id",
+        "source_id",
+        "fact_id",
+        "category",
+        "subcategory",
+        "name",
+        "status",
+        "road_address",
+        "lot_address",
+        "region_code",
+        "region_name",
+        "position",
+        "original_crs",
+        "original_x",
+        "original_y",
+        "row_reference_date",
+        "observed_at",
+        "attributes"
+      ],
+      "keyColumns": [
+        "publication_id",
+        "fact_id"
+      ],
+      "chunkKey": "publication_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 930,
+      "conflictPolicy": "reject"
+    },
+    {
+      "logicalDatabase": "reference",
+      "schema": "reference_projection",
+      "table": "fact_relation",
+      "columns": [
+        "publication_id",
+        "source_id",
+        "from_fact_id",
+        "to_fact_id",
+        "relation_type",
+        "attributes"
+      ],
+      "keyColumns": [
+        "publication_id",
+        "from_fact_id",
+        "to_fact_id",
+        "relation_type"
+      ],
+      "chunkKey": "publication_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 940,
+      "conflictPolicy": "reject"
+    },
+    {
+      "logicalDatabase": "reference",
+      "schema": "reference_projection",
+      "table": "rail_station_occurrence",
+      "columns": [
+        "publication_id",
+        "source_id",
+        "occurrence_id",
+        "operator",
+        "line_number",
+        "line_name",
+        "station_number",
+        "station_name",
+        "road_address",
+        "position",
+        "transfer_lines",
+        "row_reference_date"
+      ],
+      "keyColumns": [
+        "publication_id",
+        "occurrence_id"
+      ],
+      "chunkKey": "publication_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 950,
+      "conflictPolicy": "reject"
+    },
+    {
+      "logicalDatabase": "reference",
+      "schema": "reference_projection",
+      "table": "registry_fact",
+      "columns": [
+        "publication_id",
+        "source_id",
+        "fact_id",
+        "category",
+        "subcategory",
+        "name",
+        "status",
+        "road_address",
+        "lot_address",
+        "region_code",
+        "region_name",
+        "postal_code",
+        "normalized_name_key",
+        "normalized_address_key",
+        "row_reference_date",
+        "observed_at",
+        "attributes"
+      ],
+      "keyColumns": [
+        "publication_id",
+        "fact_id"
+      ],
+      "chunkKey": "publication_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 960,
+      "conflictPolicy": "reject"
+    },
+    {
+      "logicalDatabase": "reference",
+      "schema": "reference_projection",
+      "table": "source_coverage",
+      "columns": [
+        "publication_id",
+        "source_id",
+        "region_code",
+        "total_count",
+        "spatial_count",
+        "non_spatial_count",
+        "open_count",
+        "stale_row_count",
+        "unknown_region_count"
+      ],
+      "keyColumns": [
+        "publication_id",
+        "region_code"
+      ],
+      "chunkKey": "publication_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 970,
+      "conflictPolicy": "reject"
+    },
+    {
+      "logicalDatabase": "reference",
+      "schema": "reference_projection",
+      "table": "academy_exact_match",
+      "columns": [
+        "sbiz_publication_id",
+        "sbiz_fact_id",
+        "registry_publication_id",
+        "registry_fact_id"
+      ],
+      "keyColumns": [
+        "sbiz_publication_id",
+        "sbiz_fact_id"
+      ],
+      "chunkKey": "sbiz_publication_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 980,
+      "conflictPolicy": "reject"
+    },
+    {
+      "logicalDatabase": "reference",
+      "schema": "reference_projection",
+      "table": "retail_coordinate_enrichment",
+      "columns": [
+        "publication_id",
+        "fact_id",
+        "pnu",
+        "position",
+        "coordinate_snapshot_version",
+        "resolution_method",
+        "resolved_at"
+      ],
+      "keyColumns": [
+        "publication_id",
+        "fact_id"
+      ],
+      "chunkKey": "publication_id",
+      "chunkKeyType": "uuid",
+      "chunkRows": 250000,
+      "order": 990,
+      "conflictPolicy": "reject"
+    },
+    {
+      "logicalDatabase": "reference",
+      "schema": "public",
+      "table": "dataset_active_snapshot",
+      "columns": [
+        "source_id",
+        "publication_id",
+        "activated_at"
+      ],
+      "keyColumns": [
+        "source_id"
+      ],
+      "chunkKey": "source_id",
+      "chunkKeyType": "text",
+      "chunkRows": 250000,
+      "order": 1000,
+      "conflictPolicy": "update"
+    }
+  ]
+}

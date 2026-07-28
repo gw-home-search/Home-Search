@@ -208,6 +208,10 @@ jobs:
         run: infra/backup/test-home-search-db-backup.sh
       - name: Verify PostgreSQL backup and ephemeral restore
         run: infra/backup/test-home-search-db-backup-integration.sh
+      - name: Verify Property and Reference data-only migration
+        run: |
+          python3 -m unittest -v infra/migration/test_data_only_migration.py
+          infra/migration/test-data-only-migration-integration.sh
       - name: Verify release eligibility and manifest scripts
         run: |
           .github/scripts/test-verify-release-eligibility.sh

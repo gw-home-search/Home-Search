@@ -24,10 +24,14 @@ printf '\n' >> "${FAKE_ARGV_LOG}"
 case "$*" in
   *'SHOW server_version'*) printf '16.3\n' ;;
   *'WHERE NOT success'*) printf '0\n' ;;
+  *'reference.flyway_schema_history WHERE success'*) printf '4\n' ;;
   *'flyway_schema_history WHERE success'*) printf '3\n' ;;
   *'public.raw_trade_ingest'*) printf '11\n' ;;
   *'admin.admin_account'*) printf '7\n' ;;
   *'users.user_account'*) printf '5\n' ;;
+  *'public.dataset_source'*) printf '13\n' ;;
+  *'reference.parcel_coordinate_snapshot'*) printf '17\n' ;;
+  *'public.ai_schema_history'*) printf '16\n' ;;
   *) printf '0\n' ;;
 esac
 EOF
@@ -75,6 +79,7 @@ run_backup() {
   HOME_BACKUP_PGPASSWORD="${sentinel}" \
   HOME_BACKUP_TIMESTAMP=20260716T010203Z \
   HOME_BACKUP_S3_URI="${s3_uri}" \
+  HOME_BACKUP_KMS_KEY_ID=fixture-kms-key \
     "${script_dir}/home-search-db-backup.sh" --backup-all "${output_dir}"
 }
 
@@ -85,7 +90,7 @@ if run_backup "${output_one}" '' >> "${test_dir}/stdout.log" 2>&1; then
   exit 1
 fi
 
-for logical in property admin user; do
+for logical in property admin user ai; do
   manifest_one="${output_one}/${logical}-20260716T010203Z.manifest.tsv"
   manifest_two="${output_two}/${logical}-20260716T010203Z.manifest.tsv"
   dump_one="${output_one}/${logical}-20260716T010203Z.dump"
@@ -96,16 +101,17 @@ for logical in property admin user; do
   grep -Eq '^postgres_version[[:space:]]16[.]3$' "${manifest_one}"
 done
 
-if find "${output_one}" "${output_two}" -type f -iname '*coordinate*' | grep -q .; then
-  echo '상태: Fail - coordinate-source artifact가 생성되었습니다.' >&2
-  exit 1
-fi
 if grep -Fq "${sentinel}" "${argv_log}" || grep -Fq "${sentinel}" "${test_dir}/stdout.log"; then
   echo '상태: Fail - backup password가 argv 또는 stdout에 노출되었습니다.' >&2
   exit 1
 fi
-[[ "$(wc -l < "${aws_log}" | tr -d ' ')" == '6' ]]
+[[ "$(wc -l < "${aws_log}" | tr -d ' ')" == '10' ]]
 grep -Fq 's3://fixture-bucket/staging/property-20260716T010203Z.dump' "${aws_log}"
 grep -Fq 's3://fixture-bucket/staging/user-20260716T010203Z.manifest.tsv' "${aws_log}"
+grep -Fq 's3://fixture-bucket/staging/ai-20260716T010203Z.manifest.tsv' "${aws_log}"
+if grep -Fq '/coordinate-' "${aws_log}"; then
+  echo 'ERROR: default backup set must defer coordinate source data.' >&2
+  exit 1
+fi
 
 echo '상태: Pass - deterministic local backup manifest, fake S3 upload, secret 비노출을 확인했습니다.'

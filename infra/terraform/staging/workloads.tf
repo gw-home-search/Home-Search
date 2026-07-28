@@ -666,7 +666,9 @@ locals {
         { name = "HOME_BACKUP_PGHOST", value = aws_db_instance.primary.address },
         { name = "HOME_BACKUP_PGPORT", value = "5432" },
         { name = "HOME_BACKUP_PGUSER", value = "home_search_backup" },
+        { name = "HOME_BACKUP_LOGICAL_DATABASES", value = "property,admin,user" },
         { name = "HOME_BACKUP_S3_URI", value = "s3://${aws_s3_bucket.database_backup.id}/staging" },
+        { name = "HOME_BACKUP_KMS_KEY_ID", value = aws_kms_key.database_backup.arn },
       ]
       secrets = [{ name = "HOME_BACKUP_PGPASSWORD", valueFrom = "${aws_secretsmanager_secret.container["backup-db"].arn}:password::" }]
     }
@@ -674,7 +676,7 @@ locals {
       image       = "backup"
       role        = aws_iam_role.workload_task["restore-verification"].arn
       command     = ["--verify-latest-s3", "s3://${aws_s3_bucket.database_backup.id}/staging"]
-      environment = []
+      environment = [{ name = "HOME_BACKUP_LOGICAL_DATABASES", value = "property,admin,user" }]
       secrets     = []
     }
   }

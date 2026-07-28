@@ -1,8 +1,10 @@
 # Database Backup and Restore Verification
 
-`home-search-db-backup.sh` backs up only the operational `property`, `admin`,
-and `user` databases in PostgreSQL custom format. The coordinate-source
-database is intentionally excluded.
+`home-search-db-backup.sh` supports the five production databases—`property`,
+`admin`, `user`, `ai`, and `coordinate`—in PostgreSQL custom format. The
+checked-in staging task explicitly selects the currently provisioned first
+three with `HOME_BACKUP_LOGICAL_DATABASES`; production must set all five after
+their dedicated databases and backup roles are created.
 
 Create local artifacts:
 
@@ -11,10 +13,12 @@ HOME_BACKUP_PGHOST=127.0.0.1 \
 HOME_BACKUP_PGPORT=15432 \
 HOME_BACKUP_PGUSER=backup_role \
 HOME_BACKUP_PGPASSWORD='set-outside-shell-history' \
+HOME_BACKUP_LOGICAL_DATABASES=property,admin,user,ai,coordinate \
 infra/backup/home-search-db-backup.sh --backup-all /tmp/home-search-backups
 ```
 
-Set `HOME_BACKUP_S3_URI=s3://bucket/prefix` to upload each dump followed by its
+Set `HOME_BACKUP_S3_URI=s3://bucket/prefix` and `HOME_BACKUP_KMS_KEY_ID` to
+upload each dump followed by its
 manifest. Each manifest records the logical/database name, UTC timestamp,
 PostgreSQL version, dump checksum, migration checksum, Flyway success count,
 and a core-table row count. Passwords are passed through a temporary mode-0600
@@ -27,7 +31,7 @@ infra/backup/home-search-db-backup.sh \
   --verify-restore /tmp/home-search-backups/property-YYYYmmddTHHMMSSZ.manifest.tsv
 ```
 
-Verify the newest property/admin/user artifacts from S3 in one non-destructive
+Verify the newest selected artifacts from S3 in one non-destructive
 rehearsal:
 
 ```bash
@@ -39,6 +43,12 @@ Verification checks the dump and migration checksums, initializes a PostgreSQL
 cluster under task-local temporary storage, restores into that cluster, and
 compares Flyway/core row-count invariants. It never connects to, drops, or
 overwrites an existing database.
+
+When the five databases use separate RDS endpoints or roles, set
+`HOME_BACKUP_<LOGICAL>_PGHOST`, `PGPORT`, `PGUSER`, and `PGPASSWORD` for each
+logical name. These override the shared defaults without placing passwords in
+process arguments. The backup image includes PostGIS restore support for the
+Property and Coordinate schemas.
 
 Run the deterministic fixture and real PostgreSQL integration checks:
 

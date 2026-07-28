@@ -46,7 +46,8 @@ docker build --tag "${backup_image}" --file infra/backup/Dockerfile .
 [[ "$(docker inspect --format '{{json .Config.Entrypoint}}' "${backup_image}")" == '["/usr/local/bin/home-search-db-backup"]' ]]
 [[ "$(docker inspect --format '{{json .Config.Cmd}}' "${backup_image}")" == '["--backup-all","/backup"]' ]]
 docker run --rm --entrypoint bash "${backup_image}" -c \
-  'command -v pg_dump >/dev/null && command -v pg_restore >/dev/null && command -v initdb >/dev/null && command -v aws >/dev/null && test -d "${HOME_BACKUP_REPO_ROOT}/apps/property-data/db/migration/api" && test ! -e /model'
+  'command -v pg_dump >/dev/null && command -v pg_restore >/dev/null && command -v initdb >/dev/null && command -v aws >/dev/null && command -v zstd >/dev/null && test -f /usr/lib/postgresql/17/lib/postgis-3.so && test -d "${HOME_BACKUP_REPO_ROOT}/apps/property-data/db/migration/api" && test -d "${HOME_BACKUP_REPO_ROOT}/apps/ai/ai_service/datasets/migrations" && test -d "${HOME_BACKUP_REPO_ROOT}/apps/source-data/src/main/resources/db/migration/coordinate-source" && test -f "${HOME_BACKUP_REPO_ROOT}/infra/migration/data-only-allowlist.json" && test ! -e /model'
+docker run --rm "${backup_image}" --data-validate-catalog /opt/home-search/infra/migration/data-only-allowlist.json
 
 docker build --tag "${bootstrap_image}" --file infra/bootstrap/Dockerfile .
 [[ "$(docker inspect --format '{{.Config.User}}' "${bootstrap_image}")" == '10001:10001' ]]

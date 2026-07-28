@@ -281,6 +281,7 @@ jobs:
     timeout-minutes: 30
     needs: changes
     if: >-
+      github.event_name == 'push' ||
       needs.changes.outputs.admin_service_changed == 'true' ||
       needs.changes.outputs.user_service_changed == 'true' ||
       needs.changes.outputs.source_data_changed == 'true'

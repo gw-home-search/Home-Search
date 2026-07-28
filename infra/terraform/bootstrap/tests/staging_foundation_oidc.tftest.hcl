@@ -2,6 +2,22 @@ mock_provider "aws" {
   mock_data "aws_caller_identity" { defaults = { account_id = "123456789012" } }
 }
 
+override_resource {
+  target          = aws_kms_key.terraform_state
+  override_during = plan
+  values = {
+    arn = "arn:aws:kms:ap-northeast-2:123456789012:key/11111111-1111-1111-1111-111111111111"
+  }
+}
+
+override_resource {
+  target          = aws_s3_bucket.terraform_state
+  override_during = plan
+  values = {
+    arn = "arn:aws:s3:::home-search-state-fixture"
+  }
+}
+
 run "staging_foundation_roles_are_separated_and_state_scoped" {
   command = plan
   variables {
@@ -59,13 +75,28 @@ run "staging_foundation_roles_are_separated_and_state_scoped" {
 
   assert {
     condition = one([
-      for statement in jsondecode(aws_iam_role_policy.github_staging_foundation_apply.policy).Statement : statement
+      for statement in jsondecode(aws_iam_policy.github_staging_foundation_data_access.policy).Statement : statement
       if statement.Sid == "UseStagingDataKeys"
       ]).Condition.StringEquals == {
       "aws:ResourceTag/Environment" = "staging"
       "aws:ResourceTag/Project"     = "home-search"
     }
     error_message = "KMS data operations must be restricted to tagged staging keys."
+  }
+
+  assert {
+    condition = (
+      length(aws_iam_role_policy.github_staging_foundation_apply.policy)
+      + length(aws_iam_role_policy.github_staging_foundation_state["apply"].policy) <= 10240
+      && length(aws_iam_policy.github_staging_foundation_data_access.policy) <= 6144
+      && aws_iam_role_policy_attachment.github_staging_foundation_data_access.role == aws_iam_role.github_staging_foundation_apply.name
+      && toset([
+        for statement in jsondecode(aws_iam_policy.github_staging_foundation_data_access.policy).Statement : statement.Sid
+        ]) == toset([
+        "UseStagingDataKeys", "ManageStagingBackupBucket", "ListSecretsForStagingRefresh", "ManageStagingSecretContainers",
+      ])
+    )
+    error_message = "Staging apply inline policies and the managed data policy must stay within their AWS character limits."
   }
 
   assert {

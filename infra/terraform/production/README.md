@@ -49,7 +49,10 @@ Required non-secret inputs added by the workload layer are
 `admin_certificate_arn`, `public_origin`, `image_uris`, and the immutable
 `adot_collector_image_uri`. Secret values are never Terraform variables:
 operators inject values into the KMS-encrypted Secrets Manager containers after
-foundation apply.
+foundation apply. Database credential containers use a `password` key;
+`ai-migrator-db` additionally requires a percent-encoded PostgreSQL `dsn` key
+for the finite AI schema migration. The `database-bootstrap` task alone reads
+the five RDS master secrets and never passes them to migration or runtime tasks.
 
 Validation:
 

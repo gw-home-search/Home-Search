@@ -17,9 +17,11 @@ locals {
     ai                    = ["ai-runtime", "openai-provider", "user-jwt"]
     chat-bff              = ["user-jwt"]
     user-insight-worker   = ["user-runtime-db"]
+    database-bootstrap    = []
     property-flyway       = ["property-migrator-db"]
     admin-migration       = ["admin-migrator-db"]
     user-flyway           = ["user-migrator-db"]
+    ai-migration          = ["ai-migrator-db"]
     source-data-migration = ["coordinate-migrator-db"]
     runtime-grants        = ["property-migrator-db", "admin-migrator-db", "user-migrator-db"]
     property-batch        = ["property-runtime-db", "public-data-providers"]
@@ -97,6 +99,34 @@ resource "aws_iam_role_policy" "runtime_grants" {
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
         Resource = [for name in local.workload_secret_names["runtime-grants"] : aws_secretsmanager_secret.container[name].arn]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt"]
+        Resource = [aws_kms_key.data.arn]
+      },
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "database_bootstrap" {
+  name = "read-production-database-bootstrap-secrets"
+  role = aws_iam_role.workload_task["database-bootstrap"].id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = ["secretsmanager:GetSecretValue"]
+        Resource = concat(
+          [for database in aws_db_instance.service : database.master_user_secret[0].secret_arn],
+          [for name in [
+            "property-runtime-db", "property-ai-reader-db", "admin-runtime-db", "user-runtime-db",
+            "coordinate-reader-db", "property-migrator-db", "admin-migrator-db", "user-migrator-db",
+            "ai-migrator-db", "ai-importer-db", "ai-runtime-db", "coordinate-migrator-db",
+            "coordinate-importer-db", "backup-db",
+          ] : aws_secretsmanager_secret.container[name].arn],
+        )
       },
       {
         Effect   = "Allow"

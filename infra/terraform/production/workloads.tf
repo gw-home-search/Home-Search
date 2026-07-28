@@ -404,6 +404,31 @@ resource "aws_ecs_service" "service" {
 
 locals {
   one_shot_specs = {
+    database-bootstrap = {
+      image = "ops-bootstrap", command = ["production-db-bootstrap"]
+      environment = [
+        { name = "PROPERTY_RDS_SECRET_ARN", value = aws_db_instance.service["property"].master_user_secret[0].secret_arn },
+        { name = "ADMIN_RDS_SECRET_ARN", value = aws_db_instance.service["admin"].master_user_secret[0].secret_arn },
+        { name = "USER_RDS_SECRET_ARN", value = aws_db_instance.service["user"].master_user_secret[0].secret_arn },
+        { name = "AI_RDS_SECRET_ARN", value = aws_db_instance.service["ai"].master_user_secret[0].secret_arn },
+        { name = "COORDINATE_RDS_SECRET_ARN", value = aws_db_instance.service["coordinate"].master_user_secret[0].secret_arn },
+        { name = "PROPERTY_RUNTIME_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["property-runtime-db"].arn },
+        { name = "PROPERTY_AI_READER_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["property-ai-reader-db"].arn },
+        { name = "ADMIN_RUNTIME_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["admin-runtime-db"].arn },
+        { name = "USER_RUNTIME_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["user-runtime-db"].arn },
+        { name = "COORDINATE_READER_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["coordinate-reader-db"].arn },
+        { name = "PROPERTY_MIGRATOR_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["property-migrator-db"].arn },
+        { name = "ADMIN_MIGRATOR_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["admin-migrator-db"].arn },
+        { name = "USER_MIGRATOR_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["user-migrator-db"].arn },
+        { name = "AI_MIGRATOR_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["ai-migrator-db"].arn },
+        { name = "AI_IMPORTER_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["ai-importer-db"].arn },
+        { name = "AI_RUNTIME_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["ai-runtime-db"].arn },
+        { name = "COORDINATE_MIGRATOR_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["coordinate-migrator-db"].arn },
+        { name = "COORDINATE_IMPORTER_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["coordinate-importer-db"].arn },
+        { name = "BACKUP_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["backup-db"].arn },
+      ]
+      secrets = []
+    }
     property-flyway = {
       image = "property-flyway", command = ["migrate"]
       environment = [
@@ -427,6 +452,11 @@ locals {
         { name = "FLYWAY_USER", value = "home_search_user_migrator" },
       ]
       secrets = [{ name = "FLYWAY_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["user-migrator-db"].arn}:password::" }]
+    }
+    ai-migration = {
+      image       = "ai", command = ["home-ai-migrate"]
+      environment = []
+      secrets     = [{ name = "HOME_AI_MIGRATOR_DSN", valueFrom = "${aws_secretsmanager_secret.container["ai-migrator-db"].arn}:dsn::" }]
     }
     source-data-migration = {
       image = "source-data-migration", command = []

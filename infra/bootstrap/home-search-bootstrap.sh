@@ -150,7 +150,9 @@ write_role_sql() {
   local file="$1" role="$2" password="$3"
   printf 'DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '\''%s'\'') THEN CREATE ROLE %s LOGIN; END IF; END $$;\n' "${role}" "${role}" >>"${file}"
   printf 'ALTER ROLE %s WITH LOGIN PASSWORD '\''%s'\'';\n' "${role}" "$(sql_literal "${password}")" >>"${file}"
-  printf 'ALTER ROLE %s NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;\n' "${role}" >>"${file}"
+  printf 'ALTER ROLE %s NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;\n' "${role}" >>"${file}"
+  printf 'DO $$\nDECLARE parent_role name;\nBEGIN\n  FOR parent_role IN\n    SELECT parent.rolname\n    FROM pg_auth_members membership\n    JOIN pg_roles parent ON parent.oid = membership.roleid\n    WHERE membership.member = '\''%s'\''::regrole\n  LOOP\n    EXECUTE format('\''REVOKE %%I FROM %s'\'', parent_role);\n  END LOOP;\nEND\n$$;\n' \
+    "${role}" "${role}" >>"${file}"
 }
 
 prepare_pgpass() {
@@ -271,6 +273,129 @@ SQL
   echo '상태: Pass - logical database와 least-privilege role bootstrap을 확인했습니다.'
 }
 
+production_db_bootstrap() {
+  local name spec environment_name file_name logical master_file roles_file grants_file
+  local host port username password_file
+  for name in \
+    PROPERTY_RDS_SECRET_ARN ADMIN_RDS_SECRET_ARN USER_RDS_SECRET_ARN AI_RDS_SECRET_ARN COORDINATE_RDS_SECRET_ARN \
+    PROPERTY_RUNTIME_DB_SECRET_ARN PROPERTY_AI_READER_DB_SECRET_ARN ADMIN_RUNTIME_DB_SECRET_ARN \
+    USER_RUNTIME_DB_SECRET_ARN COORDINATE_READER_DB_SECRET_ARN PROPERTY_MIGRATOR_DB_SECRET_ARN \
+    ADMIN_MIGRATOR_DB_SECRET_ARN USER_MIGRATOR_DB_SECRET_ARN AI_MIGRATOR_DB_SECRET_ARN \
+    AI_IMPORTER_DB_SECRET_ARN AI_RUNTIME_DB_SECRET_ARN COORDINATE_MIGRATOR_DB_SECRET_ARN \
+    COORDINATE_IMPORTER_DB_SECRET_ARN BACKUP_DB_SECRET_ARN; do
+    required "${name}"
+  done
+
+  for spec in \
+    PROPERTY_RDS_SECRET_ARN:property-master ADMIN_RDS_SECRET_ARN:admin-master \
+    USER_RDS_SECRET_ARN:user-master AI_RDS_SECRET_ARN:ai-master \
+    COORDINATE_RDS_SECRET_ARN:coordinate-master \
+    PROPERTY_RUNTIME_DB_SECRET_ARN:property-runtime PROPERTY_AI_READER_DB_SECRET_ARN:property-ai-reader \
+    ADMIN_RUNTIME_DB_SECRET_ARN:admin-runtime USER_RUNTIME_DB_SECRET_ARN:user-runtime \
+    COORDINATE_READER_DB_SECRET_ARN:coordinate-reader PROPERTY_MIGRATOR_DB_SECRET_ARN:property-migrator \
+    ADMIN_MIGRATOR_DB_SECRET_ARN:admin-migrator USER_MIGRATOR_DB_SECRET_ARN:user-migrator \
+    AI_MIGRATOR_DB_SECRET_ARN:ai-migrator AI_IMPORTER_DB_SECRET_ARN:ai-importer \
+    AI_RUNTIME_DB_SECRET_ARN:ai-runtime COORDINATE_MIGRATOR_DB_SECRET_ARN:coordinate-migrator \
+    COORDINATE_IMPORTER_DB_SECRET_ARN:coordinate-importer BACKUP_DB_SECRET_ARN:backup; do
+    environment_name="${spec%%:*}"
+    file_name="${spec#*:}"
+    read_secret "${!environment_name}" "${tmp_dir}/${file_name}.json"
+  done
+
+  for logical in property admin user ai coordinate; do
+    master_file="${tmp_dir}/${logical}-master.json"
+    password_file="${tmp_dir}/${logical}-master.pgpass"
+    prepare_pgpass "${master_file}" "${password_file}"
+    host="$(jq -er '.host | select(type == "string" and length > 0)' "${master_file}")"
+    port="$(jq -er '.port // 5432 | select(type == "number")' "${master_file}")"
+    username="$(jq -er '.username | select(type == "string" and length > 0)' "${master_file}")"
+    roles_file="${tmp_dir}/${logical}-production-roles.sql"
+    grants_file="${tmp_dir}/${logical}-production-grants.sql"
+    : >"${roles_file}"
+    case "${logical}" in
+      property)
+        write_role_sql "${roles_file}" home_search_property_runtime "$(jq -er '.password' "${tmp_dir}/property-runtime.json")"
+        write_role_sql "${roles_file}" home_search_ai_reader "$(jq -er '.password' "${tmp_dir}/property-ai-reader.json")"
+        write_role_sql "${roles_file}" home_search_property_migrator "$(jq -er '.password' "${tmp_dir}/property-migrator.json")"
+        write_role_sql "${roles_file}" home_search_backup "$(jq -er '.password' "${tmp_dir}/backup.json")"
+        printf '%s\n' \
+          'ALTER ROLE home_search_ai_reader NOINHERIT;' \
+          'ALTER DATABASE home_search OWNER TO home_search_property_migrator;' \
+          'REVOKE CONNECT, TEMPORARY ON DATABASE postgres FROM PUBLIC;' \
+          'REVOKE CONNECT, TEMPORARY ON DATABASE home_search FROM PUBLIC;' \
+          'GRANT CONNECT ON DATABASE home_search TO home_search_property_runtime, home_search_property_migrator, home_search_ai_reader, home_search_backup;' \
+          >"${grants_file}"
+        ;;
+      admin)
+        write_role_sql "${roles_file}" home_search_admin_runtime "$(jq -er '.password' "${tmp_dir}/admin-runtime.json")"
+        write_role_sql "${roles_file}" home_search_admin_migrator "$(jq -er '.password' "${tmp_dir}/admin-migrator.json")"
+        write_role_sql "${roles_file}" home_search_backup "$(jq -er '.password' "${tmp_dir}/backup.json")"
+        printf '%s\n' \
+          'ALTER DATABASE home_search_admin OWNER TO home_search_admin_migrator;' \
+          'REVOKE CONNECT, TEMPORARY ON DATABASE postgres FROM PUBLIC;' \
+          'REVOKE CONNECT, TEMPORARY ON DATABASE home_search_admin FROM PUBLIC;' \
+          'GRANT CONNECT ON DATABASE home_search_admin TO home_search_admin_runtime, home_search_admin_migrator, home_search_backup;' \
+          >"${grants_file}"
+        ;;
+      user)
+        write_role_sql "${roles_file}" home_search_user_runtime "$(jq -er '.password' "${tmp_dir}/user-runtime.json")"
+        write_role_sql "${roles_file}" home_search_user_migrator "$(jq -er '.password' "${tmp_dir}/user-migrator.json")"
+        write_role_sql "${roles_file}" home_search_backup "$(jq -er '.password' "${tmp_dir}/backup.json")"
+        printf '%s\n' \
+          'ALTER DATABASE home_search_user OWNER TO home_search_user_migrator;' \
+          'REVOKE CONNECT, TEMPORARY ON DATABASE postgres FROM PUBLIC;' \
+          'REVOKE CONNECT, TEMPORARY ON DATABASE home_search_user FROM PUBLIC;' \
+          'GRANT CONNECT ON DATABASE home_search_user TO home_search_user_runtime, home_search_user_migrator, home_search_backup;' \
+          >"${grants_file}"
+        ;;
+      ai)
+        write_role_sql "${roles_file}" home_search_ai_migrator "$(jq -er '.password' "${tmp_dir}/ai-migrator.json")"
+        write_role_sql "${roles_file}" home_search_ai_importer "$(jq -er '.password' "${tmp_dir}/ai-importer.json")"
+        write_role_sql "${roles_file}" home_search_ai_runtime "$(jq -er '.password' "${tmp_dir}/ai-runtime.json")"
+        write_role_sql "${roles_file}" home_search_backup "$(jq -er '.password' "${tmp_dir}/backup.json")"
+        printf '%s\n' \
+          'ALTER ROLE home_search_ai_migrator NOINHERIT;' \
+          'ALTER ROLE home_search_ai_importer NOINHERIT;' \
+          'ALTER ROLE home_search_ai_runtime NOINHERIT;' \
+          'ALTER DATABASE home_search_ai OWNER TO home_search_ai_migrator;' \
+          'REVOKE CONNECT, TEMPORARY ON DATABASE postgres FROM PUBLIC;' \
+          'REVOKE CONNECT, TEMPORARY ON DATABASE home_search_ai FROM PUBLIC;' \
+          'GRANT CONNECT ON DATABASE home_search_ai TO home_search_ai_migrator, home_search_ai_importer, home_search_ai_runtime, home_search_backup;' \
+          >"${grants_file}"
+        ;;
+      coordinate)
+        write_role_sql "${roles_file}" home_search_coordinate_reader "$(jq -er '.password' "${tmp_dir}/coordinate-reader.json")"
+        write_role_sql "${roles_file}" home_search_coordinate_migrator "$(jq -er '.password' "${tmp_dir}/coordinate-migrator.json")"
+        write_role_sql "${roles_file}" home_search_coordinate_importer "$(jq -er '.password' "${tmp_dir}/coordinate-importer.json")"
+        write_role_sql "${roles_file}" home_search_backup "$(jq -er '.password' "${tmp_dir}/backup.json")"
+        printf '%s\n' \
+          'ALTER ROLE home_search_coordinate_reader NOINHERIT;' \
+          'ALTER ROLE home_search_coordinate_importer NOINHERIT;' \
+          'ALTER DATABASE home_search_coordinate_source OWNER TO home_search_coordinate_migrator;' \
+          'REVOKE CONNECT, TEMPORARY ON DATABASE postgres FROM PUBLIC;' \
+          'REVOKE CONNECT, TEMPORARY ON DATABASE home_search_coordinate_source FROM PUBLIC;' \
+          'GRANT CONNECT ON DATABASE home_search_coordinate_source TO home_search_coordinate_migrator, home_search_coordinate_importer, home_search_coordinate_reader, home_search_backup;' \
+          >"${grants_file}"
+        ;;
+    esac
+    PGPASSFILE="${password_file}" psql -X -q -v ON_ERROR_STOP=1 -h "${host}" -p "${port}" -U "${username}" -d postgres -f "${roles_file}" >/dev/null
+    PGPASSFILE="${password_file}" psql -X -q -v ON_ERROR_STOP=1 -h "${host}" -p "${port}" -U "${username}" -d postgres -f "${grants_file}" >/dev/null
+    if [[ "${logical}" == 'ai' ]]; then
+      PGPASSFILE="${password_file}" psql -X -q -v ON_ERROR_STOP=1 -h "${host}" -p "${port}" -U "${username}" -d home_search_ai \
+        -c 'CREATE EXTENSION IF NOT EXISTS postgis' >/dev/null
+    else
+      case "${logical}" in
+        property) name=home_search ;;
+        admin) name=home_search_admin ;;
+        user) name=home_search_user ;;
+        coordinate) name=home_search_coordinate_source ;;
+      esac
+      PGPASSFILE="${password_file}" psql -X -q -v ON_ERROR_STOP=1 -h "${host}" -p "${port}" -U "${username}" -d "${name}" -c 'SELECT 1' >/dev/null
+    fi
+  done
+  echo '상태: Pass - Production 5개 RDS role/database 경계를 멱등 적용했습니다.'
+}
+
 runtime_grants() {
   local name
   for name in PROPERTY_MIGRATOR_DB_SECRET_ARN ADMIN_MIGRATOR_DB_SECRET_ARN USER_MIGRATOR_DB_SECRET_ARN; do
@@ -386,7 +511,8 @@ materialize_keys() {
 case "${1:-}" in
   secret-bootstrap) secret_bootstrap ;;
   db-bootstrap) db_bootstrap ;;
+  production-db-bootstrap) production_db_bootstrap ;;
   runtime-grants) runtime_grants ;;
   materialize-keys) materialize_keys ;;
-  *) echo '사용법: home-search-bootstrap secret-bootstrap|db-bootstrap|runtime-grants|materialize-keys' >&2; exit 64 ;;
+  *) echo '사용법: home-search-bootstrap secret-bootstrap|db-bootstrap|production-db-bootstrap|runtime-grants|materialize-keys' >&2; exit 64 ;;
 esac

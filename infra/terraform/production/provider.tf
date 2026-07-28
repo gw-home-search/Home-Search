@@ -64,14 +64,15 @@ locals {
     "ml", "ai", "chat-bff", "user-insight-worker",
   ])
   one_shot_names = toset([
-    "property-flyway", "admin-migration", "user-flyway", "source-data-migration",
+    "database-bootstrap", "property-flyway", "admin-migration", "user-flyway", "ai-migration", "source-data-migration",
     "runtime-grants", "property-batch", "map-marker-projection", "admin-ops", "backup",
   ])
   workload_names = setunion(local.service_names, local.one_shot_names)
   secret_containers = toset([
     "property-runtime-db", "admin-runtime-db", "user-runtime-db",
     "property-migrator-db", "admin-migrator-db", "user-migrator-db",
-    "coordinate-migrator-db", "ai-runtime", "openai-provider", "oauth-providers",
+    "property-ai-reader-db", "coordinate-reader-db", "coordinate-migrator-db", "coordinate-importer-db",
+    "ai-migrator-db", "ai-importer-db", "ai-runtime-db", "ai-runtime", "openai-provider", "oauth-providers",
     "user-jwt", "admin-internal-jwt", "admin-internal-jwt-public",
     "kakao-local-provider", "public-data-providers", "backup-db",
   ])

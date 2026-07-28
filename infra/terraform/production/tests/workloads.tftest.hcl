@@ -97,11 +97,28 @@ run "private_digest_pinned_production_workloads" {
     condition = (
       length(aws_ecs_task_definition.one_shot) >= 9
       && contains(keys(aws_ecs_task_definition.one_shot), "property-flyway")
+      && contains(keys(aws_ecs_task_definition.one_shot), "database-bootstrap")
       && contains(keys(aws_ecs_task_definition.one_shot), "admin-migration")
       && contains(keys(aws_ecs_task_definition.one_shot), "user-flyway")
+      && contains(keys(aws_ecs_task_definition.one_shot), "ai-migration")
       && contains(keys(aws_ecs_task_definition.one_shot), "runtime-grants")
       && contains(keys(aws_ecs_task_definition.one_shot), "map-marker-projection")
     )
     error_message = "Production migrations and operations must be finite ECS tasks, not permanent services."
+  }
+
+  assert {
+    condition = (
+      contains(local.secret_containers, "property-ai-reader-db")
+      && contains(local.secret_containers, "ai-migrator-db")
+      && contains(local.secret_containers, "ai-importer-db")
+      && contains(local.secret_containers, "ai-runtime-db")
+      && contains(local.secret_containers, "coordinate-reader-db")
+      && contains(local.secret_containers, "coordinate-importer-db")
+      && local.one_shot_specs["database-bootstrap"].command == ["production-db-bootstrap"]
+      && one(local.one_shot_specs["ai-migration"].secrets).name == "HOME_AI_MIGRATOR_DSN"
+      && local.workload_secret_names["ai-migration"] == ["ai-migrator-db"]
+    )
+    error_message = "Production must bootstrap split-RDS roles and run the AI schema migration with a dedicated migrator secret."
   }
 }

@@ -50,6 +50,11 @@ if [[ "$*" == *'get-secret-value'* ]]; then
   case "${secret_id}" in
     arn:primary) printf '%s\n' '{"host":"primary.internal","port":5432,"username":"primary_admin","password":"MASTER_SENTINEL_PRIMARY"}' ;;
     arn:coordinate) printf '%s\n' '{"host":"coordinate.internal","port":5432,"username":"coordinate_admin","password":"MASTER_SENTINEL_COORDINATE"}' ;;
+    arn:production-property) printf '%s\n' '{"host":"property.production.internal","port":5432,"username":"cluster_admin","password":"MASTER_SENTINEL_PROPERTY"}' ;;
+    arn:production-admin) printf '%s\n' '{"host":"admin.production.internal","port":5432,"username":"cluster_admin","password":"MASTER_SENTINEL_ADMIN"}' ;;
+    arn:production-user) printf '%s\n' '{"host":"user.production.internal","port":5432,"username":"cluster_admin","password":"MASTER_SENTINEL_USER"}' ;;
+    arn:production-ai) printf '%s\n' '{"host":"ai.production.internal","port":5432,"username":"cluster_admin","password":"MASTER_SENTINEL_AI"}' ;;
+    arn:production-coordinate) printf '%s\n' '{"host":"coordinate.production.internal","port":5432,"username":"cluster_admin","password":"MASTER_SENTINEL_COORDINATE"}' ;;
     arn:property-ai-reader)
       if [[ "${FAKE_RUNTIME_WITHOUT_AI_READER:-false}" == 'true' ]]; then
         printf '%s\n' '{}'
@@ -66,6 +71,9 @@ if [[ "$*" == *'get-secret-value'* ]]; then
     arn:user-migrator) printf '%s\n' '{"password":"BOOTSTRAP_SENTINEL_USER"}' ;;
     arn:coordinate-migrator) printf '%s\n' '{"password":"BOOTSTRAP_SENTINEL_COORDINATE"}' ;;
     arn:coordinate-importer) printf '%s\n' '{"password":"BOOTSTRAP_SENTINEL_IMPORTER"}' ;;
+    arn:ai-migrator) printf '%s\n' '{"password":"BOOTSTRAP_SENTINEL_AI_MIGRATOR"}' ;;
+    arn:ai-importer) printf '%s\n' '{"password":"BOOTSTRAP_SENTINEL_AI_IMPORTER"}' ;;
+    arn:ai-runtime) printf '%s\n' '{"password":"RUNTIME_SENTINEL_AI"}' ;;
     arn:backup) printf '%s\n' '{"password":"BOOTSTRAP_SENTINEL_BACKUP"}' ;;
     *)
       [[ -f "${FAKE_AWS_STATE}/${secret_id//\//_}" ]] \
@@ -86,6 +94,13 @@ cat >"${tmp_dir}/bin/psql" <<'FAKE_PSQL'
 set -Eeuo pipefail
 printf '%q ' "$@" >>"${FAKE_DB_ARGV_LOG}"
 printf '\n' >>"${FAKE_DB_ARGV_LOG}"
+previous=''
+for argument in "$@"; do
+  if [[ "${previous}" == '-f' ]]; then
+    sed '/WITH LOGIN PASSWORD/d' "${argument}" >>"${FAKE_DB_SQL_LOG}"
+  fi
+  previous="${argument}"
+done
 if [[ "$*" == *'SELECT 1 FROM pg_database'* ]]; then
   printf '1\n'
 fi
@@ -104,9 +119,11 @@ export PATH="${tmp_dir}/bin:${PATH}"
 export FAKE_AWS_ARGV_LOG="${tmp_dir}/aws.argv"
 export FAKE_AWS_STATE="${tmp_dir}/aws-state"
 export FAKE_DB_ARGV_LOG="${tmp_dir}/db.argv"
+export FAKE_DB_SQL_LOG="${tmp_dir}/db.sql"
 mkdir -p "${FAKE_AWS_STATE}"
 : >"${FAKE_AWS_ARGV_LOG}"
 : >"${FAKE_DB_ARGV_LOG}"
+: >"${FAKE_DB_SQL_LOG}"
 
 PROPERTY_RUNTIME_DB_SECRET_ARN=arn:new-property-runtime \
 PROPERTY_AI_READER_DB_SECRET_ARN=arn:new-property-ai-reader \
@@ -258,6 +275,43 @@ COORDINATE_IMPORTER_DB_SECRET_ARN=arn:coordinate-importer \
 BACKUP_DB_SECRET_ARN=arn:backup \
   "${script}" db-bootstrap >"${tmp_dir}/db.out" 2>"${tmp_dir}/db.err"
 ! grep -Eq 'SENTINEL|password' "${FAKE_AWS_ARGV_LOG}" "${FAKE_DB_ARGV_LOG}" "${tmp_dir}/db.out" "${tmp_dir}/db.err"
+
+: >"${FAKE_DB_ARGV_LOG}"
+PROPERTY_RDS_SECRET_ARN=arn:production-property \
+ADMIN_RDS_SECRET_ARN=arn:production-admin \
+USER_RDS_SECRET_ARN=arn:production-user \
+AI_RDS_SECRET_ARN=arn:production-ai \
+COORDINATE_RDS_SECRET_ARN=arn:production-coordinate \
+PROPERTY_RUNTIME_DB_SECRET_ARN=arn:property-runtime \
+PROPERTY_AI_READER_DB_SECRET_ARN=arn:property-ai-reader \
+ADMIN_RUNTIME_DB_SECRET_ARN=arn:admin-runtime \
+USER_RUNTIME_DB_SECRET_ARN=arn:user-runtime \
+COORDINATE_READER_DB_SECRET_ARN=arn:coordinate-reader \
+PROPERTY_MIGRATOR_DB_SECRET_ARN=arn:property-migrator \
+ADMIN_MIGRATOR_DB_SECRET_ARN=arn:admin-migrator \
+USER_MIGRATOR_DB_SECRET_ARN=arn:user-migrator \
+AI_MIGRATOR_DB_SECRET_ARN=arn:ai-migrator \
+AI_IMPORTER_DB_SECRET_ARN=arn:ai-importer \
+AI_RUNTIME_DB_SECRET_ARN=arn:ai-runtime \
+COORDINATE_MIGRATOR_DB_SECRET_ARN=arn:coordinate-migrator \
+COORDINATE_IMPORTER_DB_SECRET_ARN=arn:coordinate-importer \
+BACKUP_DB_SECRET_ARN=arn:backup \
+  "${script}" production-db-bootstrap >"${tmp_dir}/production-db.out" 2>"${tmp_dir}/production-db.err"
+for boundary in \
+  'property.production.internal home_search' \
+  'admin.production.internal home_search_admin' \
+  'user.production.internal home_search_user' \
+  'ai.production.internal home_search_ai' \
+  'coordinate.production.internal home_search_coordinate_source'; do
+  host="${boundary%% *}"
+  database="${boundary#* }"
+  grep -Fq -- "-h ${host}" "${FAKE_DB_ARGV_LOG}"
+  grep -Fq -- "-d ${database}" "${FAKE_DB_ARGV_LOG}"
+done
+! grep -Eq 'SENTINEL|password' "${FAKE_AWS_ARGV_LOG}" "${FAKE_DB_ARGV_LOG}" \
+  "${tmp_dir}/production-db.out" "${tmp_dir}/production-db.err"
+grep -Fq "membership.member = 'home_search_backup'::regrole" "${FAKE_DB_SQL_LOG}"
+grep -Fq 'ALTER ROLE home_search_backup NOINHERIT NOSUPERUSER' "${FAKE_DB_SQL_LOG}"
 
 PRIMARY_DB_HOST=primary.internal \
 PRIMARY_DB_PORT=5432 \

@@ -112,6 +112,28 @@ done
 assert_route /api/v1/chatbot/query 200 chat-bff-json "Bearer route-test"
 assert_route /api/v1/chatbot/query/stream 200 chat-bff-sse "Bearer route-test"
 
+oauth_headers="$(curl --silent --show-error --max-time 5 \
+    --header 'Host: staging.homesearch.world' \
+    --header 'X-Forwarded-Proto: https' \
+    "${base_url}/oauth2/authorization/kakao")"
+if ! grep -Fq '"forwardedProto":"https"' <<<"${oauth_headers}"; then
+    echo "상태: Fail - OAuth callback 생성을 위한 외부 HTTPS protocol이 보존되지 않았습니다: ${oauth_headers}" >&2
+    exit 1
+fi
+if ! grep -Fq '"host":"staging.homesearch.world"' <<<"${oauth_headers}"; then
+    echo "상태: Fail - OAuth callback 생성을 위한 외부 host가 보존되지 않았습니다: ${oauth_headers}" >&2
+    exit 1
+fi
+
+invalid_oauth_headers="$(curl --silent --show-error --max-time 5 \
+    --header 'Host: staging.homesearch.world' \
+    --header 'X-Forwarded-Proto: javascript' \
+    "${base_url}/oauth2/authorization/kakao")"
+if ! grep -Fq '"forwardedProto":"http"' <<<"${invalid_oauth_headers}"; then
+    echo "상태: Fail - 허용되지 않은 forwarded protocol이 내부 scheme으로 fallback되지 않았습니다: ${invalid_oauth_headers}" >&2
+    exit 1
+fi
+
 for path in \
     /api/v1/insights \
     /api/v1/insights/unknown \
@@ -125,4 +147,4 @@ for path in \
     assert_route "$path" 404
 done
 
-echo "상태: Pass - insight exact route ownership, 인증 전달, namespace fallback 차단을 확인했습니다."
+echo "상태: Pass - OAuth 외부 origin, insight exact route ownership, 인증 전달, namespace fallback 차단을 확인했습니다."

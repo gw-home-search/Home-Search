@@ -41,6 +41,25 @@ jq -e '
   (.target["public-gateway"].args.VITE_MARKET_NEWS_ENABLED == "true")
 ' "${tmp_dir}/bake.json" >/dev/null
 
+if ! jq -e '([.target[] | .platforms] | all(. == ["linux/amd64"]))' \
+  "${tmp_dir}/bake.json" >/dev/null; then
+  echo '상태: Fail - release Bake target이 production ECS X86_64 architecture와 일치하지 않습니다.' >&2
+  exit 1
+fi
+
+release_workflow=".github/workflows/release-images.yml"
+if grep -Fq 'docker/setup-qemu-action@' "${release_workflow}"; then
+  echo '상태: Fail - amd64-only release workflow에 QEMU 설정이 남아 있습니다.' >&2
+  exit 1
+fi
+
+prepare_evidence_line="$(grep -nF 'name: Prepare release failure evidence' "${release_workflow}" | cut -d: -f1)"
+build_images_line="$(grep -nF 'name: Build and publish SHA and SemVer images' "${release_workflow}" | cut -d: -f1)"
+if [[ -z "${prepare_evidence_line}" || -z "${build_images_line}" || "${prepare_evidence_line}" -ge "${build_images_line}" ]]; then
+  echo '상태: Fail - release failure evidence가 image build 전에 준비되지 않습니다.' >&2
+  exit 1
+fi
+
 docker build --tag "${backup_image}" --file infra/backup/Dockerfile .
 [[ "$(docker inspect --format '{{.Config.User}}' "${backup_image}")" == '10001:10001' ]]
 [[ "$(docker inspect --format '{{json .Config.Entrypoint}}' "${backup_image}")" == '["/usr/local/bin/home-search-db-backup"]' ]]

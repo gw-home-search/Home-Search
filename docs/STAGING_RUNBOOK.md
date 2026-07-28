@@ -41,6 +41,8 @@ restore rehearsal 절차를 소유한다. production cutover, DNS 전환, produc
 | 변수 | 예시 형상 |
 |---|---|
 | `AWS_STAGING_ROLE_ARN` | protected staging OIDC role ARN |
+| `AWS_STAGING_PLAN_ROLE_ARN` | staging foundation read-only plan OIDC role ARN |
+| `AWS_STAGING_APPLY_ROLE_ARN` | reviewed staging foundation apply OIDC role ARN |
 | `AWS_REGION` | `ap-northeast-2` |
 | `STAGING_ADMIN_ALLOWED_CIDRS_JSON` | `["203.0.113.10/32"]` |
 | `STAGING_PUBLIC_CERTIFICATE_ARN` | public ACM certificate ARN |
@@ -84,7 +86,7 @@ terraform -chdir=infra/terraform/bootstrap apply \
   -var='github_repository=OWNER/REPOSITORY'
 ```
 
-출력한 state bucket, KMS key, staging/release role ARN을 기록한다. 이후
+출력한 state bucket, KMS key, staging workload/release/foundation plan/apply role ARN을 기록한다. 이후
 `backend.s3.tf.example`을 추적되지 않는 `backend.tf`로 복사해 placeholder만
 채우고 다음 명령으로 state를 명시적으로 이전한다.
 
@@ -110,22 +112,27 @@ terraform -chdir=infra/terraform/staging plan \
   -var-file=registry-bootstrap.auto.tfvars.json -out=registry.tfplan
 terraform -chdir=infra/terraform/staging apply registry.tfplan
 
-# 첫 release image 게시 후 actual digest manifest를 사용한다.
-terraform -chdir=infra/terraform/staging plan \
-  -var-file=foundation.auto.tfvars.json -out=foundation.tfplan
-terraform -chdir=infra/terraform/staging apply foundation.tfplan
+# 첫 release image 게시 후 GitHub의 Staging foundation workflow를 사용한다.
+# 1. apply=false로 plan-only run
+# 2. staging-foundation-plan-vX.Y.Z artifact의 0 destroy와 비용 검토
+# 3. apply=true, reviewed_plan_run_id=<plan run id>로 별도 apply run
 ```
 
-계획에서 public/admin ALB 분리, admin CIDR 제한, private RDS/Valkey, 별도
+`Staging foundation` workflow는 main ref에서만 plan/apply role을 assume한다.
+plan role은 staging state를 읽고 lock할 수 있지만 state를 쓸 수 없으며,
+apply role은 별도로 검토한 성공 plan run artifact만 적용한다. apply run에서 새 plan을
+만들지 않으며 plan artifact의 SHA-256이 summary와 다르면 중단한다. 계획에서
+public/admin ALB 분리, admin CIDR 제한, private RDS/Valkey, 별도
 coordinate-source RDS, ECR, secret container, EFS, private MSK Serverless,
 Glue registry, encrypted operations SNS topic, Scheduler failure DLQ가 생성되는지
 확인한다. Terraform은 topic과 Glue schema version을 생성하지 않으며 contract
 pipeline이 이를 승격한다.
-Terraform state와 plan 파일에 secret 값이 없어야 한다.
+Terraform state와 plan 파일에 secret 값이 없어야 한다. 최초 apply는
+`enable_services=false`, 모든 schedule `DISABLED`를 강제하며 service를 시작하지 않는다.
 
 ## 3. Secret과 DB bootstrap
 
-`terraform output -json network`와 `workload_release`에서 cluster, app subnet,
+foundation apply run은 `terraform output -json network`와 `workload_release`에서 cluster, app subnet,
 `ops` security group, task definition ARN을 얻는다. `run-ecs-task.sh`는 task가
 멈출 때까지 기다리고 모든 container exit code가 0일 때만 성공한다.
 
@@ -136,7 +143,9 @@ infra/deploy/run-ecs-task.sh \
   CLUSTER_ARN DATABASE_BOOTSTRAP_TASK_ARN '["subnet-a","subnet-b"]' '["sg-ops"]'
 ```
 
-그 뒤 4개 migration task를 실행하고 마지막에 `runtime-grants`를 실행한다.
+그 뒤 Property/Admin/User/Coordinate schema migration task를 실행하고 마지막에
+`runtime-grants`를 실행한다. Coordinate schema는 비어 있는 DB에만 적용하며 전국
+coordinate snapshot import나 `map-marker-projection`은 이 단계에서 실행하지 않는다.
 실패한 task가 있으면 service를 시작하지 않는다. stdout, CloudWatch Logs,
 ECS override, process argv에 password나 private key가 나타나면 즉시 중단한다.
 
@@ -159,8 +168,7 @@ artifact가 없거나 checksum이 다르면 ML entrypoint가 실패해야 한다
 ## 5. Image release
 
 1. release commit이 `main`에 포함됐는지 확인한다.
-2. `main` push에서 실행된 `ci`가 변경 대상 gate를 `success`, 비대상 gate를
-   `skipped`로 완료했는지 확인한다.
+2. `main` push에서 실행된 release 전체 matrix가 모두 `success`인지 확인한다.
 3. `vMAJOR.MINOR.PATCH` tag를 만든다.
 4. `Publish release images` workflow를 확인한다.
 

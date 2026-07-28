@@ -75,11 +75,17 @@ run "secure_remote_state_and_exact_oidc_trust" {
   }
   assert {
     condition = alltrue([
-      length(local.staging_ecs_task_role_names) == 40,
+      length(local.staging_ecs_task_role_names) == 46,
       length(one([
         for statement in jsondecode(aws_iam_role_policy.github_staging_deployment.policy).Statement : statement.Resource
         if statement.Sid == "PassStagingEcsTaskRolesOnly"
-      ])) == 40,
+      ])) == 46,
+      contains(local.staging_ecs_task_role_names, "home-search-staging-ai-execution"),
+      contains(local.staging_ecs_task_role_names, "home-search-staging-ai-task"),
+      contains(local.staging_ecs_task_role_names, "home-search-staging-chat-bff-execution"),
+      contains(local.staging_ecs_task_role_names, "home-search-staging-chat-bff-task"),
+      contains(local.staging_ecs_task_role_names, "home-search-staging-map-marker-projection-execution"),
+      contains(local.staging_ecs_task_role_names, "home-search-staging-map-marker-projection-task"),
       contains(local.staging_ecs_task_role_names, "home-search-staging-user-insight-worker-execution"),
       contains(local.staging_ecs_task_role_names, "home-search-staging-user-insight-worker-task"),
       contains(local.staging_ecs_task_role_names, "home-search-staging-property-event-maintenance-execution"),
@@ -117,7 +123,9 @@ run "secure_remote_state_and_exact_oidc_trust" {
   }
   assert {
     condition = alltrue([
-      length(local.staging_release_alarm_names) == 7,
+      length(local.staging_release_alarm_names) == 9,
+      contains(local.staging_release_alarm_names, "home-search-staging-ai-running-task"),
+      contains(local.staging_release_alarm_names, "home-search-staging-chat-bff-running-task"),
       one([
         for statement in jsondecode(aws_iam_role_policy.github_staging_deployment.policy).Statement : statement.Resource
         if statement.Sid == "ManageStagingReleaseAlarms"
@@ -131,5 +139,22 @@ run "secure_remote_state_and_exact_oidc_trust" {
       ]),
     ])
     error_message = "The deployment role may manage only exact staging ECS running-task alarms."
+  }
+  assert {
+    condition = alltrue([
+      contains(one([
+        for statement in jsondecode(aws_iam_role_policy.github_staging_deployment.policy).Statement : statement.Action
+        if statement.Sid == "ReadStagingPlanState"
+      ]), "iam:ListRoleTags"),
+      contains(one([
+        for statement in jsondecode(aws_iam_role_policy.github_staging_deployment.policy).Statement : statement.Action
+        if statement.Sid == "ReadStagingPlanState"
+      ]), "secretsmanager:GetResourcePolicy"),
+      !contains(one([
+        for statement in jsondecode(aws_iam_role_policy.github_staging_deployment.policy).Statement : statement.Action
+        if statement.Sid == "ReadStagingPlanState"
+      ]), "secretsmanager:GetSecretValue"),
+    ])
+    error_message = "The staging deployment role needs refresh metadata but must not read secret payloads."
   }
 }

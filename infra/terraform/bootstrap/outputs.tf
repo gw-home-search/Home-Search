@@ -13,6 +13,16 @@ output "github_staging_role_arn" {
   value       = aws_iam_role.github_staging.arn
 }
 
+output "github_staging_foundation_plan_role_arn" {
+  description = "Staging OIDC role that can read infrastructure and lock, but not write, staging state."
+  value       = aws_iam_role.github_staging_foundation_plan.arn
+}
+
+output "github_staging_foundation_apply_role_arn" {
+  description = "Staging OIDC role for reviewed zero-destroy foundation apply and first bootstrap tasks."
+  value       = aws_iam_role.github_staging_foundation_apply.arn
+}
+
 output "github_release_role_arn" {
   description = "Tag-only OIDC role that can publish and inspect Home Search ECR images."
   value       = aws_iam_role.github_release.arn

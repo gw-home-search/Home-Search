@@ -41,15 +41,24 @@ role can materialize only the exact DB, provider, or signing-key containers
 declared by that workload. RDS master secrets remain bootstrap-only.
 
 The release variable file contains only certificate ARNs, HTTPS origins, and
-the 15 image digests from the immutable release manifest. Keep
-`enable_services=false` on the first apply. That creates the ECS cluster and
-task definitions without starting applications against empty secrets. Run and
-wait for the following one-shot task families in order:
+the 17 image digests from the immutable release manifest. Use the
+`Staging foundation` workflow for the first full plan and apply. Run it once
+with `apply=false`, review the zero-destroy plan artifact, then run it again
+with `apply=true` and the successful `reviewed_plan_run_id`. The apply role
+cannot create a replacement plan. The reviewed plan keeps
+`enable_services=false` and every schedule disabled, creates the ECS cluster
+and task definitions without starting applications against empty secrets, then
+runs and waits for these one-shot task families in order:
 
 1. `home-search-staging-secret-bootstrap`
 2. `home-search-staging-database-bootstrap`
-3. `home-search-staging-property-flyway`, `admin-migration`, and `user-flyway`
+3. `home-search-staging-property-flyway`, `admin-migration`, `user-flyway`, and
+   `source-data-migration` for empty schemas only
 4. `home-search-staging-runtime-grants`
+
+The first foundation workflow never runs `map-marker-projection` or imports the
+nationwide coordinate snapshot. Data-only import and projection remain separate
+reviewed operations after foundation bootstrap.
 
 Only after every task exits with code 0 should a reviewed plan set
 `enable_services=true` and `enable_backup_schedules=true`. Set

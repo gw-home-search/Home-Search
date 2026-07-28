@@ -1,0 +1,259 @@
+name: Staging foundation
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Published vMAJOR.MINOR.PATCH release tag"
+        required: true
+        type: string
+      apply:
+        description: "Apply a separately reviewed zero-destroy foundation plan and run first bootstrap tasks"
+        required: true
+        default: false
+        type: boolean
+      reviewed_plan_run_id:
+        description: "Successful plan-only Staging foundation run ID; required only when apply=true"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+concurrency:
+  group: staging-foundation
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: plan-zero-destroy-foundation
+    if: ${{ !inputs.apply }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: staging
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.release_tag }}
+
+      - name: Resolve successful release evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -Eeuo pipefail
+          [[ "${RELEASE_TAG}" =~ ^v(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)$ ]]
+          release_sha="$(git rev-parse "${RELEASE_TAG}^{commit}")"
+          run_id="$(gh run list --repo "${GITHUB_REPOSITORY}" --workflow release-images.yml \
+            --commit "${release_sha}" --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+          [[ -n "${run_id}" ]]
+          mkdir -p foundation-evidence "${RUNNER_TEMP}/release-source"
+          gh run download "${run_id}" --repo "${GITHUB_REPOSITORY}" \
+            --name "release-evidence-${RELEASE_TAG}" --dir "${RUNNER_TEMP}/release-source"
+          manifest="$(find "${RUNNER_TEMP}/release-source" -type f -name release-manifest.json -print -quit)"
+          [[ -n "${manifest}" ]]
+          cp "${manifest}" foundation-evidence/release-manifest.json
+          jq -e --arg tag "${RELEASE_TAG}" --arg sha "${release_sha}" '
+            .tag == $tag and .commit_sha == $sha and (.images | length == 17)
+            and .build_architecture == "linux/amd64"
+            and .vulnerability_critical_gate_passed == true
+            and .vulnerability_policy_gate_passed == true
+          ' foundation-evidence/release-manifest.json >/dev/null
+          echo "RELEASE_SHA=${release_sha}" >>"${GITHUB_ENV}"
+
+      - name: Configure read-only staging plan credentials
+        uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with:
+          role-to-assume: ${{ vars.AWS_STAGING_PLAN_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'ap-northeast-2' }}
+          mask-aws-account-id: true
+          unset-current-credentials: true
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+        with:
+          terraform_version: 1.15.8
+          terraform_wrapper: false
+
+      - name: Initialize staging state and non-secret release variables
+        env:
+          ADMIN_ALLOWED_CIDRS: ${{ vars.STAGING_ADMIN_ALLOWED_CIDRS_JSON }}
+          PUBLIC_CERTIFICATE_ARN: ${{ vars.STAGING_PUBLIC_CERTIFICATE_ARN }}
+          ADMIN_CERTIFICATE_ARN: ${{ vars.STAGING_ADMIN_CERTIFICATE_ARN }}
+          PUBLIC_ORIGIN: ${{ vars.STAGING_PUBLIC_ORIGIN }}
+          ADMIN_ORIGIN: ${{ vars.STAGING_ADMIN_ORIGIN }}
+          STATE_BUCKET: ${{ vars.TERRAFORM_STATE_BUCKET }}
+          STATE_KEY: ${{ vars.TERRAFORM_STAGING_STATE_KEY }}
+          STATE_KMS_KEY_ARN: ${{ vars.TERRAFORM_STATE_KMS_KEY_ARN }}
+        run: |
+          set -Eeuo pipefail
+          jq -e 'type == "array" and length > 0' <<<"${ADMIN_ALLOWED_CIDRS}" >/dev/null
+          image_digests="$(jq '.images | map_values(.digest)' foundation-evidence/release-manifest.json)"
+          jq -n \
+            --argjson image_digests "${image_digests}" \
+            --argjson admin_allowed_cidrs "${ADMIN_ALLOWED_CIDRS}" \
+            --arg public_certificate_arn "${PUBLIC_CERTIFICATE_ARN}" \
+            --arg admin_certificate_arn "${ADMIN_CERTIFICATE_ARN}" \
+            --arg public_origin "${PUBLIC_ORIGIN}" --arg admin_origin "${ADMIN_ORIGIN}" \
+            '{image_digests:$image_digests,admin_allowed_cidrs:$admin_allowed_cidrs,
+              public_certificate_arn:$public_certificate_arn,admin_certificate_arn:$admin_certificate_arn,
+              public_origin:$public_origin,admin_origin:$admin_origin,enable_ml:false,
+              enable_services:false,enable_backup_schedules:false,enable_coordinate_source_runtime:false,
+              enable_market_news_public:false,enable_market_news_schedules:false,
+              enable_user_insights_public:false,enable_property_event_relay_schedule:false,
+              enable_property_event_retention_schedule:false}' \
+            >infra/terraform/staging/foundation.auto.tfvars.json
+          terraform -chdir=infra/terraform/staging init -input=false \
+            -backend-config="bucket=${STATE_BUCKET}" -backend-config="key=${STATE_KEY}" \
+            -backend-config="region=${AWS_REGION}" -backend-config="encrypt=true" \
+            -backend-config="kms_key_id=${STATE_KMS_KEY_ARN}" -backend-config="use_lockfile=true"
+
+      - name: Create and verify foundation plan
+        run: |
+          set -Eeuo pipefail
+          terraform -chdir=infra/terraform/staging plan -input=false \
+            -var-file=foundation.auto.tfvars.json -out=foundation.tfplan
+          terraform -chdir=infra/terraform/staging show -json foundation.tfplan \
+            >foundation-evidence/foundation-plan.json
+          terraform -chdir=infra/terraform/staging show -no-color foundation.tfplan \
+            >foundation-evidence/foundation-plan.txt
+          infra/deploy/verify-staging-foundation-plan.sh foundation-evidence/foundation-plan.json
+          cp infra/terraform/staging/foundation.tfplan foundation-evidence/foundation.tfplan
+          foundation_plan_sha256="$(sha256sum foundation-evidence/foundation.tfplan | awk '{print $1}')"
+          jq -n --arg release_tag "${{ inputs.release_tag }}" --arg release_sha "${RELEASE_SHA}" \
+            --arg workflow_run_id "${GITHUB_RUN_ID}" \
+            --arg foundation_plan_sha256 "${foundation_plan_sha256}" \
+            --arg planned_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{status:"pass",release_tag:$release_tag,release_sha:$release_sha,zero_destroy:true,
+              services_enabled:false,backup_schedules_enabled:false,workflow_run_id:$workflow_run_id,
+              foundation_plan_sha256:$foundation_plan_sha256,planned_at:$planned_at}' \
+            >foundation-evidence/plan-summary.json
+
+      - name: Upload reviewed foundation plan
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: staging-foundation-plan-${{ inputs.release_tag }}
+          path: foundation-evidence/
+          if-no-files-found: error
+          retention-days: 30
+
+  apply:
+    name: apply-and-bootstrap-foundation
+    if: ${{ inputs.apply }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    environment: staging
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.release_tag }}
+
+      - name: Resolve exact reviewed plan artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          REVIEWED_PLAN_RUN_ID: ${{ inputs.reviewed_plan_run_id }}
+        run: |
+          set -Eeuo pipefail
+          [[ "${REVIEWED_PLAN_RUN_ID}" =~ ^[1-9][0-9]*$ ]]
+          release_sha="$(git rev-parse "${RELEASE_TAG}^{commit}")"
+          run_json="$(gh run view "${REVIEWED_PLAN_RUN_ID}" --repo "${GITHUB_REPOSITORY}" \
+            --json workflowName,event,status,conclusion)"
+          jq -e '
+            .workflowName == "Staging foundation" and .event == "workflow_dispatch"
+            and .status == "completed" and .conclusion == "success"
+          ' <<<"${run_json}" >/dev/null
+          gh run download "${REVIEWED_PLAN_RUN_ID}" --repo "${GITHUB_REPOSITORY}" \
+            --name "staging-foundation-plan-${RELEASE_TAG}" --dir foundation-evidence
+          jq -e --arg tag "${RELEASE_TAG}" --arg sha "${release_sha}" --arg run_id "${REVIEWED_PLAN_RUN_ID}" '
+            .status == "pass" and .release_tag == $tag and .release_sha == $sha
+            and .workflow_run_id == $run_id and .zero_destroy == true
+            and .services_enabled == false and .backup_schedules_enabled == false
+            and (.foundation_plan_sha256 | test("^[0-9a-f]{64}$"))
+          ' foundation-evidence/plan-summary.json >/dev/null
+          expected_plan_sha256="$(jq -r '.foundation_plan_sha256' foundation-evidence/plan-summary.json)"
+          actual_plan_sha256="$(sha256sum foundation-evidence/foundation.tfplan | awk '{print $1}')"
+          [[ "${actual_plan_sha256}" == "${expected_plan_sha256}" ]]
+          jq -e --arg tag "${RELEASE_TAG}" --arg sha "${release_sha}" '
+            .tag == $tag and .commit_sha == $sha and (.images | length == 17)
+            and .vulnerability_critical_gate_passed == true
+            and .vulnerability_policy_gate_passed == true
+          ' foundation-evidence/release-manifest.json >/dev/null
+
+      - name: Configure reviewed staging apply credentials
+        uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with:
+          role-to-assume: ${{ vars.AWS_STAGING_APPLY_ROLE_ARN }}
+          role-duration-seconds: 7200
+          aws-region: ${{ vars.AWS_REGION || 'ap-northeast-2' }}
+          mask-aws-account-id: true
+          unset-current-credentials: true
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+        with:
+          terraform_version: 1.15.8
+          terraform_wrapper: false
+
+      - name: Initialize exact staging remote state
+        env:
+          STATE_BUCKET: ${{ vars.TERRAFORM_STATE_BUCKET }}
+          STATE_KEY: ${{ vars.TERRAFORM_STAGING_STATE_KEY }}
+          STATE_KMS_KEY_ARN: ${{ vars.TERRAFORM_STATE_KMS_KEY_ARN }}
+        run: |
+          terraform -chdir=infra/terraform/staging init -input=false \
+            -backend-config="bucket=${STATE_BUCKET}" -backend-config="key=${STATE_KEY}" \
+            -backend-config="region=${AWS_REGION}" -backend-config="encrypt=true" \
+            -backend-config="kms_key_id=${STATE_KMS_KEY_ARN}" -backend-config="use_lockfile=true"
+
+      - name: Revalidate and apply exact reviewed plan
+        run: |
+          set -Eeuo pipefail
+          mkdir -p foundation-apply-evidence
+          jq -n --arg release_tag "${{ inputs.release_tag }}" \
+            --arg started_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{status:"started",release_tag:$release_tag,started_at:$started_at}' \
+            >foundation-apply-evidence/apply-context.json
+          infra/deploy/verify-staging-foundation-plan.sh foundation-evidence/foundation-plan.json
+          terraform -chdir=infra/terraform/staging apply -input=false \
+            "${GITHUB_WORKSPACE}/foundation-evidence/foundation.tfplan"
+
+      - name: Run first bootstrap and migration tasks in order
+        run: |
+          set -Eeuo pipefail
+          network="$(terraform -chdir=infra/terraform/staging output -json network)"
+          release="$(terraform -chdir=infra/terraform/staging output -json workload_release)"
+          cluster="$(jq -r '.cluster_arn' <<<"${release}")"
+          subnets="$(jq -c '.application_subnet_ids' <<<"${network}")"
+          security_groups="$(jq -c '[.task_security_group_ids.ops]' <<<"${network}")"
+          evidence='{}'
+          tasks=(
+            secret-bootstrap
+            database-bootstrap
+            property-flyway
+            admin-migration
+            user-flyway
+            source-data-migration
+            runtime-grants
+          )
+          for task in "${tasks[@]}"; do
+            task_definition="$(jq -r --arg task "${task}" '.one_shot_task_arns[$task]' <<<"${release}")"
+            task_arn="$(infra/deploy/run-ecs-task.sh "${cluster}" "${task_definition}" "${subnets}" "${security_groups}")"
+            evidence="$(jq --arg task "${task}" --arg task_arn "${task_arn}" '. + {($task):$task_arn}' <<<"${evidence}")"
+          done
+          jq -n --argjson tasks "${evidence}" --arg release_tag "${{ inputs.release_tag }}" \
+            --arg completed_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{status:"pass",release_tag:$release_tag,services_enabled:false,bootstrap_tasks:$tasks,
+              completed_at:$completed_at}' >foundation-apply-evidence/bootstrap-summary.json
+
+      - name: Upload foundation apply evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: staging-foundation-apply-${{ inputs.release_tag }}-${{ github.run_attempt }}
+          path: foundation-apply-evidence/
+          if-no-files-found: warn
+          retention-days: 90

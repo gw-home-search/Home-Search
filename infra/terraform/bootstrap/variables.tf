@@ -33,6 +33,16 @@ variable "state_prefix" {
   }
 }
 
+variable "staging_state_key" {
+  description = "Exact remote state object key reserved for staging infrastructure."
+  type        = string
+  default     = "home-search/staging/terraform.tfstate"
+  validation {
+    condition     = startswith(var.staging_state_key, "home-search/staging/") && endswith(var.staging_state_key, ".tfstate")
+    error_message = "staging_state_key must stay under home-search/staging and end in .tfstate."
+  }
+}
+
 variable "github_repository" {
   description = "GitHub repository in owner/name form."
   type        = string
@@ -52,6 +62,24 @@ variable "github_workflow_name" {
   description = "Exact GitHub Actions workflow claim allowed to deploy staging."
   type        = string
   default     = "Deploy staging"
+}
+
+variable "github_staging_foundation_workflow_name" {
+  description = "Exact GitHub Actions workflow claim allowed to plan and apply the staging foundation."
+  type        = string
+  default     = "Staging foundation"
+}
+
+variable "github_staging_foundation_allowed_refs" {
+  description = "Protected refs allowed to plan and apply the staging foundation."
+  type        = list(string)
+  default     = ["refs/heads/main"]
+  validation {
+    condition = length(var.github_staging_foundation_allowed_refs) > 0 && alltrue([
+      for ref in var.github_staging_foundation_allowed_refs : ref == "refs/heads/main"
+    ])
+    error_message = "Staging foundation OIDC may be used only from refs/heads/main."
+  }
 }
 
 variable "allowed_refs" {

@@ -6,6 +6,60 @@ tmp_dir="$(mktemp -d)"
 cleanup() { find "${tmp_dir}" -depth -delete 2>/dev/null || true; }
 trap cleanup EXIT
 
+images=(
+  property-api property-batch property-flyway admin-api admin-migration admin-ops
+  user-api user-insight-worker user-flyway source-data-migration public-gateway admin-gateway
+  backup ops-bootstrap ml ai chat-bff
+)
+manifest_images='{}'
+for image in "${images[@]}"; do
+  manifest_images="$(jq --arg name "${image}" \
+    --arg uri "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/${image}@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \
+    '. + {($name):{repository:("home-search/" + $name),uri:$uri,digest:"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}' \
+    <<<"${manifest_images}")"
+done
+jq -n --argjson images "${manifest_images}" \
+  '{
+    format_version:2,
+    tag:"v1.2.3",
+    commit_sha:"0123456789abcdef0123456789abcdef01234567",
+    images:$images,
+    build_architecture:"linux/amd64",
+    event_schema_sha256:("c" * 64),
+    topic_manifest_sha256:("d" * 64),
+    flyway_migration_set_sha256:("e" * 64),
+    sbom_set_sha256:("f" * 64),
+    vulnerability_set_sha256:("1" * 64),
+    build_flags:{market_news_enabled:false},
+    vulnerability_critical_gate_passed:true,
+    vulnerability_policy_gate_passed:true
+  }' \
+  >"${tmp_dir}/release-manifest.json"
+"${root}/infra/deploy/release-manifest-to-tfvars.sh" \
+  "${tmp_dir}/release-manifest.json" \
+  'public.ecr.aws/aws-observability/aws-otel-collector@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' \
+  "${tmp_dir}/release.auto.tfvars.json"
+jq -e '
+  (.image_uris | length == 17)
+  and .image_uris["property-api"] == "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/property-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  and .adot_collector_image_uri == "public.ecr.aws/aws-observability/aws-otel-collector@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+' "${tmp_dir}/release.auto.tfvars.json" >/dev/null
+jq 'del(.images["chat-bff"])' "${tmp_dir}/release-manifest.json" >"${tmp_dir}/missing-image.json"
+if "${root}/infra/deploy/release-manifest-to-tfvars.sh" \
+  "${tmp_dir}/missing-image.json" \
+  'public.ecr.aws/aws-observability/aws-otel-collector@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' \
+  "${tmp_dir}/missing.auto.tfvars.json" >/dev/null 2>&1; then
+  echo '상태: Fail - image가 누락된 release manifest를 Terraform input으로 변환했습니다.' >&2
+  exit 1
+fi
+if "${root}/infra/deploy/release-manifest-to-tfvars.sh" \
+  "${tmp_dir}/release-manifest.json" \
+  'public.ecr.aws/aws-observability/aws-otel-collector:latest' \
+  "${tmp_dir}/mutable.auto.tfvars.json" >/dev/null 2>&1; then
+  echo '상태: Fail - mutable ADOT image를 Terraform input으로 허용했습니다.' >&2
+  exit 1
+fi
+
 jq -n '{resource_changes:[
   {address:"aws_ecs_task_definition.service[\"property-api\"]",type:"aws_ecs_task_definition",change:{actions:["delete","create"]}},
   {address:"aws_ecs_task_definition.user_insight_worker",type:"aws_ecs_task_definition",change:{actions:["delete","create"]}},
@@ -69,6 +123,15 @@ case "$*" in
   *'ecs run-task'*) printf '%s\n' '{"tasks":[{"taskArn":"arn:aws:ecs:ap-northeast-2:123456789012:task/staging/task-1"}],"failures":[]}' ;;
   *'ecs wait tasks-stopped'*) ;;
   *'ecs describe-tasks'*) printf '%s\n' '{"tasks":[{"containers":[{"name":"migration","exitCode":0}]}]}' ;;
+  *'ecs describe-clusters'*)
+    if [[ "${FAKE_CLUSTER_FAILURE:-}" == 'missing' ]]; then
+      printf '%s\n' '{"clusters":[],"failures":[{"arn":"arn:cluster","reason":"MISSING"}]}'
+    elif [[ "${FAKE_CLUSTER_FAILURE:-}" == 'access-denied' ]]; then
+      printf '%s\n' '{"clusters":[],"failures":[{"arn":"arn:cluster","reason":"ACCESS_DENIED"}]}'
+    else
+      printf '%s\n' '{"clusters":[{"clusterArn":"arn:cluster","status":"ACTIVE"}],"failures":[]}'
+    fi
+    ;;
   *'ecs list-services'*) printf '%s\n' '["arn:aws:ecs:ap-northeast-2:123456789012:service/home-search-staging/user-insight-worker"]' ;;
   *'ecs describe-services'*) printf '%s\n' '{"serviceName":"user-insight-worker","taskDefinition":"arn:aws:ecs:ap-northeast-2:123456789012:task-definition/user-insight-worker:1","desiredCount":0}' ;;
   *'ecs describe-task-definition'*) printf '%s\n' '{"containerDefinitions":[{"name":"user-insight-worker","image":"example.invalid/worker@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}' ;;
@@ -86,9 +149,18 @@ task_arn="$(PATH="${tmp_dir}/bin:${PATH}" FAKE_AWS_LOG="${tmp_dir}/aws.log" \
 
 PATH="${tmp_dir}/bin:${PATH}" FAKE_AWS_LOG="${tmp_dir}/aws.log" \
   "${root}/infra/deploy/capture-service-state.sh" arn:cluster "${tmp_dir}/service-state.json"
-jq -e '.services["user-insight-worker"].desired_count == 0' "${tmp_dir}/service-state.json" >/dev/null
+jq -e '.cluster_exists == true and .services["user-insight-worker"].desired_count == 0' "${tmp_dir}/service-state.json" >/dev/null
 PATH="${tmp_dir}/bin:${PATH}" FAKE_AWS_LOG="${tmp_dir}/aws.log" \
   "${root}/infra/deploy/rollback-services.sh" "${tmp_dir}/service-state.json" >/dev/null
 grep -F -- '--desired-count 0' "${tmp_dir}/aws.log" >/dev/null
+
+PATH="${tmp_dir}/bin:${PATH}" FAKE_AWS_LOG="${tmp_dir}/aws.log" FAKE_CLUSTER_FAILURE=missing \
+  "${root}/infra/deploy/capture-service-state.sh" arn:cluster "${tmp_dir}/first-deploy-state.json"
+jq -e '.cluster_exists == false and (.services | length) == 0' "${tmp_dir}/first-deploy-state.json" >/dev/null
+if PATH="${tmp_dir}/bin:${PATH}" FAKE_AWS_LOG="${tmp_dir}/aws.log" FAKE_CLUSTER_FAILURE=access-denied \
+  "${root}/infra/deploy/capture-service-state.sh" arn:cluster "${tmp_dir}/denied-state.json" >/dev/null 2>&1; then
+  echo '상태: Fail - ECS cluster access failure를 최초 배포 상태로 오인했습니다.' >&2
+  exit 1
+fi
 
 echo '상태: Pass - Terraform release/one-shot allowlist, migration checksum, ECS one-shot exit, rollback desired count 복구를 확인했습니다.'

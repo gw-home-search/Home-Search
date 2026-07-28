@@ -103,7 +103,7 @@ release workflow가 아직 이미지를 게시할 ECR repository를 필요로 �
 operator가 KMS/ECR registry target을 먼저 apply한다. 이 target-only plan의
 형식 검증을 위해 placeholder digest map을 전달할 수 있지만 task definition이나
 service에는 적용하지 않는다. ECR 생성 뒤 5절의 첫 image release를 게시하고,
-그 manifest의 실제 15개 digest로 foundation full plan을 만든다.
+그 manifest의 실제 17개 digest로 foundation full plan을 만든다.
 
 ```bash
 terraform -chdir=infra/terraform/staging init
@@ -129,6 +129,13 @@ Glue registry, encrypted operations SNS topic, Scheduler failure DLQ가 생성�
 pipeline이 이를 승격한다.
 Terraform state와 plan 파일에 secret 값이 없어야 한다. 최초 apply는
 `enable_services=false`, 모든 schedule `DISABLED`를 강제하며 service를 시작하지 않는다.
+apply 직전에는 public/admin ACM certificate가 모두 `ISSUED`인지 확인하고
+`aws kafka list-clusters-v2`로 MSK account-plan 접근을 검증한다. registry target
+apply 뒤에는 반드시 remote state를 기준으로 새 full plan을 생성한다. full plan에
+ECR create/update/delete/forget이 있으면 verifier가 거부하며 bootstrap 이전 plan은
+재사용하지 않는다. Free Plan의
+`SubscriptionRequiredException`은 우회하지 않으며 Paid Plan 전환 후 새 plan을
+검토한다.
 
 ## 3. Secret과 DB bootstrap
 

@@ -42,12 +42,30 @@ run "staging_foundation_roles_are_separated_and_state_scoped" {
       && !contains(local.staging_foundation_apply_actions, "s3:*")
       && !contains(local.staging_foundation_apply_actions, "secretsmanager:*")
       && !contains(local.staging_foundation_apply_actions, "kms:*")
+      && !contains(local.staging_foundation_apply_actions, "kms:Decrypt")
+      && toset(local.staging_foundation_kms_data_actions) == toset([
+        "kms:Decrypt", "kms:Encrypt", "kms:GenerateDataKey", "kms:ReEncrypt*",
+      ])
+      && contains(local.staging_foundation_apply_actions, "acm:DescribeCertificate")
+      && contains(local.staging_foundation_apply_actions, "route53:CreateHostedZone")
       && contains(local.staging_foundation_explicit_deny_actions, "rds:DeleteDBInstance")
       && contains(local.staging_foundation_explicit_deny_actions, "kms:ScheduleKeyDeletion")
+      && contains(local.staging_foundation_explicit_deny_actions, "route53:DeleteHostedZone")
       && contains(local.staging_foundation_explicit_deny_actions, "s3:DeleteBucket")
       && contains(local.staging_foundation_explicit_deny_actions, "ecr:DeleteRepository")
     )
     error_message = "Staging plan must be state-read-only and apply must deny foundation destruction."
+  }
+
+  assert {
+    condition = one([
+      for statement in jsondecode(aws_iam_role_policy.github_staging_foundation_apply.policy).Statement : statement
+      if statement.Sid == "UseStagingDataKeys"
+      ]).Condition.StringEquals == {
+      "aws:ResourceTag/Environment" = "staging"
+      "aws:ResourceTag/Project"     = "home-search"
+    }
+    error_message = "KMS data operations must be restricted to tagged staging keys."
   }
 
   assert {

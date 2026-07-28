@@ -29,6 +29,7 @@ violations="$(jq -c '
    | select(
        ($resource.change.actions | index("delete")) != null
        or ($allowed_types | index($resource.type)) == null
+       or $resource.type == "aws_ecr_repository"
        or (($resource.change.after | tostring) | contains("home-search-production"))
        or (($resource.change.after.tags_all? | type) == "object" and $resource.change.after.tags_all.Environment != "staging")
        or ($resource.type == "aws_ecs_service" and (

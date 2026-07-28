@@ -27,13 +27,16 @@ locals {
     "sns:Get*", "sns:List*", "sqs:GetQueueAttributes", "sqs:List*", "tag:GetResources",
   ]
   staging_foundation_apply_actions = [
-    "cloudwatch:*", "ec2:*", "ecr:*", "ecs:*", "elasticache:*", "elasticfilesystem:*",
+    "acm:DescribeCertificate", "cloudwatch:*", "ec2:*", "ecr:*", "ecs:*", "elasticache:*", "elasticfilesystem:*",
     "elasticloadbalancing:*", "glue:*", "kafka:*", "logs:*", "rds:*", "scheduler:*",
-    "servicediscovery:*", "sns:*", "sqs:*",
+    "route53:CreateHostedZone", "servicediscovery:*", "sns:*", "sqs:*",
     "kms:CreateAlias", "kms:CreateGrant", "kms:CreateKey", "kms:DescribeKey",
     "kms:EnableKeyRotation", "kms:GetKeyPolicy", "kms:GetKeyRotationStatus", "kms:ListAliases",
     "kms:ListResourceTags", "kms:PutKeyPolicy", "kms:RetireGrant", "kms:RevokeGrant",
     "kms:TagResource", "kms:UntagResource", "kms:UpdateAlias", "kms:UpdateKeyDescription",
+  ]
+  staging_foundation_kms_data_actions = [
+    "kms:Decrypt", "kms:Encrypt", "kms:GenerateDataKey", "kms:ReEncrypt*",
   ]
   staging_foundation_explicit_deny_actions = [
     "ec2:DeleteNatGateway", "ec2:DeleteSubnet", "ec2:DeleteVpc", "ec2:DeleteVpcEndpoints",
@@ -41,6 +44,7 @@ locals {
     "elasticache:DeleteReplicationGroup", "elasticfilesystem:DeleteFileSystem",
     "elasticloadbalancing:DeleteLoadBalancer", "kafka:DeleteCluster", "kms:DisableKey",
     "kms:ScheduleKeyDeletion", "logs:DeleteLogGroup", "rds:DeleteDBInstance",
+    "route53:DeleteHostedZone",
     "s3:DeleteBucket", "secretsmanager:DeleteSecret", "servicediscovery:DeleteNamespace",
     "sns:DeleteTopic", "sqs:DeleteQueue",
   ]
@@ -148,6 +152,19 @@ resource "aws_iam_role_policy" "github_staging_foundation_apply" {
       {
         Sid    = "ManageStagingFoundation", Effect = "Allow"
         Action = local.staging_foundation_apply_actions, Resource = "*"
+      },
+      {
+        Sid    = "UseStagingDataKeys", Effect = "Allow"
+        Action = local.staging_foundation_kms_data_actions
+        Resource = [
+          "arn:aws:kms:${var.aws_region}:${data.aws_caller_identity.current.account_id}:key/*",
+        ]
+        Condition = {
+          StringEquals = {
+            "aws:ResourceTag/Environment" = "staging"
+            "aws:ResourceTag/Project"     = "home-search"
+          }
+        }
       },
       {
         Sid = "ManageStagingBackupBucket", Effect = "Allow", Action = ["s3:*"]

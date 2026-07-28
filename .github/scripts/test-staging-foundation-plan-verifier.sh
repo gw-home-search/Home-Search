@@ -56,6 +56,15 @@ if "${verifier}" "${tmp_dir}/production.json" >/dev/null 2>&1; then
   exit 1
 fi
 
+jq '.resource_changes += [{
+  address:"aws_ecr_repository.image[\"property-api\"]", mode:"managed", type:"aws_ecr_repository",
+  change:{actions:["create"],after:{name:"home-search/property-api",tags_all:{Environment:"staging"}}}
+}]' "${tmp_dir}/pass.json" >"${tmp_dir}/duplicate-ecr.json"
+if "${verifier}" "${tmp_dir}/duplicate-ecr.json" >/dev/null 2>&1; then
+  echo '상태: Fail - foundation verifier가 release-owned ECR repository 중복 생성을 허용했습니다.' >&2
+  exit 1
+fi
+
 jq 'del(.resource_changes[] | select(.address == "aws_ecs_task_definition.one_shot[\"source-data-migration\"]"))' \
   "${tmp_dir}/pass.json" >"${tmp_dir}/missing-bootstrap-task.json"
 if "${verifier}" "${tmp_dir}/missing-bootstrap-task.json" >/dev/null 2>&1; then

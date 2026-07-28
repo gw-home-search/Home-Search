@@ -26,6 +26,7 @@ output "ecs_cluster" {
 }
 output "application_subnet_ids" { value = values(aws_subnet.application)[*].id }
 output "ops_security_group_id" { value = aws_security_group.task["ops"].id }
+output "core_desired_count" { value = var.core_desired_count }
 output "service_task_definition_arns" {
   value = { for name, definition in aws_ecs_task_definition.service : name => definition.arn }
 }

@@ -24,6 +24,7 @@ run "private_digest_pinned_production_workloads" {
     migration_artifact_bucket         = "approved-migration-artifacts"
     migration_artifact_prefix         = "releases/v1.2.3/property-reference"
     migration_artifact_kms_key_arn    = "arn:aws:kms:ap-northeast-2:123456789012:key/source-artifact"
+    migration_manifest_sha256         = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
     service_activation_phase          = "all"
     image_uris = {
       property-api          = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/property-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

@@ -35,6 +35,10 @@ release_tag="$(jq -er '.tag | select(test("^v[0-9]+[.][0-9]+[.][0-9]+$"))' "${re
 jq -e '
   .format_version == 2
   and (.commit_sha | test("^[0-9a-f]{40}$"))
+  and ((.images | keys | sort) == ["admin-api","admin-gateway","admin-migration","admin-ops","ai","backup","chat-bff","ml","ops-bootstrap","property-api","property-batch","property-flyway","public-gateway","source-data-migration","user-api","user-flyway","user-insight-worker"])
+  and all(.images[];
+    (.digest | test("^sha256:[0-9a-f]{64}$"))
+    and (.uri | test("^[0-9]{12}[.]dkr[.]ecr[.]ap-northeast-2[.]amazonaws[.]com/home-search/[a-z0-9-]+@sha256:[0-9a-f]{64}$")))
   and .vulnerability_critical_gate_passed == true
   and .vulnerability_policy_gate_passed == true
 ' "${release}" >/dev/null || {
@@ -58,6 +62,7 @@ jq -e '.status == "pass" and .checksum_mismatch_count == 0 and .marker_parity ==
 }
 jq -e '
   .status == "pass" and .peak_multiplier >= 2
+  and .map.cold_runs >= 3 and .map.warm_runs >= 3
   and .map.cold_p95_ms <= 2000 and .map.warm_p95_ms <= 2000
   and .map.error_rate < 0.01 and .map.marker_parity == "pass"
   and .db_cpu_percent <= 60 and .memory_headroom_percent >= 30
@@ -79,7 +84,9 @@ jq -e '.status == "pass" and .amp_services_up == true and .email_alarm_received 
 }
 jq -e '
   .status == "pass" and .cases >= 120 and .terminal_violations == 0
-  and .grounding_violations == 0 and .citation_violations == 0 and .sensitive_log_violations == 0
+  and .grounding_violations == 0 and .citation_violations == 0
+  and .numeric_unit_violations == 0 and .candidate_membership_violations == 0
+  and .sensitive_log_violations == 0 and .top3_stability_passed == true
 ' "${evidence_dir}/ai-golden.json" >/dev/null || {
   echo '상태: Fail - AI golden/terminal/privacy gate가 pass가 아닙니다.' >&2
   exit 1

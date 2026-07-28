@@ -496,6 +496,7 @@ locals {
       command    = []
       environment = [
         { name = "HOME_MIGRATION_ARTIFACT_S3_URI", value = "s3://${var.migration_artifact_bucket}/${var.migration_artifact_prefix}" },
+        { name = "HOME_MIGRATION_MANIFEST_SHA256", value = var.migration_manifest_sha256 },
         { name = "HOME_MIGRATION_EVIDENCE_S3_URI", value = "s3://${aws_s3_bucket.audit.id}/deployment-evidence/${var.deployment_release_tag}" },
         { name = "HOME_MIGRATION_EVIDENCE_KMS_KEY_ID", value = aws_kms_key.audit.arn },
         { name = "HOME_MIGRATION_PROPERTY_TARGET_HOST", value = aws_db_instance.service["property"].address },

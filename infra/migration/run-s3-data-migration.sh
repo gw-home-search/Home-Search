@@ -22,7 +22,7 @@ validate_s3_uri() {
 }
 
 for name in HOME_MIGRATION_ARTIFACT_S3_URI HOME_MIGRATION_EVIDENCE_S3_URI \
-  HOME_MIGRATION_EVIDENCE_KMS_KEY_ID; do
+  HOME_MIGRATION_EVIDENCE_KMS_KEY_ID HOME_MIGRATION_MANIFEST_SHA256; do
   required "${name}"
 done
 validate_s3_uri "${HOME_MIGRATION_ARTIFACT_S3_URI}"
@@ -47,6 +47,19 @@ if [[ "${#manifests[@]}" != '1' ]]; then
 fi
 manifest="${manifests[0]}"
 chmod 0600 "${manifest}"
+[[ "${HOME_MIGRATION_MANIFEST_SHA256}" =~ ^[0-9a-f]{64}$ ]] || {
+  echo '상태: Fail - migration manifest SHA-256 형식이 올바르지 않습니다.' >&2
+  exit 1
+}
+if command -v sha256sum >/dev/null 2>&1; then
+  actual_manifest_sha256="$(sha256sum "${manifest}" | awk '{print $1}')"
+else
+  actual_manifest_sha256="$(shasum -a 256 "${manifest}" | awk '{print $1}')"
+fi
+[[ "${actual_manifest_sha256}" == "${HOME_MIGRATION_MANIFEST_SHA256}" ]] || {
+  echo '상태: Fail - migration manifest SHA-256이 reviewed input과 다릅니다.' >&2
+  exit 1
+}
 
 home-search-db-backup --data-import "${manifest}"
 report="${work_dir}/data-migration-reconciliation.json"

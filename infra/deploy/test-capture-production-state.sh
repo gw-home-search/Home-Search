@@ -12,7 +12,18 @@ set -Eeuo pipefail
 printf '%q ' "$@" >>"${FAKE_AWS_LOG}"
 printf '\n' >>"${FAKE_AWS_LOG}"
 case "$*" in
-  *'rds create-db-snapshot'*) printf '%s\n' '{}' ;;
+  *'rds create-db-snapshot'*)
+    snapshot=''
+    database=''
+    previous=''
+    for argument in "$@"; do
+      if [[ "${previous}" == '--db-snapshot-identifier' ]]; then snapshot="${argument}"; fi
+      if [[ "${previous}" == '--db-instance-identifier' ]]; then database="${argument}"; fi
+      previous="${argument}"
+    done
+    printf '%s' "${database}" >"${FAKE_SNAPSHOT_STATE}/${snapshot}"
+    printf '%s\n' '{}'
+    ;;
   *'rds wait db-snapshot-completed'*) ;;
   *'rds describe-db-snapshots'*)
     snapshot=''
@@ -21,7 +32,12 @@ case "$*" in
       if [[ "${previous}" == '--db-snapshot-identifier' ]]; then snapshot="${argument}"; fi
       previous="${argument}"
     done
-    jq -n --arg snapshot "${snapshot}" '{DBSnapshots:[{DBSnapshotArn:("arn:aws:rds:snapshot:"+$snapshot),Status:"available",Encrypted:true}]}'
+    if [[ ! -f "${FAKE_SNAPSHOT_STATE}/${snapshot}" ]]; then
+      echo 'DBSnapshotNotFound' >&2
+      exit 254
+    fi
+    database="$(cat "${FAKE_SNAPSHOT_STATE}/${snapshot}")"
+    jq -n --arg snapshot "${snapshot}" --arg database "${database}" '{DBSnapshots:[{DBSnapshotArn:("arn:aws:rds:snapshot:"+$snapshot),DBInstanceIdentifier:$database,Status:"available",Encrypted:true}]}'
     ;;
   *'cloudwatch describe-alarms'*)
     printf '%s\n' '{"MetricAlarms":[{"AlarmName":"home-search-production-map-p95","StateValue":"OK","StateUpdatedTimestamp":"2026-07-28T00:00:00Z"}],"CompositeAlarms":[]}'
@@ -31,6 +47,8 @@ esac
 FAKE_AWS
 chmod +x "${tmp_dir}/bin/aws"
 export FAKE_AWS_LOG="${tmp_dir}/aws.log"
+export FAKE_SNAPSHOT_STATE="${tmp_dir}/snapshot-state"
+mkdir -p "${FAKE_SNAPSHOT_STATE}"
 : >"${FAKE_AWS_LOG}"
 PATH="${tmp_dir}/bin:${PATH}" "${script}" \
   '{"property":"property-db","admin":"admin-db","user":"user-db","ai":"ai-db","coordinate":"coordinate-db"}' \
@@ -43,6 +61,10 @@ jq -e '
 ' "${tmp_dir}/evidence.json" >/dev/null
 [[ "$(grep -c 'rds create-db-snapshot' "${FAKE_AWS_LOG}")" == '5' ]]
 grep -Fq -- '--db-snapshot-identifier home-search-production-property-pre-123' "${FAKE_AWS_LOG}"
+PATH="${tmp_dir}/bin:${PATH}" "${script}" \
+  '{"property":"property-db","admin":"admin-db","user":"user-db","ai":"ai-db","coordinate":"coordinate-db"}' \
+  home-search-production pre-123 "${tmp_dir}/evidence-second.json"
+[[ "$(grep -c 'rds create-db-snapshot' "${FAKE_AWS_LOG}")" == '5' ]]
 
 set +e
 PATH="${tmp_dir}/bin:${PATH}" "${script}" \

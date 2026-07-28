@@ -8,14 +8,20 @@ trap cleanup EXIT
 evidence="${tmp_dir}/evidence"
 mkdir -p "${evidence}"
 
-jq -n '{format_version:2,tag:"v1.2.3",commit_sha:("a"*40),images:{},vulnerability_critical_gate_passed:true,vulnerability_policy_gate_passed:true}' >"${evidence}/release-manifest.json"
+images='{}'
+for name in property-api property-batch property-flyway admin-api admin-migration admin-ops user-api user-insight-worker user-flyway source-data-migration public-gateway admin-gateway backup ops-bootstrap ml ai chat-bff; do
+  images="$(jq --arg name "${name}" --arg digest "sha256:$(printf 'a%.0s' {1..64})" \
+    --arg uri "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/${name}@sha256:$(printf 'a%.0s' {1..64})" \
+    '. + {($name):{digest:$digest,uri:$uri}}' <<<"${images}")"
+done
+jq -n --argjson images "${images}" '{format_version:2,tag:"v1.2.3",commit_sha:("a"*40),images:$images,vulnerability_critical_gate_passed:true,vulnerability_policy_gate_passed:true}' >"${evidence}/release-manifest.json"
 jq -n '{resource_changes:[{change:{actions:["create"]}}]}' >"${evidence}/production-plan.json"
 jq -n '{status:"pass",invariants:{normalizedDuplicateCount:0,rawFirstViolationCount:0,unqueryableFailedMatchCount:0},findings:[]}' >"${evidence}/data-migration-reconciliation.json"
 jq -n '{status:"pass",checksum_mismatch_count:0,marker_parity:"pass"}' >"${evidence}/restore.json"
-jq -n '{status:"pass",peak_multiplier:2,map:{cold_p95_ms:1800,warm_p95_ms:400,error_rate:0.005,marker_parity:"pass"},db_cpu_percent:55,memory_headroom_percent:35}' >"${evidence}/performance.json"
+jq -n '{status:"pass",peak_multiplier:2,map:{cold_runs:3,warm_runs:3,cold_p95_ms:1800,warm_p95_ms:400,error_rate:0.005,marker_parity:"pass"},db_cpu_percent:55,memory_headroom_percent:35}' >"${evidence}/performance.json"
 jq -n '{status:"pass",outside_vpn:{admin:false,grafana:false,database:false,metrics:false,ai_direct:false},tls:"pass",waf:"pass"}' >"${evidence}/security.json"
 jq -n '{status:"pass",amp_services_up:true,email_alarm_received:true,slack_alarm_received:true}' >"${evidence}/observability.json"
-jq -n '{status:"pass",cases:120,terminal_violations:0,grounding_violations:0,citation_violations:0,sensitive_log_violations:0}' >"${evidence}/ai-golden.json"
+jq -n '{status:"pass",cases:120,terminal_violations:0,grounding_violations:0,citation_violations:0,numeric_unit_violations:0,candidate_membership_violations:0,sensitive_log_violations:0,top3_stability_passed:true}' >"${evidence}/ai-golden.json"
 jq -n '{status:"pass",graph_seconds:500,application_seconds:1700}' >"${evidence}/rollback.json"
 jq -n '{status:"pass",approved:true,owner:"finops"}' >"${evidence}/cost-approval.json"
 jq -n '{status:"pass",code_review:"pass",security_audit:"pass",security_findings:"none"}' >"${evidence}/reviews.json"

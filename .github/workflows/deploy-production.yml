@@ -55,6 +55,7 @@ jobs:
           TF_VAR_migration_artifact_bucket: "${{ vars.PRODUCTION_MIGRATION_ARTIFACT_BUCKET }}"
           TF_VAR_migration_artifact_prefix: "${{ vars.PRODUCTION_MIGRATION_ARTIFACT_PREFIX }}"
           TF_VAR_migration_artifact_kms_key_arn: "${{ vars.PRODUCTION_MIGRATION_ARTIFACT_KMS_KEY_ARN }}"
+          TF_VAR_migration_manifest_sha256: "${{ vars.PRODUCTION_MIGRATION_MANIFEST_SHA256 }}"
         run: |
           set -Eeuo pipefail
           terraform init -backend-config="bucket=${{ vars.PRODUCTION_TF_STATE_BUCKET }}" -backend-config="key=home-search/production/terraform.tfstate" -backend-config="region=ap-northeast-2" -backend-config="kms_key_id=${{ vars.PRODUCTION_TF_STATE_KMS_ARN }}" -backend-config="use_lockfile=true"
@@ -121,6 +122,7 @@ jobs:
       TF_VAR_migration_artifact_bucket: "${{ vars.PRODUCTION_MIGRATION_ARTIFACT_BUCKET }}"
       TF_VAR_migration_artifact_prefix: "${{ vars.PRODUCTION_MIGRATION_ARTIFACT_PREFIX }}"
       TF_VAR_migration_artifact_kms_key_arn: "${{ vars.PRODUCTION_MIGRATION_ARTIFACT_KMS_KEY_ARN }}"
+      TF_VAR_migration_manifest_sha256: "${{ vars.PRODUCTION_MIGRATION_MANIFEST_SHA256 }}"
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5

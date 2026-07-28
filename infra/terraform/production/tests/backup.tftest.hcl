@@ -45,6 +45,7 @@ run "five_database_backup_and_restore_testing" {
     migration_artifact_bucket         = "approved-migration-artifacts"
     migration_artifact_prefix         = "releases/v1.2.3/property-reference"
     migration_artifact_kms_key_arn    = "arn:aws:kms:ap-northeast-2:123456789012:key/source-artifact"
+    migration_manifest_sha256         = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
   }
 
   assert {

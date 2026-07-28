@@ -62,7 +62,8 @@ Required non-secret inputs added by the workload layer are
 `admin_certificate_arn`, `public_origin`, `image_uris`, the immutable
 `adot_collector_image_uri`, `deployment_release_tag`,
 `migration_artifact_bucket`, `migration_artifact_prefix`, and
-`migration_artifact_kms_key_arn`. Secret values are never Terraform variables.
+`migration_artifact_kms_key_arn`, plus the reviewed
+`migration_manifest_sha256`. Secret values are never Terraform variables.
 Database credential containers use a `password` key; Production bootstrap also
 materializes the exact AI DSNs without logging them. The `database-bootstrap`
 task alone reads the five RDS master secrets and never passes them to migration

@@ -48,8 +48,10 @@ export FAKE_S3_SOURCE="${tmp_dir}/source"
 export FAKE_EVIDENCE_REPORT="${tmp_dir}/uploaded-reconciliation.json"
 : >"${FAKE_AWS_LOG}"
 : >"${FAKE_BACKUP_LOG}"
+manifest_sha256="$(shasum -a 256 "${tmp_dir}/source/data-only-manifest.json" | awk '{print $1}')"
 
 HOME_MIGRATION_ARTIFACT_S3_URI=s3://approved-artifacts/releases/migration-1 \
+HOME_MIGRATION_MANIFEST_SHA256="${manifest_sha256}" \
 HOME_MIGRATION_EVIDENCE_S3_URI=s3://production-audit/deployments/release-1 \
 HOME_MIGRATION_EVIDENCE_KMS_KEY_ID=arn:aws:kms:ap-northeast-2:123456789012:key/evidence \
 HOME_MIGRATION_PROPERTY_TARGET_PASSWORD=PROPERTY_PASSWORD_SENTINEL \
@@ -65,7 +67,19 @@ grep -Fq -- '--sse-kms-key-id arn:aws:kms:ap-northeast-2:123456789012:key/eviden
 ! grep -Fq 'PASSWORD_SENTINEL' "${FAKE_AWS_LOG}" "${FAKE_BACKUP_LOG}" "${tmp_dir}/out" "${tmp_dir}/err"
 
 set +e
+HOME_MIGRATION_ARTIFACT_S3_URI=s3://approved-artifacts/releases/migration-1 \
+HOME_MIGRATION_MANIFEST_SHA256=0000000000000000000000000000000000000000000000000000000000000000 \
+HOME_MIGRATION_EVIDENCE_S3_URI=s3://production-audit/deployments/release-1 \
+HOME_MIGRATION_EVIDENCE_KMS_KEY_ID=key \
+  "${script}" >"${tmp_dir}/digest.out" 2>"${tmp_dir}/digest.err"
+digest_code=$?
+set -e
+[[ "${digest_code}" == '1' ]]
+grep -Fq 'reviewed input과 다릅니다' "${tmp_dir}/digest.err"
+
+set +e
 HOME_MIGRATION_ARTIFACT_S3_URI=s3://approved-artifacts/releases/../escape \
+HOME_MIGRATION_MANIFEST_SHA256="${manifest_sha256}" \
 HOME_MIGRATION_EVIDENCE_S3_URI=s3://production-audit/deployments/release-1 \
 HOME_MIGRATION_EVIDENCE_KMS_KEY_ID=key \
   "${script}" >"${tmp_dir}/unsafe.out" 2>"${tmp_dir}/unsafe.err"
@@ -77,6 +91,7 @@ grep -Fq '허용되지 않은 S3 URI' "${tmp_dir}/unsafe.err"
 cp "${tmp_dir}/source/data-only-manifest.json" "${tmp_dir}/source/duplicate-data-only-manifest.json"
 set +e
 HOME_MIGRATION_ARTIFACT_S3_URI=s3://approved-artifacts/releases/migration-1 \
+HOME_MIGRATION_MANIFEST_SHA256="${manifest_sha256}" \
 HOME_MIGRATION_EVIDENCE_S3_URI=s3://production-audit/deployments/release-1 \
 HOME_MIGRATION_EVIDENCE_KMS_KEY_ID=key \
   "${script}" >"${tmp_dir}/duplicate.out" 2>"${tmp_dir}/duplicate.err"

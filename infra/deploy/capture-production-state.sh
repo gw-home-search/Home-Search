@@ -31,8 +31,25 @@ snapshots='[]'
 while IFS=$'\t' read -r logical database_identifier; do
   snapshot_identifier="${alarm_prefix,,}-${logical}-${snapshot_suffix}"
   snapshot_identifier="${snapshot_identifier//_/-}"
-  aws rds create-db-snapshot --db-instance-identifier "${database_identifier}" \
-    --db-snapshot-identifier "${snapshot_identifier}" >/dev/null
+  describe_error="$(mktemp "${TMPDIR:-/tmp}/snapshot-describe-error.XXXXXX")"
+  if existing="$(aws rds describe-db-snapshots --db-snapshot-identifier "${snapshot_identifier}" --output json 2>"${describe_error}")"; then
+    jq -e --arg database "${database_identifier}" '
+      .DBSnapshots | length == 1 and .[0].DBInstanceIdentifier == $database
+    ' <<<"${existing}" >/dev/null || {
+      unlink "${describe_error}"
+      echo "상태: Fail - 기존 snapshot의 database identity가 다릅니다: ${logical}" >&2
+      exit 1
+    }
+  else
+    if ! grep -Fq 'DBSnapshotNotFound' "${describe_error}"; then
+      unlink "${describe_error}"
+      echo "상태: Fail - 기존 ${logical} snapshot 조회에 실패했습니다." >&2
+      exit 1
+    fi
+    aws rds create-db-snapshot --db-instance-identifier "${database_identifier}" \
+      --db-snapshot-identifier "${snapshot_identifier}" >/dev/null
+  fi
+  unlink "${describe_error}"
   aws rds wait db-snapshot-completed --db-snapshot-identifier "${snapshot_identifier}"
   description="$(aws rds describe-db-snapshots --db-snapshot-identifier "${snapshot_identifier}" --output json)"
   snapshot="$(jq -ec --arg logical "${logical}" --arg database "${database_identifier}" '

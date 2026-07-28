@@ -80,6 +80,14 @@ variable "migration_artifact_kms_key_arn" {
     error_message = "migration_artifact_kms_key_arn must be a KMS key ARN."
   }
 }
+variable "migration_manifest_sha256" {
+  description = "Reviewed SHA-256 of the exact data-only manifest downloaded from the artifact prefix."
+  type        = string
+  validation {
+    condition     = can(regex("^[0-9a-f]{64}$", var.migration_manifest_sha256))
+    error_message = "migration_manifest_sha256 must be a lower-case SHA-256 digest."
+  }
+}
 variable "core_desired_count" {
   type    = number
   default = 2

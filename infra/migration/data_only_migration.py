@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -15,12 +16,15 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Iterator
+from urllib.parse import urlsplit
 
 
 IDENTIFIER = re.compile(r"^[a-z][a-z0-9_]*$")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 MIGRATION_ID = re.compile(r"^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{16}$")
 SAFE_FILE = re.compile(r"^[a-z0-9][a-z0-9._-]*[.]csv[.]zst$")
+RAW_FILE = re.compile(r"^reference-raw-[0-9a-f]{64}[.]bin$")
+RAW_OBJECT_KEY = re.compile(r"^raw/(?:[A-Za-z0-9._-]+/)*[A-Za-z0-9._-]+$")
 FORBIDDEN_TABLE = re.compile(
     r"(^|_)(user_account|admin_account|session|token|flyway_schema_history|ai_schema_history|batch_job)(_|$)"
 )
@@ -120,6 +124,50 @@ def catalog_sha256(path: Path) -> str:
     return hashlib.sha256(canonical_json(load_catalog(path))).hexdigest()
 
 
+def validate_raw_objects(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        raise MigrationError("manifest rawObjects must be an array")
+    checksums: set[str] = set()
+    files: set[str] = set()
+    validated: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            raise MigrationError("manifest raw object must be an object")
+        checksum = item.get("checksum")
+        filename = item.get("file")
+        object_key = item.get("objectKey")
+        byte_length = item.get("byteLength")
+        version_id = item.get("sourceVersionId")
+        content_type = item.get("contentType")
+        if not isinstance(checksum, str) or not SHA256.fullmatch(checksum) or checksum in checksums:
+            raise MigrationError("manifest raw object checksum is invalid")
+        if not isinstance(filename, str) or not RAW_FILE.fullmatch(filename) or filename in files:
+            raise MigrationError("manifest raw object file is invalid")
+        if filename != f"reference-raw-{checksum}.bin":
+            raise MigrationError("manifest raw object file/checksum mismatch")
+        if (
+            not isinstance(object_key, str)
+            or not RAW_OBJECT_KEY.fullmatch(object_key)
+            or any(part in {"", ".", ".."} for part in object_key.split("/"))
+        ):
+            raise MigrationError("manifest raw object key is invalid")
+        if not isinstance(byte_length, int) or byte_length < 0:
+            raise MigrationError("manifest raw object length is invalid")
+        if version_id is not None and (not isinstance(version_id, str) or not version_id or len(version_id) > 1024):
+            raise MigrationError("manifest raw object version is invalid")
+        if (
+            not isinstance(content_type, str)
+            or not content_type.strip()
+            or len(content_type) > 100
+            or any(ord(character) < 32 for character in content_type)
+        ):
+            raise MigrationError("manifest raw object content type is invalid")
+        checksums.add(checksum)
+        files.add(filename)
+        validated.append(item)
+    return validated
+
+
 def validate_manifest(manifest: dict[str, Any], allowed_datasets: set[str]) -> dict[str, Any]:
     if manifest.get("formatVersion") != 1 or not MIGRATION_ID.fullmatch(str(manifest.get("migrationId", ""))):
         raise MigrationError("manifest formatVersion/migrationId is invalid")
@@ -168,6 +216,7 @@ def validate_manifest(manifest: dict[str, Any], allowed_datasets: set[str]) -> d
     summarized_rows = {summary["dataset"]: summary["rowCount"] for summary in datasets}
     if chunk_rows != summarized_rows:
         raise MigrationError("manifest chunk row counts do not equal dataset summaries")
+    validate_raw_objects(manifest.get("rawObjects", []))
     return manifest
 
 
@@ -193,11 +242,23 @@ def validate_manifest_artifacts(path: Path, expected_catalog_sha256: str, allowe
         raise MigrationError("catalog checksum mismatch")
     root = path.resolve().parent
     for chunk in manifest["chunks"]:
-        artifact = (root / chunk["file"]).resolve()
+        candidate = root / chunk["file"]
+        if candidate.is_symlink():
+            raise MigrationError(f"chunk symlink is forbidden: {chunk['file']}")
+        artifact = candidate.resolve()
         if artifact.parent != root or not artifact.is_file():
             raise MigrationError(f"chunk is missing: {chunk['file']}")
         if sha256_file(artifact) != chunk["sha256"]:
             raise MigrationError(f"chunk checksum mismatch: {chunk['file']}")
+    for raw_object in manifest.get("rawObjects", []):
+        candidate = root / raw_object["file"]
+        if candidate.is_symlink():
+            raise MigrationError(f"raw object symlink is forbidden: {raw_object['file']}")
+        artifact = candidate.resolve()
+        if artifact.parent != root or not artifact.is_file():
+            raise MigrationError(f"raw object is missing: {raw_object['file']}")
+        if artifact.stat().st_size != raw_object["byteLength"] or sha256_file(artifact) != raw_object["checksum"]:
+            raise MigrationError(f"raw object checksum/length mismatch: {raw_object['file']}")
     return manifest
 
 
@@ -208,6 +269,35 @@ def quote_identifier(value: str) -> str:
 
 def sql_literal(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
+
+
+def raw_version_update_sql(
+    temp: str,
+    raw_objects: list[dict[str, Any]],
+    target_versions: dict[str, str | None],
+) -> str:
+    quote_identifier(temp)
+    checksums = {item["checksum"] for item in raw_objects}
+    if set(target_versions) != checksums:
+        raise MigrationError("target raw object version mapping does not equal manifest")
+    if not checksums:
+        return (
+            f"DO $$BEGIN IF EXISTS (SELECT 1 FROM {quote_identifier(temp)} WHERE storage_backend='S3') "
+            "THEN RAISE EXCEPTION 'S3 raw object is absent from migration manifest'; END IF; END$$;"
+        )
+    allowed = ",".join(sql_literal(checksum) for checksum in sorted(checksums))
+    cases = " ".join(
+        f"WHEN {sql_literal(checksum)} THEN "
+        + ("NULL" if target_versions[checksum] is None else sql_literal(target_versions[checksum] or ""))
+        for checksum in sorted(checksums)
+    )
+    return (
+        f"DO $$BEGIN IF EXISTS (SELECT 1 FROM {quote_identifier(temp)} WHERE storage_backend='S3' "
+        f"AND checksum::text NOT IN ({allowed})) THEN RAISE EXCEPTION 'S3 raw object is absent from migration manifest'; "
+        "END IF; END$$;"
+        f"UPDATE {quote_identifier(temp)} SET object_version_id=CASE checksum::text {cases} END "
+        "WHERE storage_backend='S3';"
+    )
 
 
 class PostgresConnection:
@@ -241,6 +331,37 @@ def sanitized_environment() -> dict[str, str]:
         for key, value in os.environ.items()
         if not (key.startswith("HOME_MIGRATION_") and key.endswith("_PASSWORD"))
     }
+
+
+class RawStoreConfig:
+    def __init__(self, direction: str):
+        prefix = f"HOME_MIGRATION_RAW_{direction.upper()}_"
+        self.bucket = required_environment(prefix + "BUCKET")
+        self.region = required_environment(prefix + "REGION")
+        self.endpoint = os.environ.get(prefix + "ENDPOINT", "").strip() or None
+        self.kms_key_id = os.environ.get(prefix + "KMS_KEY_ID", "").strip() or None
+        if not re.fullmatch(r"[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]", self.bucket):
+            raise MigrationError(f"invalid raw {direction} bucket")
+        if self.endpoint is not None:
+            parsed = urlsplit(self.endpoint)
+            if (
+                parsed.scheme not in {"http", "https"}
+                or parsed.hostname not in {"minio", "localhost", "127.0.0.1"}
+                or parsed.username
+                or parsed.password
+                or parsed.query
+                or parsed.fragment
+                or parsed.path not in {"", "/"}
+            ):
+                raise MigrationError("raw S3 endpoint override is allowed only for local MinIO")
+        if direction == "target" and self.endpoint is None and not self.kms_key_id:
+            raise MigrationError("raw target KMS key id is required for AWS S3")
+
+    def aws_args(self) -> list[str]:
+        value = ["aws", "--no-cli-pager", "--region", self.region]
+        if self.endpoint:
+            value.extend(["--endpoint-url", self.endpoint])
+        return value
 
 
 def zstd_threads(environment: dict[str, str] | None = None) -> str:
@@ -461,6 +582,145 @@ def export_dataset(connection: PostgresConnection, snapshot: str, watermark: str
     return chunks, sum(chunk["rowCount"] for chunk in chunks)
 
 
+def raw_object_metadata(connection: PostgresConnection, snapshot: str | None = None) -> list[dict[str, Any]]:
+    statement = (
+        "SELECT coalesce(json_agg(row_to_json(metadata) ORDER BY metadata.checksum),'[]'::json)::text FROM ("
+        "SELECT checksum::text AS checksum,byte_length AS \"byteLength\",object_key AS \"objectKey\","
+        "object_version_id AS \"sourceVersionId\",content_type AS \"contentType\" "
+        "FROM public.dataset_raw_object WHERE storage_backend='S3') metadata"
+    )
+    value = run_psql(connection, snapshot_sql(snapshot, statement) if snapshot else statement)
+    try:
+        items = json.loads(value)
+    except json.JSONDecodeError as exception:
+        raise MigrationError("cannot parse Reference raw object metadata") from exception
+    if not isinstance(items, list):
+        raise MigrationError("Reference raw object metadata is invalid")
+    return items
+
+
+def run_aws_json(arguments: list[str], *, check: bool = True) -> tuple[int, dict[str, Any], str]:
+    result = subprocess.run(
+        arguments,
+        env=sanitized_environment(),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if check and result.returncode != 0:
+        raise MigrationError(f"AWS S3 command failed: {result.stderr.strip()}")
+    try:
+        value = json.loads(result.stdout) if result.stdout.strip() else {}
+    except json.JSONDecodeError as exception:
+        raise MigrationError("AWS S3 command returned invalid JSON") from exception
+    if not isinstance(value, dict):
+        raise MigrationError("AWS S3 command result must be an object")
+    return result.returncode, value, result.stderr.strip()
+
+
+def export_reference_raw_objects(
+    connection: PostgresConnection,
+    snapshot: str,
+    output: Path,
+) -> list[dict[str, Any]]:
+    items = raw_object_metadata(connection, snapshot)
+    if not items:
+        return []
+    config = RawStoreConfig("source")
+    raw_objects: list[dict[str, Any]] = []
+    for metadata in items:
+        checksum = metadata.get("checksum")
+        item = {**metadata, "file": f"reference-raw-{checksum}.bin"}
+        validate_raw_objects([item])
+        destination = output / item["file"]
+        partial = destination.with_name(destination.name + ".partial")
+        if destination.exists() or partial.exists():
+            raise MigrationError(f"immutable raw object artifact already exists: {destination.name}")
+        arguments = config.aws_args() + [
+            "s3api", "get-object", "--bucket", config.bucket, "--key", item["objectKey"],
+        ]
+        if item["sourceVersionId"] is not None:
+            arguments.extend(["--version-id", item["sourceVersionId"]])
+        arguments.append(str(partial))
+        try:
+            run_aws_json(arguments)
+            if partial.is_symlink() or not partial.is_file():
+                raise MigrationError(f"source raw object artifact is not a regular file: {item['objectKey']}")
+            partial.chmod(0o600)
+            if partial.stat().st_size != item["byteLength"] or sha256_file(partial) != checksum:
+                raise MigrationError(f"source raw object checksum/length mismatch: {item['objectKey']}")
+            partial.replace(destination)
+        except Exception:
+            partial.unlink(missing_ok=True)
+            raise
+        raw_objects.append(item)
+    return validate_raw_objects(raw_objects)
+
+
+def raw_checksum_base64(checksum: str) -> str:
+    return base64.b64encode(bytes.fromhex(checksum)).decode("ascii")
+
+
+def head_raw_object(
+    config: RawStoreConfig,
+    item: dict[str, Any],
+    version_id: str | None = None,
+    *,
+    required: bool = True,
+) -> dict[str, Any] | None:
+    arguments = config.aws_args() + [
+        "s3api", "head-object", "--bucket", config.bucket, "--key", item["objectKey"],
+        "--checksum-mode", "ENABLED",
+    ]
+    if version_id:
+        arguments.extend(["--version-id", version_id])
+    code, value, error = run_aws_json(arguments, check=False)
+    if code != 0:
+        if required:
+            raise MigrationError(f"target raw object HEAD failed: {item['objectKey']}: {error}")
+        return None
+    return value
+
+
+def assert_raw_head(item: dict[str, Any], head: dict[str, Any]) -> str | None:
+    version = head.get("VersionId")
+    if version is not None and (not isinstance(version, str) or not version):
+        raise MigrationError(f"target raw object version is invalid: {item['objectKey']}")
+    if (
+        head.get("ContentLength") != item["byteLength"]
+        or head.get("ChecksumSHA256") != raw_checksum_base64(item["checksum"])
+        or head.get("ContentType") != item["contentType"]
+    ):
+        raise MigrationError(f"target raw object checksum/metadata mismatch: {item['objectKey']}")
+    return version
+
+
+def restore_reference_raw_objects(manifest_path: Path, raw_objects: list[dict[str, Any]]) -> dict[str, str | None]:
+    if not raw_objects:
+        return {}
+    config = RawStoreConfig("target")
+    root = manifest_path.resolve().parent
+    versions: dict[str, str | None] = {}
+    for item in raw_objects:
+        existing = head_raw_object(config, item, required=False)
+        if existing is None:
+            arguments = config.aws_args() + [
+                "s3api", "put-object", "--bucket", config.bucket, "--key", item["objectKey"],
+                "--body", str(root / item["file"]), "--content-length", str(item["byteLength"]),
+                "--content-type", item["contentType"], "--checksum-algorithm", "SHA256",
+                "--checksum-sha256", raw_checksum_base64(item["checksum"]),
+            ]
+            if config.kms_key_id:
+                arguments.extend(["--server-side-encryption", "aws:kms", "--ssekms-key-id", config.kms_key_id])
+            _, response, _ = run_aws_json(arguments)
+            response_version = response.get("VersionId")
+            if response_version is not None and not isinstance(response_version, str):
+                raise MigrationError("target raw object upload version is invalid")
+            existing = head_raw_object(config, item, response_version)
+        versions[item["checksum"]] = assert_raw_head(item, existing)
+    return versions
+
+
 def upload_artifacts(paths: list[Path], s3_uri: str, kms_key_id: str) -> None:
     if not s3_uri.startswith("s3://") or ".." in s3_uri:
         raise MigrationError("invalid S3 URI")
@@ -488,6 +748,7 @@ def export_all(catalog_path: Path, output: Path, s3_uri: str | None, kms_key_id:
     manifest: dict[str, Any] = {
         "formatVersion": 1, "migrationId": migration_id, "createdAt": datetime.now(UTC).isoformat(),
         "catalogSha256": catalog_sha256(catalog_path), "sourceWatermarks": {}, "datasets": [], "chunks": [],
+        "rawObjects": [],
     }
     for logical in ("property", "reference"):
         items = [item for item in catalog["datasets"] if item["logicalDatabase"] == logical]
@@ -496,6 +757,8 @@ def export_all(catalog_path: Path, output: Path, s3_uri: str | None, kms_key_id:
         connection = PostgresConnection(logical, "source")
         with exported_snapshot(connection) as (snapshot, watermark):
             manifest["sourceWatermarks"][logical] = watermark
+            if logical == "reference" and any(dataset_name(item) == "reference:public.dataset_raw_object" for item in items):
+                manifest["rawObjects"] = export_reference_raw_objects(connection, snapshot, output)
             for item in items:
                 chunks, row_count = export_dataset(connection, snapshot, watermark, item, output)
                 manifest["chunks"].extend(chunks)
@@ -507,7 +770,14 @@ def export_all(catalog_path: Path, output: Path, s3_uri: str | None, kms_key_id:
     return manifest_path
 
 
-def import_chunk(connection: PostgresConnection, item: dict[str, Any], chunk: dict[str, Any], artifact: Path) -> None:
+def import_chunk(
+    connection: PostgresConnection,
+    item: dict[str, Any],
+    chunk: dict[str, Any],
+    artifact: Path,
+    raw_objects: list[dict[str, Any]],
+    target_versions: dict[str, str | None],
+) -> None:
     temp = f"migration_chunk_{secrets.token_hex(6)}"
     columns = ordered_columns(item)
     keys = ",".join(quote_identifier(key) for key in item["keyColumns"])
@@ -533,8 +803,12 @@ def import_chunk(connection: PostgresConnection, item: dict[str, Any], chunk: di
         f"CREATE TEMP TABLE {quote_identifier(temp)} (LIKE {qualified(item)} INCLUDING DEFAULTS INCLUDING GENERATED);"
         f"COPY {quote_identifier(temp)} ({columns}) FROM STDIN WITH (FORMAT CSV, HEADER TRUE);\n"
     )
+    raw_version_sql = ""
+    if dataset_name(item) == "reference:public.dataset_raw_object":
+        raw_version_sql = raw_version_update_sql(temp, raw_objects, target_versions)
     postlude = (
         "\\.\n"
+        f"{raw_version_sql}"
         f"{reject_existing_mismatch}"
         f"INSERT INTO {qualified(item)} ({columns}) OVERRIDING SYSTEM VALUE SELECT {columns} FROM {quote_identifier(temp)} "
         f"ON CONFLICT ({keys}) {conflict_action};"
@@ -588,6 +862,8 @@ def import_all(catalog_path: Path, manifest_path: Path) -> None:
     catalog = load_catalog(catalog_path)
     by_name = {dataset_name(item): item for item in catalog["datasets"]}
     manifest = validate_manifest_artifacts(manifest_path, catalog_sha256(catalog_path), set(by_name))
+    raw_objects = manifest.get("rawObjects", [])
+    target_versions = restore_reference_raw_objects(manifest_path, raw_objects)
     connections = {logical: PostgresConnection(logical, "target") for logical in ("property", "reference")}
     for item in catalog["datasets"]:
         assert_schema_matches(connections[item["logicalDatabase"]], item)
@@ -597,7 +873,10 @@ def import_all(catalog_path: Path, manifest_path: Path) -> None:
         chunks_by_dataset[chunk["dataset"]].append(chunk)
     for item in catalog["datasets"]:
         for chunk in sorted(chunks_by_dataset[dataset_name(item)], key=lambda value: value["file"]):
-            import_chunk(connections[item["logicalDatabase"]], item, chunk, root / chunk["file"])
+            import_chunk(
+                connections[item["logicalDatabase"]], item, chunk, root / chunk["file"],
+                raw_objects, target_versions,
+            )
     for logical, connection in connections.items():
         reset_sequences(connection, [item for item in catalog["datasets"] if item["logicalDatabase"] == logical])
 
@@ -617,17 +896,73 @@ def target_csv_sha256(connection: PostgresConnection, query: str) -> str:
     return digest.hexdigest()
 
 
+def reconciliation_copy_query(
+    item: dict[str, Any],
+    lower: str | None,
+    upper: str | None,
+    raw_objects: list[dict[str, Any]],
+) -> str:
+    if dataset_name(item) != "reference:public.dataset_raw_object":
+        return copy_query(item, lower, upper)
+    versions = {raw_object["checksum"]: raw_object.get("sourceVersionId") for raw_object in raw_objects}
+    cases = " ".join(
+        f"WHEN {sql_literal(checksum)} THEN " + ("NULL" if version is None else sql_literal(version))
+        for checksum, version in sorted(versions.items())
+    )
+    version_expression = "object_version_id"
+    if cases:
+        version_expression = f"CASE checksum::text {cases} ELSE object_version_id END"
+    columns = ",".join(
+        f"{version_expression} AS {quote_identifier(column)}"
+        if column == "object_version_id" else quote_identifier(column)
+        for column in item["columns"]
+    )
+    return (
+        f"SELECT {columns} FROM {qualified(item)} "
+        f"WHERE {predicate_for_item(item, lower, upper)} ORDER BY {order_clause(item)}"
+    )
+
+
+def verify_target_raw_objects(connection: PostgresConnection, raw_objects: list[dict[str, Any]]) -> None:
+    actual_items = raw_object_metadata(connection)
+    expected = {item["checksum"]: item for item in raw_objects}
+    actual = {item.get("checksum"): item for item in actual_items}
+    if set(actual) != set(expected):
+        raise MigrationError("target S3 raw object rows do not equal migration manifest")
+    if not expected:
+        return
+    config = RawStoreConfig("target")
+    for checksum, item in expected.items():
+        row = actual[checksum]
+        if (
+            row.get("byteLength") != item["byteLength"]
+            or row.get("objectKey") != item["objectKey"]
+            or row.get("contentType") != item["contentType"]
+        ):
+            raise MigrationError(f"target raw object database metadata mismatch: {checksum}")
+        version = row.get("sourceVersionId")
+        if version is not None and not isinstance(version, str):
+            raise MigrationError(f"target raw object database version is invalid: {checksum}")
+        head = head_raw_object(config, item, version)
+        head_version = assert_raw_head(item, head)
+        if version is not None and head_version != version:
+            raise MigrationError(f"target raw object database/S3 version mismatch: {checksum}")
+
+
 def reconcile(catalog_path: Path, manifest_path: Path, report_path: Path) -> None:
     catalog = load_catalog(catalog_path)
     by_name = {dataset_name(item): item for item in catalog["datasets"]}
     manifest = validate_manifest_artifacts(manifest_path, catalog_sha256(catalog_path), set(by_name))
     connections = {logical: PostgresConnection(logical, "target") for logical in ("property", "reference")}
     findings: list[str] = []
+    raw_objects = manifest.get("rawObjects", [])
+    if "reference:public.dataset_raw_object" in by_name:
+        verify_target_raw_objects(connections["reference"], raw_objects)
     for chunk in manifest["chunks"]:
         item = by_name[chunk["dataset"]]
         digest = target_csv_sha256(
             connections[item["logicalDatabase"]],
-            copy_query(item, chunk.get("lowerExclusive"), chunk.get("maxKey")),
+            reconciliation_copy_query(item, chunk.get("lowerExclusive"), chunk.get("maxKey"), raw_objects),
         )
         if digest != chunk["csvSha256"]:
             findings.append(f"checksum mismatch: {chunk['dataset']}:{chunk['file']}")

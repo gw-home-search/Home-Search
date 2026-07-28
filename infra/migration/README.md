@@ -18,6 +18,16 @@ conflicting rows, while only `dataset_active_snapshot` permits pointer updates.
 It never drops a source
 database or Docker volume.
 
+Reference rows backed by S3 are transferred with their exact source version.
+The exporter verifies each content-addressed object's SHA-256 and byte length
+before atomically publishing the local artifact. Import uploads or reuses the
+same immutable key in the target bucket, then replaces only the staged
+`object_version_id` with the target version before inserting the fresh database
+row. Reconciliation maps that target version back to the source version for CSV
+parity while independently checking the target DB version with S3 `HEAD`.
+Standard AWS S3 targets require SSE-KMS; endpoint overrides are accepted only
+for local MinIO tests.
+
 ## Environment
 
 Set each connection outside Git. Passwords are passed to `psql` only through
@@ -35,11 +45,17 @@ HOME_MIGRATION_REFERENCE_SOURCE_PORT=5432
 HOME_MIGRATION_REFERENCE_SOURCE_DATABASE
 HOME_MIGRATION_REFERENCE_SOURCE_USER
 HOME_MIGRATION_REFERENCE_SOURCE_PASSWORD
+
+HOME_MIGRATION_RAW_SOURCE_BUCKET
+HOME_MIGRATION_RAW_SOURCE_REGION=ap-northeast-2
+# local test only: HOME_MIGRATION_RAW_SOURCE_ENDPOINT=http://127.0.0.1:19000
 ```
 
-For import/reconciliation, replace `SOURCE` with `TARGET`. `psql`, `zstd`, and
-Python 3.11+ are required. Optional S3 publication requires both `--s3-uri` and
-`--kms-key-id`; the tool forces `aws:kms` server-side encryption.
+For import/reconciliation, replace `SOURCE` with `TARGET` and set
+`HOME_MIGRATION_RAW_TARGET_KMS_KEY_ID` for an AWS S3 target. `psql`, `zstd`,
+AWS CLI, and Python 3.11+ are required. Optional migration-artifact publication
+requires both `--s3-uri` and `--kms-key-id`; the tool forces `aws:kms`
+server-side encryption.
 Compression uses one zstd worker by default to keep one-shot task memory
 bounded. `HOME_MIGRATION_ZSTD_THREADS=1..8` may be set from measured task
 capacity. A chunk is written as `.partial` and atomically renamed only after

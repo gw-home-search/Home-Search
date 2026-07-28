@@ -32,6 +32,22 @@ plan_line="$(grep -nF 'terraform -chdir=infra/terraform/staging plan' "${workflo
 apply_line="$(grep -nF 'terraform -chdir=infra/terraform/staging apply' "${workflow}" | head -1 | cut -d: -f1)"
 [[ -n "${plan_line}" && -n "${apply_line}" && "${plan_line}" -lt "${apply_line}" ]]
 
+certificate_preflight_line="$(grep -nF 'aws acm describe-certificate' "${workflow}" | head -1 | cut -d: -f1 || true)"
+msk_preflight_line="$(grep -nF 'aws kafka list-clusters-v2' "${workflow}" | head -1 | cut -d: -f1 || true)"
+apply_evidence_init_line="$(grep -nF 'name: Initialize foundation apply evidence' "${workflow}" | head -1 | cut -d: -f1 || true)"
+[[ -n "${apply_evidence_init_line}" && "${apply_evidence_init_line}" -lt "${certificate_preflight_line}" ]] || {
+  echo '상태: Fail - apply evidence 초기화가 external prerequisite 검사보다 먼저 실행되지 않습니다.' >&2
+  exit 1
+}
+[[ -n "${certificate_preflight_line}" && "${certificate_preflight_line}" -lt "${apply_line}" ]] || {
+  echo '상태: Fail - ACM ISSUED preflight가 Terraform apply보다 먼저 실행되지 않습니다.' >&2
+  exit 1
+}
+[[ -n "${msk_preflight_line}" && "${msk_preflight_line}" -lt "${apply_line}" ]] || {
+  echo '상태: Fail - MSK account-plan preflight가 Terraform apply보다 먼저 실행되지 않습니다.' >&2
+  exit 1
+}
+
 previous=0
 for task in secret-bootstrap database-bootstrap property-flyway admin-migration user-flyway source-data-migration runtime-grants; do
   line="$(grep -nF "${task}" "${workflow}" | tail -1 | cut -d: -f1)"

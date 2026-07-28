@@ -198,6 +198,27 @@ jobs:
           terraform_version: 1.15.8
           terraform_wrapper: false
 
+      - name: Initialize foundation apply evidence
+        run: |
+          mkdir -p foundation-apply-evidence
+          jq -n --arg release_tag "${{ inputs.release_tag }}" \
+            --arg started_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{status:"started",release_tag:$release_tag,started_at:$started_at}' \
+            >foundation-apply-evidence/apply-context.json
+
+      - name: Verify external staging prerequisites before apply
+        env:
+          PUBLIC_CERTIFICATE_ARN: ${{ vars.STAGING_PUBLIC_CERTIFICATE_ARN }}
+          ADMIN_CERTIFICATE_ARN: ${{ vars.STAGING_ADMIN_CERTIFICATE_ARN }}
+        run: |
+          set -Eeuo pipefail
+          for certificate_arn in "${PUBLIC_CERTIFICATE_ARN}" "${ADMIN_CERTIFICATE_ARN}"; do
+            certificate_status="$(aws acm describe-certificate \
+              --certificate-arn "${certificate_arn}" --query 'Certificate.Status' --output text)"
+            [[ "${certificate_status}" == "ISSUED" ]]
+          done
+          aws kafka list-clusters-v2 --max-results 1 >/dev/null
+
       - name: Initialize exact staging remote state
         env:
           STATE_BUCKET: ${{ vars.TERRAFORM_STATE_BUCKET }}
@@ -212,11 +233,6 @@ jobs:
       - name: Revalidate and apply exact reviewed plan
         run: |
           set -Eeuo pipefail
-          mkdir -p foundation-apply-evidence
-          jq -n --arg release_tag "${{ inputs.release_tag }}" \
-            --arg started_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            '{status:"started",release_tag:$release_tag,started_at:$started_at}' \
-            >foundation-apply-evidence/apply-context.json
           infra/deploy/verify-staging-foundation-plan.sh foundation-evidence/foundation-plan.json
           terraform -chdir=infra/terraform/staging apply -input=false \
             "${GITHUB_WORKSPACE}/foundation-evidence/foundation.tfplan"

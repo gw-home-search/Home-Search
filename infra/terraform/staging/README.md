@@ -45,7 +45,14 @@ the 17 image digests from the immutable release manifest. Use the
 `Staging foundation` workflow for the first full plan and apply. Run it once
 with `apply=false`, review the zero-destroy plan artifact, then run it again
 with `apply=true` and the successful `reviewed_plan_run_id`. The apply role
-cannot create a replacement plan. The reviewed plan keeps
+cannot create a replacement plan. The full foundation plan must not contain ECR
+repository actions: create the 17 repositories with the documented one-time
+registry target plan, persist that state remotely, and generate a new full plan.
+Never reuse a plan generated before registry bootstrap. Before Terraform apply,
+the workflow requires both ACM certificates to be `ISSUED` and verifies that the
+account can call MSK Serverless. A Free Plan account without MSK access fails
+before any additional foundation mutation; upgrade the account plan rather than
+bypassing streaming. The reviewed plan keeps
 `enable_services=false` and every schedule disabled, creates the ECS cluster
 and task definitions without starting applications against empty secrets, then
 runs and waits for these one-shot task families in order:

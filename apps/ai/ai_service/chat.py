@@ -13,6 +13,7 @@ from typing import Protocol, cast
 
 from .auth import AuthenticatedUser
 from .models import ChatbotQueryRequest
+from .operational_metrics import SUPERVISOR_METRICS
 from .terminal_response import unavailable_response, with_terminal_outcome
 from .property_chat.models import PropertyCapability, QueryCapability, ReferenceCapability
 
@@ -112,11 +113,6 @@ class ChatbotEngine(Protocol):
         user: AuthenticatedUser,
         request_id: str,
     ) -> dict[str, object]: ...
-
-
-class _SupervisorGraphMetrics:
-    def increment(self, name: str, labels: dict[str, str | int | bool]) -> None:
-        _LOGGER.info(name, extra={"event": name, **labels})
 
 
 @lru_cache
@@ -618,7 +614,7 @@ class ConfiguredChatbotEngine:
                         planner=engine,
                         executor=GroundedGoalExecutor(engine, repository),
                         timeout_seconds=timeout_seconds,
-                        metrics=_SupervisorGraphMetrics(),
+                        metrics=SUPERVISOR_METRICS,
                     ).query(request=request, request_id=request_id)
 
                 if graph_selected and supervisor_mode != "shadow":

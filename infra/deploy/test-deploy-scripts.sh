@@ -151,8 +151,33 @@ case "$*" in
     fi
     ;;
   *'ecs list-services'*) printf '%s\n' '["arn:aws:ecs:ap-northeast-2:123456789012:service/home-search-staging/user-insight-worker"]' ;;
-  *'ecs describe-services'*) printf '%s\n' '{"serviceName":"user-insight-worker","taskDefinition":"arn:aws:ecs:ap-northeast-2:123456789012:task-definition/user-insight-worker:1","desiredCount":0}' ;;
-  *'ecs describe-task-definition'*) printf '%s\n' '{"containerDefinitions":[{"name":"user-insight-worker","image":"example.invalid/worker@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}' ;;
+  *'ecs describe-services'*)
+    if [[ "${FAKE_PHASE_VERIFY:-}" == '1' ]]; then
+      services='[]'
+      for name in property-api admin-api user-api public-gateway admin-gateway ml ai chat-bff user-insight-worker; do
+        services="$(jq --arg name "${name}" '. + [{serviceName:$name,taskDefinition:("arn:aws:ecs:ap-northeast-2:123456789012:task-definition/" + $name + ":1"),desiredCount:2,runningCount:2,pendingCount:0,deployments:[{status:"PRIMARY",rolloutState:"COMPLETED"}]}]' <<<"${services}")"
+      done
+      jq -n --argjson services "${services}" '{services:$services,failures:[]}'
+    else
+      printf '%s\n' '{"serviceName":"user-insight-worker","taskDefinition":"arn:aws:ecs:ap-northeast-2:123456789012:task-definition/user-insight-worker:1","desiredCount":0}'
+    fi
+    ;;
+  *'ecs describe-task-definition'*)
+    if [[ "${FAKE_PHASE_VERIFY:-}" == '1' ]]; then
+      task_definition=''
+      previous=''
+      for argument in "$@"; do
+        if [[ "${previous}" == '--task-definition' ]]; then task_definition="${argument}"; break; fi
+        previous="${argument}"
+      done
+      name="${task_definition##*/}"
+      name="${name%%:*}"
+      jq -n --arg name "${name}" --arg image "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/${name}@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \
+        '{containerDefinitions:[{name:$name,image:$image}]}'
+    else
+      printf '%s\n' '{"containerDefinitions":[{"name":"user-insight-worker","image":"example.invalid/worker@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}'
+    fi
+    ;;
   *'ecs update-service'*) printf '%s\n' '{}' ;;
   *'ecs wait services-stable'*) ;;
   *) exit 2 ;;
@@ -178,6 +203,21 @@ jq -e '.cluster_exists == false and (.services | length) == 0' "${tmp_dir}/first
 if PATH="${tmp_dir}/bin:${PATH}" FAKE_AWS_LOG="${tmp_dir}/aws.log" FAKE_CLUSTER_FAILURE=access-denied \
   "${root}/infra/deploy/capture-service-state.sh" arn:cluster "${tmp_dir}/denied-state.json" >/dev/null 2>&1; then
   echo '상태: Fail - ECS cluster access failure를 최초 배포 상태로 오인했습니다.' >&2
+  exit 1
+fi
+
+PATH="${tmp_dir}/bin:${PATH}" FAKE_AWS_LOG="${tmp_dir}/aws.log" FAKE_PHASE_VERIFY=1 \
+  "${root}/infra/deploy/verify-service-activation.sh" \
+  arn:cluster all 2 "${tmp_dir}/release-manifest.json" "${tmp_dir}/activation-evidence.json"
+jq -e '.phase == "all" and ([.services[].running_count] | all(. == 2))' \
+  "${tmp_dir}/activation-evidence.json" >/dev/null
+jq '.images["public-gateway"].uri = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/public-gateway@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"' \
+  "${tmp_dir}/release-manifest.json" >"${tmp_dir}/mismatched-release-manifest.json"
+if PATH="${tmp_dir}/bin:${PATH}" FAKE_AWS_LOG="${tmp_dir}/aws.log" FAKE_PHASE_VERIFY=1 \
+  "${root}/infra/deploy/verify-service-activation.sh" \
+  arn:cluster all 2 "${tmp_dir}/mismatched-release-manifest.json" "${tmp_dir}/mismatched-activation-evidence.json" \
+  >/dev/null 2>&1; then
+  echo '상태: Fail - ECS task image와 release manifest digest 불일치를 허용했습니다.' >&2
   exit 1
 fi
 

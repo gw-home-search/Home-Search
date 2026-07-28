@@ -154,6 +154,36 @@ class ManifestValidationTest(unittest.TestCase):
         with patch.dict(os.environ, attacker, clear=True), self.assertRaisesRegex(migration.MigrationError, "local MinIO"):
             migration.RawStoreConfig("target")
 
+    def test_publication_includes_chunks_raw_objects_and_manifest(self) -> None:
+        root = Path("/evidence")
+        manifest_path = root / "data-only-manifest.json"
+        manifest = {
+            "chunks": [{"file": "property-public-region-000001.csv.zst"}],
+            "rawObjects": [{"file": f"reference-raw-{'a' * 64}.bin"}],
+        }
+
+        self.assertEqual(
+            migration.manifest_artifact_paths(root, manifest, manifest_path),
+            [
+                root / "property-public-region-000001.csv.zst",
+                root / f"reference-raw-{'a' * 64}.bin",
+                manifest_path,
+            ],
+        )
+
+    def test_local_evidence_permissions_are_owner_only(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "export"
+            output.mkdir(mode=0o755)
+            artifact = output / "chunk.csv.zst"
+            artifact.write_bytes(b"sensitive")
+
+            migration.secure_directory(output)
+            migration.secure_file(artifact)
+
+            self.assertEqual(output.stat().st_mode & 0o777, 0o700)
+            self.assertEqual(artifact.stat().st_mode & 0o777, 0o600)
+
     def test_child_process_environment_removes_migration_passwords(self) -> None:
         os.environ["HOME_MIGRATION_PROPERTY_SOURCE_PASSWORD"] = "sentinel"
         try:

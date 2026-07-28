@@ -46,6 +46,21 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def secure_directory(path: Path) -> None:
+    if path.is_symlink():
+        raise MigrationError(f"evidence directory symlink is forbidden: {path}")
+    path.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if not path.is_dir():
+        raise MigrationError(f"evidence path is not a directory: {path}")
+    path.chmod(0o700)
+
+
+def secure_file(path: Path) -> None:
+    if path.is_symlink() or not path.is_file():
+        raise MigrationError(f"evidence artifact is not a regular file: {path.name}")
+    path.chmod(0o600)
+
+
 def dataset_name(item: dict[str, Any]) -> str:
     return f"{item['logicalDatabase']}:{item['schema']}.{item['table']}"
 
@@ -527,6 +542,7 @@ def export_csv_zstd(connection: PostgresConnection, snapshot: str, query: str, d
     if psql_code != 0 or zstd_code != 0:
         partial.unlink(missing_ok=True)
         raise MigrationError(f"chunk export failed: {psql_error.strip()} {zstd_error.strip()}")
+    secure_file(partial)
     partial.replace(destination)
     return digest.hexdigest()
 
@@ -644,9 +660,7 @@ def export_reference_raw_objects(
         arguments.append(str(partial))
         try:
             run_aws_json(arguments)
-            if partial.is_symlink() or not partial.is_file():
-                raise MigrationError(f"source raw object artifact is not a regular file: {item['objectKey']}")
-            partial.chmod(0o600)
+            secure_file(partial)
             if partial.stat().st_size != item["byteLength"] or sha256_file(partial) != checksum:
                 raise MigrationError(f"source raw object checksum/length mismatch: {item['objectKey']}")
             partial.replace(destination)
@@ -733,6 +747,14 @@ def upload_artifacts(paths: list[Path], s3_uri: str, kms_key_id: str) -> None:
         ], check=True, env=sanitized_environment())
 
 
+def manifest_artifact_paths(output: Path, manifest: dict[str, Any], manifest_path: Path) -> list[Path]:
+    return [
+        *(output / chunk["file"] for chunk in manifest["chunks"]),
+        *(output / raw_object["file"] for raw_object in manifest.get("rawObjects", [])),
+        manifest_path,
+    ]
+
+
 def validate_s3_options(s3_uri: str | None, kms_key_id: str | None) -> None:
     if bool(s3_uri) != bool(kms_key_id):
         raise MigrationError("S3 URI and KMS key id must be provided together")
@@ -741,7 +763,7 @@ def validate_s3_options(s3_uri: str | None, kms_key_id: str | None) -> None:
 def export_all(catalog_path: Path, output: Path, s3_uri: str | None, kms_key_id: str | None) -> Path:
     validate_s3_options(s3_uri, kms_key_id)
     catalog = load_catalog(catalog_path)
-    output.mkdir(parents=True, exist_ok=True)
+    secure_directory(output)
     if any(output.iterdir()):
         raise MigrationError("export output directory must be empty")
     migration_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ") + "-" + secrets.token_hex(8)
@@ -765,8 +787,9 @@ def export_all(catalog_path: Path, output: Path, s3_uri: str | None, kms_key_id:
                 manifest["datasets"].append({"dataset": dataset_name(item), "rowCount": row_count})
     manifest_path = output / "data-only-manifest.json"
     manifest_path.write_bytes(canonical_json(manifest))
+    secure_file(manifest_path)
     if s3_uri:
-        upload_artifacts([*(output / chunk["file"] for chunk in manifest["chunks"]), manifest_path], s3_uri, kms_key_id or "")
+        upload_artifacts(manifest_artifact_paths(output, manifest, manifest_path), s3_uri, kms_key_id or "")
     return manifest_path
 
 
@@ -1006,6 +1029,7 @@ def reconcile(catalog_path: Path, manifest_path: Path, report_path: Path) -> Non
         "checkedAt": datetime.now(UTC).isoformat(), "invariants": values, "findings": findings,
     }
     report_path.write_bytes(canonical_json(report))
+    secure_file(report_path)
     if findings:
         raise MigrationError(f"reconciliation failed: {'; '.join(findings[:5])}; see report")
 

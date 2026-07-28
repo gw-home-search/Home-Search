@@ -59,7 +59,9 @@ server-side encryption.
 Compression uses one zstd worker by default to keep one-shot task memory
 bounded. `HOME_MIGRATION_ZSTD_THREADS=1..8` may be set from measured task
 capacity. A chunk is written as `.partial` and atomically renamed only after
-both PostgreSQL export and compression succeed.
+both PostgreSQL export and compression succeed. Local evidence directories are
+forced to mode `0700`, and chunks, raw objects, manifests, and reconciliation
+reports to `0600`.
 The immutable `backup` release image contains the same tool, catalog, `zstd`,
 PostgreSQL 17 clients, and PostGIS restore libraries. Its entrypoint exposes
 `--data-export`, `--data-import`, `--data-reconcile`, and

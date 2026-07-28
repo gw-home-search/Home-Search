@@ -105,7 +105,7 @@ if grep -Fq "${sentinel}" "${argv_log}" || grep -Fq "${sentinel}" "${test_dir}/s
   echo '상태: Fail - backup password가 argv 또는 stdout에 노출되었습니다.' >&2
   exit 1
 fi
-[[ "$(wc -l < "${aws_log}" | tr -d ' ')" == '10' ]]
+[[ "$(wc -l < "${aws_log}" | tr -d ' ')" == '8' ]]
 grep -Fq 's3://fixture-bucket/staging/property-20260716T010203Z.dump' "${aws_log}"
 grep -Fq 's3://fixture-bucket/staging/user-20260716T010203Z.manifest.tsv' "${aws_log}"
 grep -Fq 's3://fixture-bucket/staging/ai-20260716T010203Z.manifest.tsv' "${aws_log}"

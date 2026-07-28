@@ -1,10 +1,11 @@
 # Database Backup and Restore Verification
 
 `home-search-db-backup.sh` supports the five production databases—`property`,
-`admin`, `user`, `ai`, and `coordinate`—in PostgreSQL custom format. The
-checked-in staging task explicitly selects the currently provisioned first
-three with `HOME_BACKUP_LOGICAL_DATABASES`; production must set all five after
-their dedicated databases and backup roles are created.
+`admin`, `user`, `ai`, and `coordinate`—in PostgreSQL custom format. The default
+set is `property,admin,user,ai`. The nationwide coordinate source is deferred
+and must be added explicitly only after an operator import, reconciliation, and
+runtime activation approval. The checked-in staging task remains narrower at
+`property,admin,user`.
 
 Create local artifacts:
 
@@ -13,7 +14,7 @@ HOME_BACKUP_PGHOST=127.0.0.1 \
 HOME_BACKUP_PGPORT=15432 \
 HOME_BACKUP_PGUSER=backup_role \
 HOME_BACKUP_PGPASSWORD='set-outside-shell-history' \
-HOME_BACKUP_LOGICAL_DATABASES=property,admin,user,ai,coordinate \
+HOME_BACKUP_LOGICAL_DATABASES=property,admin,user,ai \
 infra/backup/home-search-db-backup.sh --backup-all /tmp/home-search-backups
 ```
 
@@ -49,6 +50,10 @@ When the five databases use separate RDS endpoints or roles, set
 logical name. These override the shared defaults without placing passwords in
 process arguments. The backup image includes PostGIS restore support for the
 Property and Coordinate schemas.
+
+Do not add `coordinate` to `HOME_BACKUP_LOGICAL_DATABASES` merely because the
+empty coordinate RDS exists. The operator activation evidence must first prove
+the imported snapshot checksum/row count and the read-only runtime boundary.
 
 Run the deterministic fixture and real PostgreSQL integration checks:
 

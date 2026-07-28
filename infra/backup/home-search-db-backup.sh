@@ -29,7 +29,7 @@ Environment:
                            Per property/admin/user/ai/coordinate override.
   HOME_BACKUP_TIMESTAMP    Optional deterministic UTC timestamp (YYYYmmddTHHMMSSZ).
   HOME_BACKUP_LOGICAL_DATABASES
-                           Comma list from property,admin,user,ai,coordinate (default: all five).
+                           Comma list from property,admin,user,ai,coordinate (default: property,admin,user,ai).
   HOME_BACKUP_S3_URI       Optional s3://bucket/prefix upload destination.
   HOME_BACKUP_REPO_ROOT    Migration source root (default: repository root).
   HOME_RESTORE_TMP_ROOT    Ephemeral restore parent (default: /tmp).
@@ -213,7 +213,7 @@ cleanup_backup_pgpass() {
 }
 
 configure_logicals() {
-  local configured="${HOME_BACKUP_LOGICAL_DATABASES:-property,admin,user,ai,coordinate}"
+  local configured="${HOME_BACKUP_LOGICAL_DATABASES:-property,admin,user,ai}"
   local logical seen=','
   IFS=',' read -r -a BACKUP_LOGICALS <<<"${configured}"
   [[ "${#BACKUP_LOGICALS[@]}" -gt 0 ]] || { echo 'ERROR: backup logical database list is empty.' >&2; exit 2; }

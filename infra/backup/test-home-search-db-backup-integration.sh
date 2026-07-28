@@ -86,6 +86,7 @@ docker run --rm --network "${network}" \
   --env HOME_BACKUP_PGPORT=5432 \
   --env HOME_BACKUP_PGUSER=postgres \
   --env HOME_BACKUP_PGPASSWORD="${password}" \
+  --env HOME_BACKUP_LOGICAL_DATABASES=property,admin,user,ai,coordinate \
   --env HOME_BACKUP_TIMESTAMP=20260716T020304Z \
   "${image}" bash /workspace/infra/backup/home-search-db-backup.sh --backup-all /backup
 

@@ -41,6 +41,10 @@ run "five_database_backup_and_restore_testing" {
     monthly_budget_usd                = 5000
     budget_notification_emails        = ["ops@example.invalid"]
     alarm_topic_arn                   = "arn:aws:sns:ap-northeast-2:123456789012:alarms"
+    deployment_release_tag            = "v1.2.3"
+    migration_artifact_bucket         = "approved-migration-artifacts"
+    migration_artifact_prefix         = "releases/v1.2.3/property-reference"
+    migration_artifact_kms_key_arn    = "arn:aws:kms:ap-northeast-2:123456789012:key/source-artifact"
   }
 
   assert {

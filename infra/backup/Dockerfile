@@ -2,7 +2,7 @@ FROM postgres:17-bookworm@sha256:4f736ae292687621d4dbe0d499ffd024a36bd2ee7d8ca6f
 
 USER root
 RUN apt-get update \
-    && apt-get install --yes --no-install-recommends awscli ca-certificates postgresql-17-postgis-3 zstd \
+    && apt-get install --yes --no-install-recommends awscli ca-certificates jq postgresql-17-postgis-3 python3 zstd \
     && find /var/lib/apt/lists -mindepth 1 -delete \
     && groupadd --gid 10001 home-search \
     && useradd --uid 10001 --gid 10001 --no-create-home \
@@ -18,6 +18,7 @@ COPY --chown=10001:10001 apps/ai/ai_service/datasets/migrations /opt/home-search
 COPY --chown=10001:10001 apps/source-data/src/main/resources/db/migration/coordinate-source /opt/home-search/apps/source-data/src/main/resources/db/migration/coordinate-source
 COPY --chown=10001:10001 --chmod=0555 infra/migration/data_only_migration.py /opt/home-search/infra/migration/data_only_migration.py
 COPY --chown=10001:10001 infra/migration/data-only-allowlist.json /opt/home-search/infra/migration/data-only-allowlist.json
+COPY --chown=10001:10001 --chmod=0555 infra/migration/run-s3-data-migration.sh /usr/local/bin/run-s3-data-migration
 
 USER 10001:10001
 WORKDIR /backup

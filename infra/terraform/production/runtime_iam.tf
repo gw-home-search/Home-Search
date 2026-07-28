@@ -24,6 +24,7 @@ locals {
     admin-migration       = ["admin-migrator-db"]
     user-flyway           = ["user-migrator-db"]
     ai-migration          = ["ai-migrator-db"]
+    data-import-reconcile = ["property-migrator-db", "ai-importer-db"]
     source-data-migration = ["coordinate-migrator-db"]
     runtime-grants        = ["property-migrator-db", "admin-migrator-db", "user-migrator-db"]
     property-batch        = ["property-runtime-db", "public-data-providers"]

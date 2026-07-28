@@ -490,6 +490,31 @@ locals {
       environment = []
       secrets     = [{ name = "HOME_AI_MIGRATOR_DSN", valueFrom = "${aws_secretsmanager_secret.container["ai-migrator-db"].arn}:dsn::" }]
     }
+    data-import-reconcile = {
+      image      = "backup"
+      entrypoint = ["/usr/local/bin/run-s3-data-migration"]
+      command    = []
+      environment = [
+        { name = "HOME_MIGRATION_ARTIFACT_S3_URI", value = "s3://${var.migration_artifact_bucket}/${var.migration_artifact_prefix}" },
+        { name = "HOME_MIGRATION_EVIDENCE_S3_URI", value = "s3://${aws_s3_bucket.audit.id}/deployment-evidence/${var.deployment_release_tag}" },
+        { name = "HOME_MIGRATION_EVIDENCE_KMS_KEY_ID", value = aws_kms_key.audit.arn },
+        { name = "HOME_MIGRATION_PROPERTY_TARGET_HOST", value = aws_db_instance.service["property"].address },
+        { name = "HOME_MIGRATION_PROPERTY_TARGET_PORT", value = "5432" },
+        { name = "HOME_MIGRATION_PROPERTY_TARGET_DATABASE", value = "home_search" },
+        { name = "HOME_MIGRATION_PROPERTY_TARGET_USER", value = "home_search_property_migrator" },
+        { name = "HOME_MIGRATION_REFERENCE_TARGET_HOST", value = aws_db_instance.service["ai"].address },
+        { name = "HOME_MIGRATION_REFERENCE_TARGET_PORT", value = "5432" },
+        { name = "HOME_MIGRATION_REFERENCE_TARGET_DATABASE", value = "home_search_ai" },
+        { name = "HOME_MIGRATION_REFERENCE_TARGET_USER", value = "home_search_ai_importer" },
+        { name = "HOME_MIGRATION_RAW_TARGET_BUCKET", value = aws_s3_bucket.reference_raw.id },
+        { name = "HOME_MIGRATION_RAW_TARGET_REGION", value = var.aws_region },
+        { name = "HOME_MIGRATION_RAW_TARGET_KMS_KEY_ID", value = aws_kms_key.data.arn },
+      ]
+      secrets = [
+        { name = "HOME_MIGRATION_PROPERTY_TARGET_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["property-migrator-db"].arn}:password::" },
+        { name = "HOME_MIGRATION_REFERENCE_TARGET_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["ai-importer-db"].arn}:password::" },
+      ]
+    }
     source-data-migration = {
       image = "source-data-migration", command = []
       environment = [
@@ -565,7 +590,7 @@ resource "aws_ecs_task_definition" "one_shot" {
     cpu_architecture        = "X86_64"
     operating_system_family = "LINUX"
   }
-  ephemeral_storage { size_in_gib = each.key == "backup" ? 100 : 21 }
+  ephemeral_storage { size_in_gib = contains(["backup", "data-import-reconcile"], each.key) ? 100 : 21 }
   container_definitions = jsonencode([merge({
     name                   = each.key
     image                  = var.image_uris[each.value.image]
@@ -577,5 +602,6 @@ resource "aws_ecs_task_definition" "one_shot" {
     stopTimeout            = 120
     linuxParameters        = { initProcessEnabled = true }
     logConfiguration       = local.awslogs[each.key]
-  }, length(each.value.command) > 0 ? { command = each.value.command } : {})])
+    }, length(each.value.command) > 0 ? { command = each.value.command } : {},
+  length(try(each.value.entrypoint, [])) > 0 ? { entryPoint = each.value.entrypoint } : {})])
 }

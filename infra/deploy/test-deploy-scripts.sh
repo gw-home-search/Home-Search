@@ -41,6 +41,7 @@ jq -n --argjson images "${manifest_images}" \
   "${tmp_dir}/release.auto.tfvars.json"
 jq -e '
   (.image_uris | length == 17)
+  and .deployment_release_tag == "v1.2.3"
   and .image_uris["property-api"] == "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/property-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
   and .adot_collector_image_uri == "public.ecr.aws/aws-observability/aws-otel-collector@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 ' "${tmp_dir}/release.auto.tfvars.json" >/dev/null

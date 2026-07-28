@@ -43,6 +43,43 @@ variable "service_activation_phase" {
     error_message = "service_activation_phase must be one of off, consumers, private, or all."
   }
 }
+variable "deployment_release_tag" {
+  description = "Immutable release tag used to partition deployment evidence."
+  type        = string
+  validation {
+    condition     = can(regex("^v[0-9]+[.][0-9]+[.][0-9]+$", var.deployment_release_tag))
+    error_message = "deployment_release_tag must be an immutable semantic release tag."
+  }
+}
+variable "migration_artifact_bucket" {
+  description = "Approved versioned bucket containing the exported Property+Reference artifact."
+  type        = string
+  validation {
+    condition     = can(regex("^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$", var.migration_artifact_bucket))
+    error_message = "migration_artifact_bucket must be a valid S3 bucket name."
+  }
+}
+variable "migration_artifact_prefix" {
+  description = "Reviewed immutable object prefix containing exactly one data-only manifest."
+  type        = string
+  validation {
+    condition = (
+      can(regex("^[A-Za-z0-9][A-Za-z0-9._/-]{0,510}$", var.migration_artifact_prefix))
+      && !strcontains("/${var.migration_artifact_prefix}/", "/../")
+      && !strcontains("/${var.migration_artifact_prefix}/", "/./")
+      && !strcontains(var.migration_artifact_prefix, "//")
+    )
+    error_message = "migration_artifact_prefix must be a bounded traversal-free S3 prefix."
+  }
+}
+variable "migration_artifact_kms_key_arn" {
+  description = "KMS key protecting the reviewed source migration artifact."
+  type        = string
+  validation {
+    condition     = can(regex("^arn:aws:kms:[a-z0-9-]+:[0-9]{12}:key/[0-9A-Za-z-]+$", var.migration_artifact_kms_key_arn))
+    error_message = "migration_artifact_kms_key_arn must be a KMS key ARN."
+  }
+}
 variable "core_desired_count" {
   type    = number
   default = 2

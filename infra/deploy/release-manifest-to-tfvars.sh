@@ -63,7 +63,8 @@ trap cleanup EXIT
 jq --arg adot "${adot_image_uri}" '
   {
     image_uris:(.images | with_entries(.value = .value.uri)),
-    adot_collector_image_uri:$adot
+    adot_collector_image_uri:$adot,
+    deployment_release_tag:.tag
   }
 ' "${manifest}" >"${temporary}"
 chmod 0600 "${temporary}"

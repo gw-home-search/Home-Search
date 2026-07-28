@@ -39,6 +39,10 @@ run "production_audit_and_grafana_boundary" {
     monthly_budget_usd                = 5000
     budget_notification_emails        = ["ops@example.invalid"]
     alarm_topic_arn                   = "arn:aws:sns:ap-northeast-2:123456789012:alarms"
+    deployment_release_tag            = "v1.2.3"
+    migration_artifact_bucket         = "approved-migration-artifacts"
+    migration_artifact_prefix         = "releases/v1.2.3/property-reference"
+    migration_artifact_kms_key_arn    = "arn:aws:kms:ap-northeast-2:123456789012:key/source-artifact"
   }
 
   assert {
@@ -141,5 +145,15 @@ run "production_audit_and_grafana_boundary" {
       && local.dashboard_sections == ["SLO overview", "ECS and data capacity"]
     )
     error_message = "The production operations dashboard must be managed as code with SLO and capacity sections."
+  }
+
+  assert {
+    condition = (
+      aws_s3_bucket.reference_raw.force_destroy == false
+      && aws_s3_bucket_versioning.reference_raw.versioning_configuration[0].status == "Enabled"
+      && aws_s3_bucket_public_access_block.reference_raw.restrict_public_buckets
+      && strcontains(aws_iam_role_policy.data_import_reconcile.name, "property-reference-data-only-import")
+    )
+    error_message = "Reference raw restore storage and the data-only import role must remain private, versioned, and finite."
   }
 }

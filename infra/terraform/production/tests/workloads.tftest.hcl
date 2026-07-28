@@ -20,6 +20,10 @@ run "private_digest_pinned_production_workloads" {
     monthly_budget_usd                = 5000
     budget_notification_emails        = ["ops@example.invalid"]
     alarm_topic_arn                   = "arn:aws:sns:ap-northeast-2:123456789012:alarms"
+    deployment_release_tag            = "v1.2.3"
+    migration_artifact_bucket         = "approved-migration-artifacts"
+    migration_artifact_prefix         = "releases/v1.2.3/property-reference"
+    migration_artifact_kms_key_arn    = "arn:aws:kms:ap-northeast-2:123456789012:key/source-artifact"
     service_activation_phase          = "all"
     image_uris = {
       property-api          = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/property-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -103,6 +107,7 @@ run "private_digest_pinned_production_workloads" {
       && contains(keys(aws_ecs_task_definition.one_shot), "admin-migration")
       && contains(keys(aws_ecs_task_definition.one_shot), "user-flyway")
       && contains(keys(aws_ecs_task_definition.one_shot), "ai-migration")
+      && contains(keys(aws_ecs_task_definition.one_shot), "data-import-reconcile")
       && contains(keys(aws_ecs_task_definition.one_shot), "runtime-grants")
       && contains(keys(aws_ecs_task_definition.one_shot), "map-marker-projection")
     )
@@ -120,6 +125,8 @@ run "private_digest_pinned_production_workloads" {
       && local.one_shot_specs["database-bootstrap"].command == ["production-db-bootstrap"]
       && local.one_shot_specs["secret-bootstrap"].command == ["production-secret-bootstrap"]
       && local.one_shot_specs["secret-readiness"].command == ["production-secret-readiness"]
+      && local.one_shot_specs["data-import-reconcile"].entrypoint == ["/usr/local/bin/run-s3-data-migration"]
+      && aws_ecs_task_definition.one_shot["data-import-reconcile"].ephemeral_storage[0].size_in_gib == 100
       && one(local.one_shot_specs["ai-migration"].secrets).name == "HOME_AI_MIGRATOR_DSN"
       && local.workload_secret_names["ai-migration"] == ["ai-migrator-db"]
       && contains(local.secret_bootstrap_actions, "secretsmanager:PutSecretValue")

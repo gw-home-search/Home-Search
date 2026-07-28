@@ -10,12 +10,14 @@ The exporter holds one `REPEATABLE READ READ ONLY` exported snapshot per
 logical database. Large tables use stable key ranges; every zstd chunk records
 the compressed and canonical CSV SHA-256, row count, min/max key, and source WAL
 watermark. The importer rejects catalog/schema drift and unexpected datasets,
-validates checksums before writes, and uses primary/unique keys plus full-row
-equality to make a repeated chunk import idempotent. Property evidence permits
-an update only when a final snapshot contains a corrected row (including trade
-cancellation); unchanged conflicts perform no write. Reference history rejects
-conflicting rows, while only `dataset_active_snapshot` permits pointer updates.
-It never drops a source
+validates checksums before writes, and records each completed chunk in the
+target-only `home_migration.import_progress` table in the same transaction as
+the data write. A rerun validates the durable checkpoint metadata and skips the
+completed chunk, while a missing or mismatched checkpoint fails closed.
+Property evidence permits an update only when a final snapshot contains a
+corrected row (including trade cancellation); unchanged conflicts perform no
+write. Reference history rejects conflicting rows, while only
+`dataset_active_snapshot` permits pointer updates. It never drops a source
 database or Docker volume.
 
 Reference rows backed by S3 are transferred with their exact source version.

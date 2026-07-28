@@ -94,6 +94,8 @@ def validate_catalog(catalog: dict[str, Any]) -> dict[str, Any]:
             raise MigrationError(f"invalid conflictPolicy for {logical}:{item.get('table')}")
         schema = validate_identifier(item.get("schema"), "schema")
         table = validate_identifier(item.get("table"), "table")
+        if schema == "home_migration":
+            raise MigrationError("home_migration is reserved for resumable import evidence")
         if FORBIDDEN_TABLE.search(table):
             raise MigrationError(f"forbidden data-only table: {schema}.{table}")
         name = dataset_name(item)
@@ -430,6 +432,64 @@ def run_psql(connection: PostgresConnection, statement: str) -> str:
     if result.returncode != 0:
         raise MigrationError(f"psql failed: {result.stderr.strip()}")
     return result.stdout.strip()
+
+
+def ensure_import_progress(connection: PostgresConnection) -> None:
+    run_psql(
+        connection,
+        "CREATE SCHEMA IF NOT EXISTS home_migration;"
+        "REVOKE ALL ON SCHEMA home_migration FROM PUBLIC;"
+        "CREATE TABLE IF NOT EXISTS home_migration.import_progress ("
+        "migration_id text NOT NULL, dataset text NOT NULL, chunk_file text NOT NULL,"
+        "compressed_sha256 char(64) NOT NULL, csv_sha256 char(64) NOT NULL,"
+        "row_count bigint NOT NULL CHECK (row_count >= 0), completed_at timestamptz NOT NULL DEFAULT clock_timestamp(),"
+        "PRIMARY KEY (migration_id,dataset,chunk_file));"
+        "REVOKE ALL ON TABLE home_migration.import_progress FROM PUBLIC",
+    )
+
+
+def progress_predicate(migration_id: str, item: dict[str, Any], chunk: dict[str, Any]) -> str:
+    if not MIGRATION_ID.fullmatch(migration_id):
+        raise MigrationError("progress migration id is invalid")
+    return (
+        f"migration_id={sql_literal(migration_id)} AND dataset={sql_literal(dataset_name(item))} "
+        f"AND chunk_file={sql_literal(chunk['file'])}"
+    )
+
+
+def chunk_is_complete(
+    connection: PostgresConnection,
+    migration_id: str,
+    item: dict[str, Any],
+    chunk: dict[str, Any],
+) -> bool:
+    predicate = progress_predicate(migration_id, item, chunk)
+    value = run_psql(
+        connection,
+        "SELECT concat_ws('|',compressed_sha256,csv_sha256,row_count::text) "
+        f"FROM home_migration.import_progress WHERE {predicate}",
+    )
+    if not value:
+        return False
+    expected = f"{chunk['sha256']}|{chunk['csvSha256']}|{chunk['rowCount']}"
+    if value != expected:
+        raise MigrationError(f"durable chunk checkpoint metadata mismatch: {chunk['file']}")
+    return True
+
+
+def progress_insert_sql(migration_id: str, item: dict[str, Any], chunk: dict[str, Any]) -> str:
+    predicate = progress_predicate(migration_id, item, chunk)
+    return (
+        "INSERT INTO home_migration.import_progress "
+        "(migration_id,dataset,chunk_file,compressed_sha256,csv_sha256,row_count) VALUES ("
+        f"{sql_literal(migration_id)},{sql_literal(dataset_name(item))},{sql_literal(chunk['file'])},"
+        f"{sql_literal(chunk['sha256'])},{sql_literal(chunk['csvSha256'])},{int(chunk['rowCount'])}) "
+        "ON CONFLICT (migration_id,dataset,chunk_file) DO NOTHING;"
+        "DO $$BEGIN IF NOT EXISTS (SELECT 1 FROM home_migration.import_progress WHERE "
+        f"{predicate} AND compressed_sha256={sql_literal(chunk['sha256'])} "
+        f"AND csv_sha256={sql_literal(chunk['csvSha256'])} AND row_count={int(chunk['rowCount'])}) "
+        "THEN RAISE EXCEPTION 'durable chunk checkpoint metadata mismatch'; END IF; END$$;"
+    )
 
 
 def actual_columns(connection: PostgresConnection, item: dict[str, Any]) -> list[str]:
@@ -795,12 +855,16 @@ def export_all(catalog_path: Path, output: Path, s3_uri: str | None, kms_key_id:
 
 def import_chunk(
     connection: PostgresConnection,
+    migration_id: str,
     item: dict[str, Any],
     chunk: dict[str, Any],
     artifact: Path,
     raw_objects: list[dict[str, Any]],
     target_versions: dict[str, str | None],
 ) -> None:
+    if chunk_is_complete(connection, migration_id, item, chunk):
+        print(f"상태: resume - durable chunk checkpoint {chunk['file']}")
+        return
     temp = f"migration_chunk_{secrets.token_hex(6)}"
     columns = ordered_columns(item)
     keys = ",".join(quote_identifier(key) for key in item["keyColumns"])
@@ -840,7 +904,8 @@ def import_chunk(
         f"IF EXISTS (SELECT 1 FROM {quote_identifier(temp)} incoming JOIN {qualified(item)} target ON {join} "
         "WHERE to_jsonb(incoming) IS DISTINCT FROM to_jsonb(target)) THEN RAISE EXCEPTION 'imported row differs from migration chunk'; "
         f"END IF; IF (SELECT count(*) FROM {quote_identifier(temp)} incoming JOIN {qualified(item)} target ON {join}) "
-        f"<> (SELECT count(*) FROM {quote_identifier(temp)}) THEN RAISE EXCEPTION 'imported row is missing'; END IF; END$$;COMMIT;\n"
+        f"<> (SELECT count(*) FROM {quote_identifier(temp)}) THEN RAISE EXCEPTION 'imported row is missing'; END IF; END$$;"
+        f"{progress_insert_sql(migration_id, item, chunk)}COMMIT;\n"
     )
     psql = subprocess.Popen(connection.args(), env=connection.environment(), stdin=subprocess.PIPE, stderr=subprocess.PIPE)
     zstd = subprocess.Popen(
@@ -888,6 +953,8 @@ def import_all(catalog_path: Path, manifest_path: Path) -> None:
     raw_objects = manifest.get("rawObjects", [])
     target_versions = restore_reference_raw_objects(manifest_path, raw_objects)
     connections = {logical: PostgresConnection(logical, "target") for logical in ("property", "reference")}
+    for connection in connections.values():
+        ensure_import_progress(connection)
     for item in catalog["datasets"]:
         assert_schema_matches(connections[item["logicalDatabase"]], item)
     root = manifest_path.resolve().parent
@@ -897,7 +964,7 @@ def import_all(catalog_path: Path, manifest_path: Path) -> None:
     for item in catalog["datasets"]:
         for chunk in sorted(chunks_by_dataset[dataset_name(item)], key=lambda value: value["file"]):
             import_chunk(
-                connections[item["logicalDatabase"]], item, chunk, root / chunk["file"],
+                connections[item["logicalDatabase"]], manifest["migrationId"], item, chunk, root / chunk["file"],
                 raw_objects, target_versions,
             )
     for logical, connection in connections.items():
@@ -983,6 +1050,14 @@ def reconcile(catalog_path: Path, manifest_path: Path, report_path: Path) -> Non
         verify_target_raw_objects(connections["reference"], raw_objects)
     for chunk in manifest["chunks"]:
         item = by_name[chunk["dataset"]]
+        progress = int(run_psql(
+            connections[item["logicalDatabase"]],
+            f"SELECT count(*) FROM home_migration.import_progress WHERE {progress_predicate(manifest['migrationId'], item, chunk)} "
+            f"AND compressed_sha256={sql_literal(chunk['sha256'])} AND csv_sha256={sql_literal(chunk['csvSha256'])} "
+            f"AND row_count={int(chunk['rowCount'])}",
+        ))
+        if progress != 1:
+            findings.append(f"durable checkpoint missing: {chunk['dataset']}:{chunk['file']}")
         digest = target_csv_sha256(
             connections[item["logicalDatabase"]],
             reconciliation_copy_query(item, chunk.get("lowerExclusive"), chunk.get("maxKey"), raw_objects),

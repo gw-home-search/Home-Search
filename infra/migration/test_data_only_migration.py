@@ -48,6 +48,23 @@ class CatalogValidationTest(unittest.TestCase):
                 {"user_account", "admin_account", "session", "token", "flyway_schema_history", "ai_schema_history"},
             )
 
+    def test_catalog_rejects_reserved_resume_evidence_schema(self) -> None:
+        invalid = {
+            "formatVersion": 1,
+            "datasets": [{
+                "order": 10,
+                "logicalDatabase": "property",
+                "conflictPolicy": "reject",
+                "schema": "home_migration",
+                "table": "import_progress",
+                "columns": ["migration_id"],
+                "keyColumns": ["migration_id"],
+            }],
+        }
+
+        with self.assertRaisesRegex(migration.MigrationError, "reserved"):
+            migration.validate_catalog(invalid)
+
     def test_wildcard_or_duplicate_order_is_rejected(self) -> None:
         invalid = {
             "formatVersion": 1,

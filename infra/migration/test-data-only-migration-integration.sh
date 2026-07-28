@@ -11,13 +11,19 @@ property_target="migration_property_${suffix}"
 reference_target="migration_reference_${suffix}"
 test_dir="$(mktemp -d)"
 fake_bin="${test_dir}/bin"
+real_zstd="$(command -v zstd)"
 catalog="${test_dir}/catalog.json"
 export_dir="${test_dir}/export"
 final_export_dir="${test_dir}/final-export"
 raw_source_file="${test_dir}/raw-source.zip"
 raw_target_file="${test_dir}/raw-target.zip"
+interrupted_import_pid=""
 
 cleanup() {
+  if [[ -n "${interrupted_import_pid}" ]]; then
+    kill "${interrupted_import_pid}" >/dev/null 2>&1 || true
+    wait "${interrupted_import_pid}" 2>/dev/null || true
+  fi
   docker exec "${container}" psql -X -qAt -U home_search -d postgres \
     -c "DROP DATABASE IF EXISTS \"${property_target}\" WITH (FORCE)" >/dev/null 2>&1 || true
   docker exec "${container}" psql -X -qAt -U home_search -d postgres \
@@ -135,6 +141,16 @@ else:
 PY
 chmod +x "${fake_bin}/aws"
 
+cat >"${fake_bin}/zstd" <<'WRAPPER'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+if [[ " $* " == *' -dc '* ]]; then
+  sleep "${HOME_MIGRATION_TEST_ZSTD_DELAY_SECONDS:-0}"
+fi
+exec "${HOME_MIGRATION_TEST_REAL_ZSTD}" "$@"
+WRAPPER
+chmod +x "${fake_bin}/zstd"
+
 python3 - "${script_dir}/data-only-allowlist.json" "${catalog}" <<'PY'
 import json
 import sys
@@ -191,11 +207,37 @@ export HOME_MIGRATION_RAW_TARGET_REGION=ap-northeast-2
 export HOME_MIGRATION_RAW_TARGET_ENDPOINT=http://127.0.0.1:9000
 export HOME_MIGRATION_TEST_RAW_SOURCE_FILE="${raw_source_file}"
 export HOME_MIGRATION_TEST_RAW_TARGET_FILE="${raw_target_file}"
+export HOME_MIGRATION_TEST_REAL_ZSTD="${real_zstd}"
 
 PATH="${fake_bin}:${PATH}" python3 "${script_dir}/data_only_migration.py" --catalog "${catalog}" export --output "${export_dir}"
 manifest="${export_dir}/data-only-manifest.json"
-PATH="${fake_bin}:${PATH}" python3 "${script_dir}/data_only_migration.py" --catalog "${catalog}" import --manifest "${manifest}"
-PATH="${fake_bin}:${PATH}" python3 "${script_dir}/data_only_migration.py" --catalog "${catalog}" import --manifest "${manifest}"
+HOME_MIGRATION_TEST_ZSTD_DELAY_SECONDS=2 PATH="${fake_bin}:${PATH}" \
+  python3 "${script_dir}/data_only_migration.py" --catalog "${catalog}" import --manifest "${manifest}" \
+  >"${test_dir}/interrupted-import.log" 2>&1 &
+interrupted_import_pid=$!
+interrupted=false
+for _ in $(seq 1 100); do
+  property_progress_count="$(docker exec "${container}" psql -X -qAt -U home_search -d "${property_target}" -c 'SELECT count(*) FROM home_migration.import_progress' 2>/dev/null || true)"
+  reference_progress_count="$(docker exec "${container}" psql -X -qAt -U home_search -d "${reference_target}" -c 'SELECT count(*) FROM home_migration.import_progress' 2>/dev/null || true)"
+  total_progress_count=$((${property_progress_count:-0} + ${reference_progress_count:-0}))
+  if [[ "${total_progress_count}" == '1' ]]; then
+    kill "${interrupted_import_pid}"
+    wait "${interrupted_import_pid}" 2>/dev/null || true
+    interrupted_import_pid=""
+    interrupted=true
+    break
+  fi
+  sleep 0.1
+done
+[[ "${interrupted}" == 'true' ]] || { cat "${test_dir}/interrupted-import.log" >&2; exit 1; }
+
+resume_output="$(PATH="${fake_bin}:${PATH}" python3 "${script_dir}/data_only_migration.py" --catalog "${catalog}" import --manifest "${manifest}")"
+[[ "$(grep -c '상태: resume - durable chunk checkpoint' <<<"${resume_output}")" == '1' ]]
+property_progress_count="$(docker exec "${container}" psql -X -qAt -U home_search -d "${property_target}" -c 'SELECT count(*) FROM home_migration.import_progress')"
+reference_progress_count="$(docker exec "${container}" psql -X -qAt -U home_search -d "${reference_target}" -c 'SELECT count(*) FROM home_migration.import_progress')"
+[[ "${property_progress_count}|${reference_progress_count}" == '1|2' ]]
+second_resume_output="$(PATH="${fake_bin}:${PATH}" python3 "${script_dir}/data_only_migration.py" --catalog "${catalog}" import --manifest "${manifest}")"
+[[ "$(grep -c '상태: resume - durable chunk checkpoint' <<<"${second_resume_output}")" == '3' ]]
 docker exec "${container}" psql -X -qAt -v ON_ERROR_STOP=1 -U home_search -d home_search \
   -c "UPDATE public.region SET unit_cnt_sum=777, updated_at=now() WHERE id=2"
 mkdir -p "${final_export_dir}"

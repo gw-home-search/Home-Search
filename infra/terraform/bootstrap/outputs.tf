@@ -18,6 +18,10 @@ output "github_release_role_arn" {
   value       = aws_iam_role.github_release.arn
 }
 
+output "github_production_plan_role_arn" { value = aws_iam_role.github_production_plan.arn }
+output "github_production_apply_role_arn" { value = aws_iam_role.github_production_apply.arn }
+output "github_production_deploy_role_arn" { value = aws_iam_role.github_production_deploy.arn }
+
 output "backend_config" {
   description = "Non-secret backend values used during the explicit state migration."
   value = {

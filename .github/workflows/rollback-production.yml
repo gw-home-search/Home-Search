@@ -31,7 +31,7 @@ jobs:
           jq -e '.format_version == 1 and (.services | type == "object")' \
             rollback-evidence/pre-deploy-services.json >/dev/null
       - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
-        with: { role-to-assume: "${{ vars.AWS_PRODUCTION_APPLY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
+        with: { role-to-assume: "${{ vars.AWS_PRODUCTION_DEPLOY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
       - name: Restore previous task definitions producer to consumer
         run: |
           set -Eeuo pipefail

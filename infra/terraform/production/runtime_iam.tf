@@ -27,6 +27,7 @@ locals {
     admin-ops             = ["admin-runtime-db"]
     backup                = ["backup-db"]
   }
+  amp_remote_write_actions = ["aps:RemoteWrite"]
 }
 
 resource "aws_iam_role" "workload_execution" {
@@ -69,6 +70,21 @@ resource "aws_iam_role" "workload_task" {
   for_each           = local.workload_names
   name               = "${local.name}-${each.key}-task"
   assume_role_policy = local.ecs_task_assume_policy
+}
+
+resource "aws_iam_role_policy" "amp_remote_write" {
+  for_each = local.metric_service_specs
+  name     = "remote-write-production-amp"
+  role     = aws_iam_role.workload_task[each.key].id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid      = "RemoteWriteOnly"
+      Effect   = "Allow"
+      Action   = local.amp_remote_write_actions
+      Resource = [aws_prometheus_workspace.this.arn]
+    }]
+  })
 }
 
 resource "aws_iam_role_policy" "runtime_grants" {

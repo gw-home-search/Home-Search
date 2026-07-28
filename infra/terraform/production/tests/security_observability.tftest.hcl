@@ -4,8 +4,9 @@ mock_provider "aws" {
 }
 
 variables {
-  admin_certificate_arn = "arn:aws:acm:ap-northeast-2:123456789012:certificate/admin"
-  public_origin         = "https://home.example.invalid"
+  admin_certificate_arn    = "arn:aws:acm:ap-northeast-2:123456789012:certificate/admin"
+  adot_collector_image_uri = "public.ecr.aws/aws-observability/aws-otel-collector@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  public_origin            = "https://home.example.invalid"
   image_uris = {
     property-api          = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/property-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     property-batch        = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/property-batch@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -96,5 +97,49 @@ run "production_audit_and_grafana_boundary" {
       && length(aws_ce_anomaly_subscription.daily.subscriber) > 0
     )
     error_message = "Cost Anomaly Detection must notify the production cost owners daily."
+  }
+
+  assert {
+    condition = (
+      length(local.metric_service_specs) == 6
+      && strcontains(var.adot_collector_image_uri, "@sha256:")
+    )
+    error_message = "Every Prometheus-enabled HTTP service must run a digest-pinned ADOT collector sidecar."
+  }
+
+  assert {
+    condition = (
+      length(aws_iam_role_policy.amp_remote_write) == 6
+      && local.amp_remote_write_actions == ["aps:RemoteWrite"]
+    )
+    error_message = "Only metrics-producing workload task roles may remote-write to the production AMP workspace."
+  }
+
+  assert {
+    condition = (
+      strcontains(aws_prometheus_rule_group_namespace.production.data, "MapP95Exceeded")
+      && strcontains(aws_prometheus_rule_group_namespace.production.data, "AiMissingFinal")
+      && length([aws_prometheus_alert_manager_definition.production]) == 1
+      && local.amp_alert_receiver_name == "production-sns"
+    )
+    error_message = "AMP alert rules must cover map latency and AI terminal contract failures and route to the approved SNS topic."
+  }
+
+  assert {
+    condition = (
+      length(aws_cloudwatch_metric_alarm.ecs_running_task) == 9
+      && length(aws_cloudwatch_metric_alarm.rds_cpu) == 5
+      && aws_cloudwatch_metric_alarm.public_5xx_rate.threshold == 1
+      && aws_cloudwatch_metric_alarm.certificate_expiry.threshold == 30
+    )
+    error_message = "CloudWatch alarms must cover ECS, every RDS database, public 5xx rate, and certificate expiry."
+  }
+
+  assert {
+    condition = (
+      aws_cloudwatch_dashboard.production.dashboard_name == "home-search-production"
+      && local.dashboard_sections == ["SLO overview", "ECS and data capacity"]
+    )
+    error_message = "The production operations dashboard must be managed as code with SLO and capacity sections."
   }
 }

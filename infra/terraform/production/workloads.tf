@@ -33,8 +33,9 @@ locals {
         { name = "DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["property-runtime-db"].arn}:password::" },
         { name = "KAKAO_REST_API_KEY", valueFrom = "${aws_secretsmanager_secret.container["kakao-local-provider"].arn}:rest_api_key::" },
       ]
-      key_secrets = [{ name = "PUBLIC_KEY_PEM", valueFrom = "${aws_secretsmanager_secret.container["admin-internal-jwt-public"].arn}:public_key_pem::" }]
-      health      = ["CMD-SHELL", "timeout 3 bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080; printf \"GET /actuator/health/readiness HTTP/1.0\\r\\n\\r\\n\" >&3; head -1 <&3 | grep -q \" 200 \"' || exit 1"]
+      key_secrets  = [{ name = "PUBLIC_KEY_PEM", valueFrom = "${aws_secretsmanager_secret.container["admin-internal-jwt-public"].arn}:public_key_pem::" }]
+      health       = ["CMD-SHELL", "timeout 3 bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080; printf \"GET /actuator/health/readiness HTTP/1.0\\r\\n\\r\\n\" >&3; head -1 <&3 | grep -q \" 200 \"' || exit 1"]
+      metrics_path = "/actuator/prometheus"
     }
     admin-api = {
       image = "admin-api", port = 8081, sg = "admin", cpu = 512, memory = 1024
@@ -51,9 +52,10 @@ locals {
         { name = "ADMIN_INTERNAL_JWT_PRIVATE_KEY_PATH", value = "/run/keys/private.pem" },
         { name = "PROPERTY_DATA_INTERNAL_BASE_URL", value = "http://property-api.${local.namespace_name}:8080" },
       ]
-      secrets     = [{ name = "ADMIN_DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["admin-runtime-db"].arn}:password::" }]
-      key_secrets = [{ name = "PRIVATE_KEY_PEM", valueFrom = "${aws_secretsmanager_secret.container["admin-internal-jwt"].arn}:private_key_pem::" }]
-      health      = ["CMD-SHELL", "timeout 3 bash -c 'exec 3<>/dev/tcp/127.0.0.1/8081; printf \"GET /actuator/health/readiness HTTP/1.0\\r\\n\\r\\n\" >&3; head -1 <&3 | grep -q \" 200 \"' || exit 1"]
+      secrets      = [{ name = "ADMIN_DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["admin-runtime-db"].arn}:password::" }]
+      key_secrets  = [{ name = "PRIVATE_KEY_PEM", valueFrom = "${aws_secretsmanager_secret.container["admin-internal-jwt"].arn}:private_key_pem::" }]
+      health       = ["CMD-SHELL", "timeout 3 bash -c 'exec 3<>/dev/tcp/127.0.0.1/8081; printf \"GET /actuator/health/readiness HTTP/1.0\\r\\n\\r\\n\" >&3; head -1 <&3 | grep -q \" 200 \"' || exit 1"]
+      metrics_path = "/actuator/prometheus"
     }
     user-api = {
       image = "user-api", port = 8082, sg = "user", cpu = 512, memory = 1024
@@ -84,7 +86,8 @@ locals {
         { name = "PRIVATE_KEY_PEM", valueFrom = "${aws_secretsmanager_secret.container["user-jwt"].arn}:private_key_pem::" },
         { name = "PUBLIC_KEY_PEM", valueFrom = "${aws_secretsmanager_secret.container["user-jwt"].arn}:public_key_pem::" },
       ]
-      health = ["CMD-SHELL", "timeout 3 bash -c 'exec 3<>/dev/tcp/127.0.0.1/8082; printf \"GET /actuator/health/readiness HTTP/1.0\\r\\n\\r\\n\" >&3; head -1 <&3 | grep -q \" 200 \"' || exit 1"]
+      health       = ["CMD-SHELL", "timeout 3 bash -c 'exec 3<>/dev/tcp/127.0.0.1/8082; printf \"GET /actuator/health/readiness HTTP/1.0\\r\\n\\r\\n\" >&3; head -1 <&3 | grep -q \" 200 \"' || exit 1"]
+      metrics_path = "/actuator/prometheus"
     }
     public-gateway = {
       image = "public-gateway", port = 8080, sg = "public-gateway", cpu = 256, memory = 512
@@ -96,8 +99,9 @@ locals {
         { name = "CHAT_BFF_HOST", value = "chat-bff.${local.namespace_name}" },
         { name = "CHAT_BFF_PORT", value = "8083" },
       ]
-      secrets = [], key_secrets = []
-      health  = ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1"]
+      secrets      = [], key_secrets = []
+      health       = ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1"]
+      metrics_path = null
     }
     admin-gateway = {
       image = "admin-gateway", port = 8080, sg = "admin-gateway", cpu = 256, memory = 512
@@ -105,14 +109,16 @@ locals {
         { name = "ADMIN_API_HOST", value = "admin-api.${local.namespace_name}" },
         { name = "ADMIN_API_PORT", value = "8081" },
       ]
-      secrets = [], key_secrets = []
-      health  = ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1"]
+      secrets      = [], key_secrets = []
+      health       = ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1"]
+      metrics_path = null
     }
     ml = {
-      image       = "ml", port = 8001, sg = "ml", cpu = 1024, memory = 2048
-      environment = [{ name = "F37_ARTIFACT_DIR", value = "/model" }]
-      secrets     = [], key_secrets = []
-      health      = ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3)\" || exit 1"]
+      image        = "ml", port = 8001, sg = "ml", cpu = 1024, memory = 2048
+      environment  = [{ name = "F37_ARTIFACT_DIR", value = "/model" }]
+      secrets      = [], key_secrets = []
+      health       = ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3)\" || exit 1"]
+      metrics_path = "/metrics"
     }
     ai = {
       image = "ai", port = 8000, sg = "ai", cpu = 1024, memory = 2048
@@ -135,8 +141,9 @@ locals {
         { name = "HOME_AI_OPENAI_PRIMARY_MODEL", valueFrom = "${aws_secretsmanager_secret.container["openai-provider"].arn}:primary_model::" },
         { name = "HOME_AI_OPENAI_SECONDARY_MODEL", valueFrom = "${aws_secretsmanager_secret.container["openai-provider"].arn}:secondary_model::" },
       ]
-      key_secrets = [{ name = "PUBLIC_KEY_PEM", valueFrom = "${aws_secretsmanager_secret.container["user-jwt"].arn}:public_key_pem::" }]
-      health      = ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)\" || exit 1"]
+      key_secrets  = [{ name = "PUBLIC_KEY_PEM", valueFrom = "${aws_secretsmanager_secret.container["user-jwt"].arn}:public_key_pem::" }]
+      health       = ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)\" || exit 1"]
+      metrics_path = "/metrics"
     }
     chat-bff = {
       image = "chat-bff", port = 8083, sg = "chat-bff", cpu = 512, memory = 1024
@@ -151,9 +158,10 @@ locals {
         { name = "SPRING_DATA_REDIS_PORT", value = "6379" },
         { name = "SPRING_DATA_REDIS_SSL_ENABLED", value = "true" },
       ]
-      secrets     = []
-      key_secrets = [{ name = "PUBLIC_KEY_PEM", valueFrom = "${aws_secretsmanager_secret.container["user-jwt"].arn}:public_key_pem::" }]
-      health      = ["CMD-SHELL", "curl --fail --silent --max-time 3 http://127.0.0.1:8083/actuator/health/readiness >/dev/null || exit 1"]
+      secrets      = []
+      key_secrets  = [{ name = "PUBLIC_KEY_PEM", valueFrom = "${aws_secretsmanager_secret.container["user-jwt"].arn}:public_key_pem::" }]
+      health       = ["CMD-SHELL", "curl --fail --silent --max-time 3 http://127.0.0.1:8083/actuator/health/readiness >/dev/null || exit 1"]
+      metrics_path = "/actuator/prometheus"
     }
     user-insight-worker = {
       image = "user-insight-worker", port = 0, sg = "user-insight-worker", cpu = 512, memory = 1024
@@ -163,9 +171,14 @@ locals {
         { name = "HOME_KAFKA_BOOTSTRAP_SERVERS", value = aws_msk_serverless_cluster.events.bootstrap_brokers_sasl_iam },
         { name = "HOME_INSIGHT_RETENTION_ENABLED", value = "true" },
       ]
-      secrets     = [{ name = "USER_DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["user-runtime-db"].arn}:password::" }]
-      key_secrets = [], health = null
+      secrets      = [{ name = "USER_DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["user-runtime-db"].arn}:password::" }]
+      key_secrets  = [], health = null
+      metrics_path = null
     }
+  }
+  metric_service_specs = {
+    for name, spec in local.service_specs : name => spec
+    if spec.metrics_path != null
   }
 }
 
@@ -265,6 +278,68 @@ resource "aws_ecs_task_definition" "service" {
       user                   = "10001:10001"
       readonlyRootFilesystem = false
       logConfiguration       = local.awslogs[each.key]
+    }] : [],
+    each.value.metrics_path != null ? [{
+      name                   = "adot"
+      image                  = var.adot_collector_image_uri
+      essential              = true
+      command                = ["--config=env:AOT_CONFIG_CONTENT"]
+      cpu                    = 128
+      memoryReservation      = 256
+      readonlyRootFilesystem = true
+      user                   = "10001:10001"
+      linuxParameters        = { initProcessEnabled = true }
+      environment = [{
+        name = "AOT_CONFIG_CONTENT"
+        value = yamlencode({
+          extensions = {
+            sigv4auth = { region = var.aws_region }
+          }
+          receivers = {
+            prometheus = {
+              config = {
+                scrape_configs = [{
+                  job_name        = each.key
+                  scrape_interval = "30s"
+                  scrape_timeout  = "10s"
+                  metrics_path    = each.value.metrics_path
+                  static_configs  = [{ targets = ["127.0.0.1:${each.value.port}"] }]
+                }]
+              }
+            }
+          }
+          processors = {
+            batch = { timeout = "10s" }
+            memory_limiter = {
+              check_interval  = "5s"
+              limit_mib       = 192
+              spike_limit_mib = 64
+            }
+          }
+          exporters = {
+            prometheusremotewrite = {
+              endpoint = "${aws_prometheus_workspace.this.prometheus_endpoint}api/v1/remote_write"
+              auth     = { authenticator = "sigv4auth" }
+              external_labels = {
+                service        = each.key
+                environment    = "production"
+                release_digest = element(split("@", var.image_uris[each.value.image]), 1)
+              }
+            }
+          }
+          service = {
+            extensions = ["sigv4auth"]
+            pipelines = {
+              metrics = {
+                receivers  = ["prometheus"]
+                processors = ["memory_limiter", "batch"]
+                exporters  = ["prometheusremotewrite"]
+              }
+            }
+          }
+        })
+      }]
+      logConfiguration = local.awslogs[each.key]
     }] : [],
   ))
 

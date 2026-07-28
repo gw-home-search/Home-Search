@@ -6,8 +6,9 @@ mock_provider "aws" {
 mock_provider "aws" { alias = "backup" }
 
 variables {
-  admin_certificate_arn = "arn:aws:acm:ap-northeast-2:123456789012:certificate/admin"
-  public_origin         = "https://home.example.invalid"
+  admin_certificate_arn    = "arn:aws:acm:ap-northeast-2:123456789012:certificate/admin"
+  adot_collector_image_uri = "public.ecr.aws/aws-observability/aws-otel-collector@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  public_origin            = "https://home.example.invalid"
   image_uris = {
     property-api          = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/property-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     property-batch        = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/property-batch@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

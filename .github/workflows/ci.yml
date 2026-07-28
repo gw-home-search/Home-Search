@@ -226,6 +226,9 @@ jobs:
     if: github.event_name == 'push' || needs.changes.outputs.ml_changed == 'true'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Verify bounded ML operational metrics
+        working-directory: apps/ml
+        run: python3 -m unittest discover -s tests -v
       - name: Build exact-lock ML image
         run: docker build --tag home-search-ml:ci apps/ml
       - name: Verify installed dependency graph
@@ -234,7 +237,11 @@ jobs:
         run: >-
           docker run --rm --entrypoint python home-search-ml:ci -c
           "import fastapi, h5py, keras, numpy, pydantic, tensorflow, uvicorn;
-          import ml_service.main"
+          from ml_service.main import app, metrics;
+          paths = {route.path for route in app.routes};
+          assert '/metrics' in paths;
+          assert '/openapi.json' not in paths;
+          assert b'home_ml_up 1' in metrics().body"
       - name: Verify non-root runtime and model exclusion
         shell: bash
         run: |

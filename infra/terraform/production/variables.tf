@@ -58,6 +58,17 @@ variable "image_uris" {
     error_message = "image_uris must contain all 17 immutable ap-northeast-2 ECR digest URIs."
   }
 }
+variable "adot_collector_image_uri" {
+  description = "Immutable ADOT collector image used by Prometheus-enabled ECS tasks."
+  type        = string
+  validation {
+    condition = can(regex(
+      "^(public[.]ecr[.]aws/aws-observability/aws-otel-collector|[0-9]+[.]dkr[.]ecr[.]ap-northeast-2[.]amazonaws[.]com/home-search/aws-otel-collector)@sha256:[0-9a-f]{64}$",
+      var.adot_collector_image_uri,
+    ))
+    error_message = "adot_collector_image_uri must be an immutable official ADOT or approved regional mirror digest URI."
+  }
+}
 variable "monthly_budget_usd" {
   type = number
   validation {

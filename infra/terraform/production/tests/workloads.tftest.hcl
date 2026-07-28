@@ -15,6 +15,7 @@ run "private_digest_pinned_production_workloads" {
     client_vpn_saml_provider_arn      = "arn:aws:iam::123456789012:saml-provider/operators"
     public_certificate_arn            = "arn:aws:acm:ap-northeast-2:123456789012:certificate/public"
     admin_certificate_arn             = "arn:aws:acm:ap-northeast-2:123456789012:certificate/admin"
+    adot_collector_image_uri          = "public.ecr.aws/aws-observability/aws-otel-collector@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
     public_origin                     = "https://home.example.invalid"
     monthly_budget_usd                = 5000
     budget_notification_emails        = ["ops@example.invalid"]

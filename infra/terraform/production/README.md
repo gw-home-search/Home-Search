@@ -34,10 +34,20 @@ deployment workflow must run schema migrations, runtime grants, data import,
 and dark validation before applying `enable_services=true`; the enabled desired
 count cannot be lower than two and ECS availability-zone rebalancing remains on.
 
+Property, Admin, User, ML, AI, and chat-bff run a digest-pinned ADOT sidecar
+that scrapes only the loopback metrics endpoint and remote-writes to the
+production AMP workspace with a workload-specific `aps:RemoteWrite` task
+policy. AMP alert rules enforce the map p95/error and AI terminal-contract
+gates, and route through an explicitly scoped role to the approved SNS topic.
+CloudWatch alarms and the code-managed production dashboard cover public ALB,
+ECS task count, all five RDS databases, Valkey pressure, and public certificate
+expiry.
+
 Required non-secret inputs added by the workload layer are
-`admin_certificate_arn`, `public_origin`, and `image_uris`. Secret values are
-never Terraform variables: operators inject values into the KMS-encrypted
-Secrets Manager containers after foundation apply.
+`admin_certificate_arn`, `public_origin`, `image_uris`, and the immutable
+`adot_collector_image_uri`. Secret values are never Terraform variables:
+operators inject values into the KMS-encrypted Secrets Manager containers after
+foundation apply.
 
 Validation:
 

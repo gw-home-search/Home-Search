@@ -266,6 +266,22 @@ ADMIN_MIGRATOR_DB_SECRET_ARN=arn:admin-migrator \
 USER_MIGRATOR_DB_SECRET_ARN=arn:user-migrator \
   "${script}" runtime-grants >"${tmp_dir}/grants.out" 2>"${tmp_dir}/grants.err"
 ! grep -Eq 'SENTINEL|password' "${FAKE_AWS_ARGV_LOG}" "${FAKE_DB_ARGV_LOG}" "${tmp_dir}/grants.out" "${tmp_dir}/grants.err"
+
+: >"${FAKE_DB_ARGV_LOG}"
+PROPERTY_DB_HOST=property.production.internal PROPERTY_DB_PORT=5432 \
+ADMIN_DB_HOST=admin.production.internal ADMIN_DB_PORT=5432 \
+USER_DB_HOST=user.production.internal USER_DB_PORT=5432 \
+PROPERTY_MIGRATOR_DB_SECRET_ARN=arn:property-migrator \
+ADMIN_MIGRATOR_DB_SECRET_ARN=arn:admin-migrator \
+USER_MIGRATOR_DB_SECRET_ARN=arn:user-migrator \
+  "${script}" runtime-grants >"${tmp_dir}/split-grants.out" 2>"${tmp_dir}/split-grants.err"
+grep -Fq -- '-h property.production.internal' "${FAKE_DB_ARGV_LOG}"
+grep -Fq -- '-d home_search' "${FAKE_DB_ARGV_LOG}"
+grep -Fq -- '-h admin.production.internal' "${FAKE_DB_ARGV_LOG}"
+grep -Fq -- '-d home_search_admin' "${FAKE_DB_ARGV_LOG}"
+grep -Fq -- '-h user.production.internal' "${FAKE_DB_ARGV_LOG}"
+grep -Fq -- '-d home_search_user' "${FAKE_DB_ARGV_LOG}"
+! grep -Eq 'SENTINEL|password' "${FAKE_AWS_ARGV_LOG}" "${FAKE_DB_ARGV_LOG}" "${tmp_dir}/split-grants.out" "${tmp_dir}/split-grants.err"
 grep -Fq 'GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public, reference, batch TO home_search_property_runtime;' "${script}"
 grep -Fq 'REVOKE DELETE ON ALL TABLES IN SCHEMA public, reference, batch FROM home_search_property_runtime;' "${script}"
 grep -Fq 'GRANT DELETE ON TABLE market_news_collection_execution,' "${script}"

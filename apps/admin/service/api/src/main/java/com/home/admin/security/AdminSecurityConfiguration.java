@@ -46,7 +46,7 @@ public class AdminSecurityConfiguration {
                         .csrfTokenRequestHandler(new SpaCsrfTokenRequestHandler())
                         .ignoringRequestMatchers("/api/v1/admin/auth/login"))
                 .securityContext(context -> context.securityContextRepository(securityContextRepository()))
-                .authorizeHttpRequests(auth -> auth.requestMatchers("/api/v1/admin/auth/login")
+                .authorizeHttpRequests(auth -> auth.requestMatchers("/api/v1/admin/auth/login", "/actuator/health/**")
                         .permitAll()
                         .anyRequest()
                         .authenticated())

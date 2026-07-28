@@ -25,6 +25,20 @@ monitors spend by AWS service and sends a daily notification when total anomaly
 impact reaches the greater of USD 10 or one percent of the approved monthly
 budget.
 
+The workload layer accepts exactly the 17 `uri` values from the approved
+release manifest through `image_uris`; tags and repository-only references are
+rejected. It creates nine private ECS services, production service discovery,
+MSK Serverless, the ML model EFS, a WAF-protected public ALB, and a VPN-only
+internal Admin ALB. Services start at desired count zero by default. The
+deployment workflow must run schema migrations, runtime grants, data import,
+and dark validation before applying `enable_services=true`; the enabled desired
+count cannot be lower than two and ECS availability-zone rebalancing remains on.
+
+Required non-secret inputs added by the workload layer are
+`admin_certificate_arn`, `public_origin`, and `image_uris`. Secret values are
+never Terraform variables: operators inject values into the KMS-encrypted
+Secrets Manager containers after foundation apply.
+
 Validation:
 
 ```bash

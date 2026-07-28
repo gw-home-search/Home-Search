@@ -2,6 +2,7 @@ resource "aws_kms_key" "data" {
   description             = "Home Search production data"
   enable_key_rotation     = true
   deletion_window_in_days = 30
+  policy                  = local.data_kms_policy
 }
 resource "aws_kms_alias" "data" {
   name          = "alias/${local.name}-data"
@@ -198,11 +199,20 @@ resource "aws_db_subnet_group" "this" {
   name       = local.name
   subnet_ids = values(aws_subnet.data)[*].id
 }
+resource "aws_db_parameter_group" "postgres" {
+  name   = "${local.name}-postgres17"
+  family = "postgres17"
+  parameter {
+    name  = "rds.force_ssl"
+    value = "1"
+  }
+}
 resource "aws_db_instance" "service" {
   for_each                        = local.database_names
   identifier                      = "${local.name}-${each.key}"
   engine                          = "postgres"
   engine_version                  = "17.10"
+  db_name                         = each.value
   instance_class                  = var.rds_instance_class
   username                        = "cluster_admin"
   manage_master_user_password     = true
@@ -213,6 +223,7 @@ resource "aws_db_instance" "service" {
   storage_encrypted               = true
   kms_key_id                      = aws_kms_key.data.arn
   db_subnet_group_name            = aws_db_subnet_group.this.name
+  parameter_group_name            = aws_db_parameter_group.postgres.name
   vpc_security_group_ids          = [aws_security_group.database.id]
   publicly_accessible             = false
   multi_az                        = true
@@ -222,6 +233,18 @@ resource "aws_db_instance" "service" {
   skip_final_snapshot             = false
   final_snapshot_identifier       = "${local.name}-${each.key}-final"
   enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
+  auto_minor_version_upgrade      = true
+  apply_immediately               = false
+  performance_insights_enabled    = true
+  performance_insights_kms_key_id = aws_kms_key.data.arn
+}
+
+resource "aws_secretsmanager_secret" "container" {
+  for_each                = local.secret_containers
+  name                    = "${local.name}/${each.key}"
+  description             = "Value is injected outside Terraform by the approved production bootstrap."
+  kms_key_id              = aws_kms_key.data.arn
+  recovery_window_in_days = 30
 }
 resource "aws_elasticache_subnet_group" "this" {
   name       = local.name
@@ -241,6 +264,7 @@ resource "aws_elasticache_replication_group" "this" {
   security_group_ids         = [aws_security_group.valkey.id]
   at_rest_encryption_enabled = true
   transit_encryption_enabled = true
+  transit_encryption_mode    = "required"
   kms_key_id                 = aws_kms_key.data.arn
   snapshot_retention_limit   = 35
 }

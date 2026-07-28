@@ -26,6 +26,38 @@ variable "client_vpn_server_certificate_arn" { type = string }
 variable "client_vpn_saml_provider_arn" { type = string }
 variable "operator_group_id" { type = string }
 variable "public_certificate_arn" { type = string }
+variable "admin_certificate_arn" { type = string }
+variable "public_origin" {
+  type = string
+  validation {
+    condition     = can(regex("^https://[^/]+$", var.public_origin))
+    error_message = "public_origin must be an HTTPS origin without a path."
+  }
+}
+variable "enable_services" {
+  description = "Activate ECS desired counts only after migrations and dark validation are complete."
+  type        = bool
+  default     = false
+}
+variable "core_desired_count" {
+  type    = number
+  default = 2
+  validation {
+    condition     = var.core_desired_count >= 2 && floor(var.core_desired_count) == var.core_desired_count
+    error_message = "core_desired_count must be an integer of at least two."
+  }
+}
+variable "image_uris" {
+  description = "The 17 release-manifest ECR image URIs pinned with @sha256 digests."
+  type        = map(string)
+  validation {
+    condition = (
+      length(var.image_uris) == 17
+      && alltrue([for uri in values(var.image_uris) : can(regex("^[0-9]+[.]dkr[.]ecr[.]ap-northeast-2[.]amazonaws[.]com/home-search/[a-z0-9-]+@sha256:[0-9a-f]{64}$", uri))])
+    )
+    error_message = "image_uris must contain all 17 immutable ap-northeast-2 ECR digest URIs."
+  }
+}
 variable "monthly_budget_usd" {
   type = number
   validation {

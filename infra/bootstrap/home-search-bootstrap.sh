@@ -273,20 +273,45 @@ SQL
 
 runtime_grants() {
   local name
-  for name in PRIMARY_DB_HOST PRIMARY_DB_PORT PROPERTY_MIGRATOR_DB_SECRET_ARN ADMIN_MIGRATOR_DB_SECRET_ARN USER_MIGRATOR_DB_SECRET_ARN; do
+  for name in PROPERTY_MIGRATOR_DB_SECRET_ARN ADMIN_MIGRATOR_DB_SECRET_ARN USER_MIGRATOR_DB_SECRET_ARN; do
     required "${name}"
   done
+  if [[ -n "${PROPERTY_DB_HOST:-}${ADMIN_DB_HOST:-}${USER_DB_HOST:-}" ]]; then
+    for name in PROPERTY_DB_HOST PROPERTY_DB_PORT ADMIN_DB_HOST ADMIN_DB_PORT USER_DB_HOST USER_DB_PORT; do
+      required "${name}"
+    done
+  else
+    for name in PRIMARY_DB_HOST PRIMARY_DB_PORT; do
+      required "${name}"
+    done
+  fi
   read_secret "${PROPERTY_MIGRATOR_DB_SECRET_ARN}" "${tmp_dir}/property-migrator.json"
   read_secret "${ADMIN_MIGRATOR_DB_SECRET_ARN}" "${tmp_dir}/admin-migrator.json"
   read_secret "${USER_MIGRATOR_DB_SECRET_ARN}" "${tmp_dir}/user-migrator.json"
   local host port logical database migrator password pgpass sql
-  host="${PRIMARY_DB_HOST}"
-  port="${PRIMARY_DB_PORT}"
   for logical in property admin user; do
     case "${logical}" in
-      property) database=home_search; migrator=home_search_property_migrator; password="$(jq -er '.password' "${tmp_dir}/property-migrator.json")" ;;
-      admin) database=home_search_admin; migrator=home_search_admin_migrator; password="$(jq -er '.password' "${tmp_dir}/admin-migrator.json")" ;;
-      user) database=home_search_user; migrator=home_search_user_migrator; password="$(jq -er '.password' "${tmp_dir}/user-migrator.json")" ;;
+      property)
+        host="${PROPERTY_DB_HOST:-${PRIMARY_DB_HOST}}"
+        port="${PROPERTY_DB_PORT:-${PRIMARY_DB_PORT}}"
+        database=home_search
+        migrator=home_search_property_migrator
+        password="$(jq -er '.password' "${tmp_dir}/property-migrator.json")"
+        ;;
+      admin)
+        host="${ADMIN_DB_HOST:-${PRIMARY_DB_HOST}}"
+        port="${ADMIN_DB_PORT:-${PRIMARY_DB_PORT}}"
+        database=home_search_admin
+        migrator=home_search_admin_migrator
+        password="$(jq -er '.password' "${tmp_dir}/admin-migrator.json")"
+        ;;
+      user)
+        host="${USER_DB_HOST:-${PRIMARY_DB_HOST}}"
+        port="${USER_DB_PORT:-${PRIMARY_DB_PORT}}"
+        database=home_search_user
+        migrator=home_search_user_migrator
+        password="$(jq -er '.password' "${tmp_dir}/user-migrator.json")"
+        ;;
     esac
     pgpass="${tmp_dir}/${logical}.pgpass"
     printf '%s:%s:%s:%s:%s\n' "$(pgpass_field "${host}")" "${port}" "${database}" "${migrator}" "$(pgpass_field "${password}")" >"${pgpass}"

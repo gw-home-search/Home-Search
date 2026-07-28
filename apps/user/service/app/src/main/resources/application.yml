@@ -3,6 +3,8 @@ spring:
     name: home-search-user-service
   flyway:
     enabled: false
+  lifecycle:
+    timeout-per-shutdown-phase: 90s
   datasource:
     url: ${USER_DB_JDBC_URL}
     username: ${USER_DB_USERNAME:home_search_user_runtime}
@@ -68,6 +70,7 @@ home:
 
 server:
   port: 8082
+  shutdown: graceful
   servlet:
     session:
       cookie:
@@ -76,3 +79,13 @@ server:
         secure: ${USER_COOKIE_SECURE:true}
         same-site: lax
         path: /
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true

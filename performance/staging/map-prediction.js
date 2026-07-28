@@ -1,5 +1,6 @@
 import http from 'k6/http';
 import exec from 'k6/execution';
+import crypto from 'k6/crypto';
 import { check } from 'k6';
 import { Counter, Rate, Trend } from 'k6/metrics';
 
@@ -7,6 +8,9 @@ const baseUrl = required('BASE_URL').replace(/\/$/, '');
 const mapBounds = JSON.parse(required('MAP_BOUNDS_JSON'));
 const readyComplexId = required('READY_COMPLEX_ID');
 const missComplexId = required('MISS_COMPLEX_ID');
+const expectedPeakRps = positiveNumber(required('EXPECTED_PEAK_RPS'), 'EXPECTED_PEAK_RPS');
+const expectedMapMarkerCount = positiveNumber(required('MAP_MARKER_EXPECTED_COUNT'), 'MAP_MARKER_EXPECTED_COUNT');
+const expectedMapMarkerHash = required('MAP_MARKER_CANONICAL_SHA256');
 
 const mapColdDuration = new Trend('map_cold_duration', true);
 const mapWarmDuration = new Trend('map_warm_duration', true);
@@ -17,20 +21,29 @@ const predictionReadyDuration = new Trend('prediction_ready_duration', true);
 const predictionMissDuration = new Trend('prediction_miss_duration', true);
 const predictionErrors = new Rate('prediction_error_rate');
 
-let firstMapRequest = true;
-
 export const options = {
   scenarios: {
-    staging_evidence: {
-      executor: 'per-vu-iterations',
+    map_cold_gate: {
+      executor: 'shared-iterations',
+      exec: 'coldMap',
       vus: 3,
-      iterations: 5,
-      maxDuration: '2m',
+      iterations: 3,
+      maxDuration: '30s',
+    },
+    expected_peak_x2: {
+      executor: 'constant-arrival-rate',
+      exec: 'peakTraffic',
+      startTime: '10s',
+      rate: expectedPeakRps * 2,
+      timeUnit: '1s',
+      duration: '30s',
+      preAllocatedVUs: Math.max(10, expectedPeakRps * 2),
+      maxVUs: Math.max(30, expectedPeakRps * 6),
     },
   },
   thresholds: {
-    map_cold_duration: ['p(95)<2500'],
-    map_warm_duration: ['p(95)<100'],
+    map_cold_duration: ['count>=3', 'p(95)<2000'],
+    map_warm_duration: ['count>=3', 'p(95)<2000'],
     map_error_rate: ['rate<0.01'],
     prediction_ready_duration: ['p(95)<1000'],
     prediction_miss_duration: ['p(95)<3000'],
@@ -38,21 +51,16 @@ export const options = {
   },
 };
 
-export default function () {
-  const mapResponse = http.post(`${baseUrl}/api/v1/map/complexes`, JSON.stringify(mapBounds), {
-    headers: { 'Content-Type': 'application/json', 'X-Performance-Probe': 'staging-evidence' },
-    tags: { operation: firstMapRequest ? 'map-cold-first-request' : 'map-warm-repeat' },
-  });
-  const mapPayload = jsonOrNull(mapResponse);
-  const mapOk = check(mapResponse, {
-    'map status is 200': (response) => response.status === 200,
-    'map response is array': () => Array.isArray(mapPayload),
-  });
-  (firstMapRequest ? mapColdDuration : mapWarmDuration).add(mapResponse.timings.duration);
-  firstMapRequest = false;
-  mapErrors.add(!mapOk);
-  mapResponses.add(1);
-  if (mapOk) mapRows.add(mapPayload.length);
+export function coldMap() {
+  const uniqueBounds = {
+    ...mapBounds,
+    priceEokMin: exec.vu.idInTest * 0.0000001,
+  };
+  runMapProbe(uniqueBounds, true);
+}
+
+export function peakTraffic() {
+  runMapProbe(mapBounds, false);
 
   const readyResponse = http.get(`${baseUrl}/api/v1/complex/${readyComplexId}`, {
     tags: { operation: 'prediction-ready-cache-hit' },
@@ -79,6 +87,44 @@ export default function () {
   }
 }
 
+export default peakTraffic;
+
+function runMapProbe(bounds, cold) {
+  const mapResponse = http.post(`${baseUrl}/api/v1/map/complexes`, JSON.stringify(bounds), {
+    headers: { 'Content-Type': 'application/json', 'X-Performance-Probe': 'staging-gate' },
+    tags: { operation: cold ? 'map-cold-unique-key' : 'map-warm-peak-x2' },
+  });
+  const mapPayload = jsonOrNull(mapResponse);
+  const mapOk = check(mapResponse, {
+    'map status is 200': (response) => response.status === 200,
+    'map response is array': () => Array.isArray(mapPayload),
+    'map marker count matches generation evidence': () => mapPayload?.length === expectedMapMarkerCount,
+    'map marker canonical hash matches generation evidence': () =>
+      Array.isArray(mapPayload) && canonicalMarkerHash(mapPayload) === expectedMapMarkerHash,
+  });
+  (cold ? mapColdDuration : mapWarmDuration).add(mapResponse.timings.duration);
+  mapErrors.add(!mapOk);
+  mapResponses.add(1);
+  if (mapOk) mapRows.add(mapPayload.length);
+}
+
+function canonicalMarkerHash(markers) {
+  const canonicalRows = markers
+    .map((marker) =>
+      [
+        marker.parcelId,
+        marker.complexId ?? '',
+        marker.name ?? '',
+        marker.lat,
+        marker.lng,
+        marker.latestDealAmount ?? '',
+        marker.unitCntSum ?? '',
+      ].join('|'),
+    )
+    .sort();
+  return crypto.sha256(canonicalRows.join('\n'), 'hex');
+}
+
 export function handleSummary(data) {
   return {
     stdout: `staging performance evidence: ${JSON.stringify(data.metrics)}\n`,
@@ -90,6 +136,14 @@ function required(name) {
   const value = __ENV[name];
   if (!value) throw new Error(`${name} is required`);
   return value;
+}
+
+function positiveNumber(value, name) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0 || !Number.isInteger(parsed)) {
+    throw new Error(`${name} must be a positive integer`);
+  }
+  return parsed;
 }
 
 function jsonOrNull(response) {

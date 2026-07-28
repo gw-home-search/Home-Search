@@ -23,6 +23,7 @@ public record BatchJobArguments(String jobName, JobParameters jobParameters) {
 
     private static final String DAILY_JOB = "rtmsDailyRefreshJob";
     private static final String BACKFILL_JOB = "rtmsBackfillJob";
+    private static final String MAP_MARKER_PROJECTION_JOB = "mapMarkerProjectionJob";
     private static final String INSIGHT_DAILY_JOB = "marketInsightDailyJob";
     private static final String INSIGHT_ROLLING_7D_JOB = "marketInsightRolling7dJob";
     private static final String BUILDING_METADATA_JOB = "complexBuildingMetadataJob";
@@ -59,6 +60,7 @@ public record BatchJobArguments(String jobName, JobParameters jobParameters) {
             case "propertyEventOutboxRetentionJob" ->
                 scheduledPropertyEventJob(normalizedJobName, params, clock, "property-event-outbox-retention");
             case BACKFILL_JOB -> backfill(normalizedJobName, params);
+            case MAP_MARKER_PROJECTION_JOB -> mapMarkerProjection(normalizedJobName, params, clock);
             case BUILDING_METADATA_JOB -> buildingMetadata(normalizedJobName, params, clock);
             case ODC_METADATA_GAP_FILL_JOB -> odcMetadataGapFill(normalizedJobName, params, clock);
             case BUILDING_REGISTER_COLLECT_JOB -> buildingRegisterCollect(normalizedJobName, params, clock);
@@ -422,6 +424,23 @@ public record BatchJobArguments(String jobName, JobParameters jobParameters) {
                         "toYmd", toYmd,
                         "lawdCds", lawdCds,
                         "requestId", requestId)));
+    }
+
+    private static BatchJobArguments mapMarkerProjection(String jobName, Map<String, String> arguments, Clock clock) {
+        Clock safeClock = clock == null ? Clock.systemUTC() : clock;
+        String requestId = text(arguments.get("requestId"));
+        if (requestId == null) {
+            requestId = UUID.randomUUID().toString();
+        } else {
+            requestId = canonicalRequestId(requestId);
+        }
+        return new BatchJobArguments(
+                jobName,
+                parameters(Map.of(
+                        "requestId",
+                        requestId,
+                        "requestedAt",
+                        safeClock.instant().toString())));
     }
 
     private static JobParameters parameters(Map<String, String> values) {

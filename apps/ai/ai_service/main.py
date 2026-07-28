@@ -9,7 +9,7 @@ from uuid import UUID, uuid4
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from .auth import AuthenticatedUser, AuthenticationRequired, require_authenticated_user
 from .chat import (
@@ -20,6 +20,7 @@ from .chat import (
     get_supervisor_graph_mode,
 )
 from .models import ChatbotQueryRequest
+from .operational_metrics import SUPERVISOR_METRICS
 from .terminal_response import safe_final_response, with_terminal_outcome
 
 
@@ -98,6 +99,14 @@ async def unexpected_generation_error(request: Request, _exception: Exception) -
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/metrics", include_in_schema=False)
+async def metrics() -> Response:
+    return Response(
+        content=SUPERVISOR_METRICS.render(),
+        media_type="text/plain; version=0.0.4; charset=utf-8",
+    )
 
 
 @app.post("/api/v1/chatbot/query")

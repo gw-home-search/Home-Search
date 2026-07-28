@@ -108,7 +108,7 @@ resource "aws_vpc_security_group_egress_rule" "dns_tcp" {
 }
 
 resource "aws_vpc_security_group_egress_rule" "external_https" {
-  for_each          = toset(["property-batch", "user"])
+  for_each          = toset(["property-batch", "user", "ai"])
   security_group_id = aws_security_group.task[each.key].id
   cidr_ipv4         = "0.0.0.0/0"
   from_port         = 443
@@ -121,6 +121,10 @@ locals {
   task_internal_egress = {
     public-gateway-property       = { source = "public-gateway", destination = "property", port = 8080 }
     public-gateway-user           = { source = "public-gateway", destination = "user", port = 8082 }
+    public-gateway-chat-bff       = { source = "public-gateway", destination = "chat-bff", port = 8083 }
+    chat-bff-ai                   = { source = "chat-bff", destination = "ai", port = 8000 }
+    chat-bff-redis                = { source = "chat-bff", destination = "redis", port = 6379 }
+    ai-db                         = { source = "ai", destination = "database-primary", port = 5432 }
     admin-gateway-admin           = { source = "admin-gateway", destination = "admin", port = 8081 }
     admin-property                = { source = "admin", destination = "property", port = 8080 }
     property-db                   = { source = "property", destination = "database-primary", port = 5432 }
@@ -147,6 +151,8 @@ locals {
     admin               = aws_security_group.task["admin"].id
     user                = aws_security_group.task["user"].id
     ml                  = aws_security_group.task["ml"].id
+    ai                  = aws_security_group.task["ai"].id
+    chat-bff            = aws_security_group.task["chat-bff"].id
     database-primary    = aws_security_group.database_primary.id
     database-coordinate = aws_security_group.database_coordinate.id
     redis               = aws_security_group.redis.id
@@ -205,6 +211,22 @@ resource "aws_vpc_security_group_ingress_rule" "user_from_public_gateway" {
   ip_protocol                  = "tcp"
 }
 
+resource "aws_vpc_security_group_ingress_rule" "chat_bff_from_public_gateway" {
+  security_group_id            = aws_security_group.task["chat-bff"].id
+  referenced_security_group_id = aws_security_group.task["public-gateway"].id
+  from_port                    = 8083
+  to_port                      = 8083
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "ai_from_chat_bff" {
+  security_group_id            = aws_security_group.task["ai"].id
+  referenced_security_group_id = aws_security_group.task["chat-bff"].id
+  from_port                    = 8000
+  to_port                      = 8000
+  ip_protocol                  = "tcp"
+}
+
 resource "aws_vpc_security_group_ingress_rule" "admin_from_admin_gateway" {
   security_group_id            = aws_security_group.task["admin"].id
   referenced_security_group_id = aws_security_group.task["admin-gateway"].id
@@ -238,6 +260,7 @@ resource "aws_security_group" "database_primary" {
       aws_security_group.task["user"].id,
       aws_security_group.task["user-insight-worker"].id,
       aws_security_group.task["ops"].id,
+      aws_security_group.task["ai"].id,
     ]
   }
 }
@@ -254,6 +277,7 @@ resource "aws_security_group" "database_coordinate" {
       aws_security_group.task["property"].id,
       aws_security_group.task["property-batch"].id,
       aws_security_group.task["ops"].id,
+      aws_security_group.task["chat-bff"].id,
     ]
   }
 }

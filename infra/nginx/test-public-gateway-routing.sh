@@ -7,10 +7,11 @@ suffix="${RANDOM}-$$"
 network="home-search-public-gateway-test-${suffix}"
 property_upstream="home-search-property-upstream-${suffix}"
 user_upstream="home-search-user-upstream-${suffix}"
+chatbot_upstream="home-search-chatbot-upstream-${suffix}"
 gateway="home-search-public-gateway-${suffix}"
 
 cleanup() {
-    docker stop --time 1 "$gateway" "$property_upstream" "$user_upstream" >/dev/null 2>&1 || true
+    docker stop --time 1 "$gateway" "$property_upstream" "$user_upstream" "$chatbot_upstream" >/dev/null 2>&1 || true
     docker network remove "$network" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -24,6 +25,10 @@ docker run --rm --detach --name "$user_upstream" \
     --network "$network" --network-alias user-api \
     --volume "$script_dir/public-gateway-user-test-upstream.conf:/etc/nginx/conf.d/default.conf:ro" \
     "$nginx_image" >/dev/null
+docker run --rm --detach --name "$chatbot_upstream" \
+    --network "$network" --network-alias chat-bff \
+    --volume "$script_dir/chatbot-public-test-upstream.conf:/etc/nginx/conf.d/default.conf:ro" \
+    "$nginx_image" >/dev/null
 docker run --rm --detach --name "$gateway" \
     --network "$network" \
     --publish 127.0.0.1::8080 \
@@ -31,6 +36,8 @@ docker run --rm --detach --name "$gateway" \
     --env PROPERTY_API_PORT=8080 \
     --env USER_API_HOST=user-api \
     --env USER_API_PORT=8080 \
+    --env CHAT_BFF_HOST=chat-bff \
+    --env CHAT_BFF_PORT=8083 \
     --volume "$script_dir/public-gateway.conf.template:/etc/nginx/templates/default.conf.template:ro" \
     "$nginx_image" >/dev/null
 
@@ -102,6 +109,9 @@ for path in \
     assert_route "$path" 200 user "Bearer route-test"
 done
 
+assert_route /api/v1/chatbot/query 200 chat-bff-json "Bearer route-test"
+assert_route /api/v1/chatbot/query/stream 200 chat-bff-sse "Bearer route-test"
+
 for path in \
     /api/v1/insights \
     /api/v1/insights/unknown \
@@ -109,6 +119,7 @@ for path in \
     /api/v1/admin \
     /api/v1/chatbot \
     /api/v1/chatbot/messages \
+    /api/v1/chatbot/query/extra \
     /internal \
     /internal/health; do
     assert_route "$path" 404

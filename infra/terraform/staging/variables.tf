@@ -71,12 +71,12 @@ variable "image_digests" {
       "property-api", "property-batch", "property-flyway",
       "admin-api", "admin-migration", "admin-ops",
       "user-api", "user-insight-worker", "user-flyway", "source-data-migration",
-      "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml",
+      "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml", "ai", "chat-bff",
       ]))) == 0 && length(setsubtract(toset([
       "property-api", "property-batch", "property-flyway",
       "admin-api", "admin-migration", "admin-ops",
       "user-api", "user-insight-worker", "user-flyway", "source-data-migration",
-      "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml",
+      "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml", "ai", "chat-bff",
       ]), toset(keys(var.image_digests)))) == 0 && alltrue([
       for digest in values(var.image_digests) : can(regex("^sha256:[0-9a-f]{64}$", digest))
     ])

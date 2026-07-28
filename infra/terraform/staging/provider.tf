@@ -26,17 +26,17 @@ locals {
     "property-api", "property-batch", "property-flyway",
     "admin-api", "admin-migration", "admin-ops",
     "user-api", "user-insight-worker", "user-flyway", "source-data-migration",
-    "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml",
+    "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml", "ai", "chat-bff",
   ])
   service_log_names = toset([
     "property-api", "property-batch", "property-event-relay", "property-event-maintenance", "property-flyway",
     "admin-api", "admin-migration", "admin-ops",
     "user-api", "user-insight-worker", "user-flyway", "source-data-migration",
-    "public-gateway", "admin-gateway", "backup", "restore-verification", "ml",
-    "secret-bootstrap", "database-bootstrap", "runtime-grants",
+    "public-gateway", "admin-gateway", "backup", "restore-verification", "ml", "ai", "chat-bff",
+    "secret-bootstrap", "database-bootstrap", "runtime-grants", "map-marker-projection",
   ])
   secret_containers = toset([
-    "database-runtime", "database-bootstrap", "oauth-providers",
+    "database-runtime", "database-bootstrap", "oauth-providers", "ai-runtime", "openai-provider",
     "user-jwt", "admin-internal-jwt", "admin-internal-jwt-public", "public-data-providers", "kakao-local-provider",
     "property-runtime-db", "property-ai-reader-db", "admin-runtime-db",
     "user-runtime-db", "coordinate-reader-db", "property-migrator-db",
@@ -45,6 +45,6 @@ locals {
   ])
   task_security_group_names = toset([
     "public-gateway", "admin-gateway", "property", "property-event-relay",
-    "property-event-maintenance", "property-batch", "admin", "user", "user-insight-worker", "ops", "ml",
+    "property-event-maintenance", "property-batch", "admin", "user", "user-insight-worker", "ops", "ml", "ai", "chat-bff",
   ])
 }

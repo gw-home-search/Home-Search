@@ -16,6 +16,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -40,6 +41,30 @@ class RedisCachingComplexMarkerRepositoryTest {
         assertThat(repository.findComplexMarkers(seedWideRequest())).isEqualTo(markers);
 
         assertThat(delegate.callCount).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("active generation이 바뀌면 같은 요청도 이전 Redis entry를 사용하지 않는다")
+    void activeGenerationChangeInvalidatesCachedRequest() {
+        var firstGenerationMarkers = markers(1001L);
+        var secondGenerationMarkers = markers(2001L);
+        var delegate = new SequencedComplexMarkerRepository(firstGenerationMarkers, secondGenerationMarkers);
+        var generationId = new AtomicLong(41L);
+        var repository = new RedisCachingComplexMarkerRepository(
+                delegate,
+                redisTemplateBackedBy(new HashMap<>()),
+                objectMapper,
+                CACHE_TTL,
+                new SimpleMeterRegistry(),
+                generationId::get);
+
+        assertThat(repository.findComplexMarkers(seedWideRequest())).isEqualTo(firstGenerationMarkers);
+        assertThat(repository.findComplexMarkers(seedWideRequest())).isEqualTo(firstGenerationMarkers);
+
+        generationId.set(42L);
+
+        assertThat(repository.findComplexMarkers(seedWideRequest())).isEqualTo(secondGenerationMarkers);
+        assertThat(delegate.callCount).isEqualTo(2);
     }
 
     @Test

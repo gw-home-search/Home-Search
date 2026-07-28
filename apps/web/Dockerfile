@@ -1,4 +1,4 @@
-FROM node:22-bookworm-slim AS build
+FROM node:22-bookworm-slim@sha256:6c74791e557ce11fc957704f6d4fe134a7bc8d6f5ca4403205b2966bd488f6b3 AS build
 
 WORKDIR /workspace
 COPY apps/web/package.json apps/web/package-lock.json ./
@@ -15,13 +15,15 @@ RUN test -n "${VITE_USER_API_SERVER_IP}" \
     && test "${VITE_MARKET_NEWS_ENABLED}" = "true" -o "${VITE_MARKET_NEWS_ENABLED}" = "false" \
     && npm run build
 
-FROM nginxinc/nginx-unprivileged:1.27-alpine
+FROM nginxinc/nginx-unprivileged:1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0
 
 ENV PROPERTY_API_HOST=property-api \
     PROPERTY_API_PORT=8080 \
     USER_API_HOST=user-api \
     USER_API_PORT=8082 \
-    NGINX_ENVSUBST_FILTER='^(PROPERTY_API_HOST|PROPERTY_API_PORT|USER_API_HOST|USER_API_PORT)$'
+    CHAT_BFF_HOST=chat-bff \
+    CHAT_BFF_PORT=8083 \
+    NGINX_ENVSUBST_FILTER='^(PROPERTY_API_HOST|PROPERTY_API_PORT|USER_API_HOST|USER_API_PORT|CHAT_BFF_HOST|CHAT_BFF_PORT)$'
 
 COPY --from=build /workspace/dist /usr/share/nginx/html
 COPY infra/nginx/public-gateway.conf.template /etc/nginx/templates/default.conf.template

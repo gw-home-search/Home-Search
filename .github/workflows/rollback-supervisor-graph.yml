@@ -1,0 +1,24 @@
+name: Roll back Supervisor Graph
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag: { description: "Immutable deployed release tag", required: true, type: string }
+permissions: { contents: read, id-token: write }
+jobs:
+  graph-off:
+    environment: production
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with: { role-to-assume: "${{ vars.AWS_PRODUCTION_DEPLOY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
+      - name: Reuse deployed digest with Graph disabled
+        env: { ECS_CLUSTER: "${{ vars.PRODUCTION_ECS_CLUSTER }}", AI_SERVICE: "${{ vars.PRODUCTION_AI_SERVICE }}" }
+        run: |
+          set -Eeuo pipefail
+          current="$(aws ecs describe-services --cluster "${ECS_CLUSTER}" --services "${AI_SERVICE}" --query 'services[0].taskDefinition' --output text)"
+          aws ecs describe-task-definition --task-definition "${current}" --query taskDefinition > task.json
+          jq 'del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy) | .containerDefinitions[0].environment = ((.containerDefinitions[0].environment | map(select(.name != "HOME_AI_SUPERVISOR_GRAPH_MODE"))) + [{name:"HOME_AI_SUPERVISOR_GRAPH_MODE",value:"off"}])' task.json > graph-off-task.json
+          next="$(aws ecs register-task-definition --cli-input-json file://graph-off-task.json --query 'taskDefinition.taskDefinitionArn' --output text)"
+          aws ecs update-service --cluster "${ECS_CLUSTER}" --service "${AI_SERVICE}" --task-definition "${next}" --force-new-deployment >/dev/null
+          aws ecs wait services-stable --cluster "${ECS_CLUSTER}" --services "${AI_SERVICE}"

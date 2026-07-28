@@ -25,7 +25,7 @@ jq -e '
     "property-api", "property-batch", "property-flyway",
     "admin-api", "admin-migration", "admin-ops",
     "user-api", "user-insight-worker", "user-flyway", "source-data-migration",
-    "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml"
+    "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml", "ai", "chat-bff"
   ] | sort) and
   ([.target[] | .labels["org.opencontainers.image.revision"]] | all(. == "0123456789abcdef")) and
   ([.target[] | .labels["org.opencontainers.image.version"]] | all(. == "1.2.3")) and
@@ -35,6 +35,8 @@ jq -e '
   (.target["property-flyway"].platforms == ["linux/amd64"]) and
   (.target["user-flyway"].platforms == ["linux/amd64"]) and
   (.target.ml.context == "apps/ml") and
+  (.target.ai.context == "apps/ai") and
+  (.target["chat-bff"].dockerfile == "apps/chat-bff/Dockerfile") and
   (.target["public-gateway"].args.VITE_USER_API_SERVER_IP == "https://staging.example.test") and
   (.target["public-gateway"].args.VITE_MARKET_NEWS_ENABLED == "true")
 ' "${tmp_dir}/bake.json" >/dev/null
@@ -44,7 +46,8 @@ docker build --tag "${backup_image}" --file infra/backup/Dockerfile .
 [[ "$(docker inspect --format '{{json .Config.Entrypoint}}' "${backup_image}")" == '["/usr/local/bin/home-search-db-backup"]' ]]
 [[ "$(docker inspect --format '{{json .Config.Cmd}}' "${backup_image}")" == '["--backup-all","/backup"]' ]]
 docker run --rm --entrypoint bash "${backup_image}" -c \
-  'command -v pg_dump >/dev/null && command -v pg_restore >/dev/null && command -v initdb >/dev/null && command -v aws >/dev/null && test -d "${HOME_BACKUP_REPO_ROOT}/apps/property-data/db/migration/api" && test ! -e /model'
+  'command -v pg_dump >/dev/null && command -v pg_restore >/dev/null && command -v initdb >/dev/null && command -v aws >/dev/null && command -v zstd >/dev/null && test -f /usr/lib/postgresql/17/lib/postgis-3.so && test -d "${HOME_BACKUP_REPO_ROOT}/apps/property-data/db/migration/api" && test -d "${HOME_BACKUP_REPO_ROOT}/apps/ai/ai_service/datasets/migrations" && test -d "${HOME_BACKUP_REPO_ROOT}/apps/source-data/src/main/resources/db/migration/coordinate-source" && test -f "${HOME_BACKUP_REPO_ROOT}/infra/migration/data-only-allowlist.json" && test ! -e /model'
+docker run --rm "${backup_image}" --data-validate-catalog /opt/home-search/infra/migration/data-only-allowlist.json
 
 docker build --tag "${bootstrap_image}" --file infra/bootstrap/Dockerfile .
 [[ "$(docker inspect --format '{{.Config.User}}' "${bootstrap_image}")" == '10001:10001' ]]
@@ -59,7 +62,9 @@ for dockerfile in \
   apps/user/service/Dockerfile \
   apps/web/Dockerfile \
   apps/admin/web/Dockerfile \
-  apps/ml/Dockerfile; do
+  apps/ml/Dockerfile \
+  apps/ai/Dockerfile \
+  apps/chat-bff/Dockerfile; do
   grep -q '^HEALTHCHECK ' "${dockerfile}"
 done
 

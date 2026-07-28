@@ -7,6 +7,7 @@ set -Eeuo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/../.." && pwd)"
 BACKUP_PGPASS_FILE=""
+BACKUP_LOGICALS=()
 
 usage() {
   cat <<'EOF'
@@ -14,26 +15,34 @@ Usage:
   home-search-db-backup.sh --backup-all OUTPUT_DIR
   home-search-db-backup.sh --verify-restore MANIFEST_FILE
   home-search-db-backup.sh --verify-latest-s3 S3_URI
+  home-search-db-backup.sh --data-validate-catalog CATALOG_FILE
+  home-search-db-backup.sh --data-export OUTPUT_DIR
+  home-search-db-backup.sh --data-import DATA_MANIFEST_FILE
+  home-search-db-backup.sh --data-reconcile DATA_MANIFEST_FILE
 
 Environment:
-  HOME_BACKUP_PGHOST       Source PostgreSQL host (required for backup).
-  HOME_BACKUP_PGPORT       Source PostgreSQL port (default: 5432).
-  HOME_BACKUP_PGUSER       Backup role (required for backup).
-  HOME_BACKUP_PGPASSWORD   Backup role password (required for backup).
+  HOME_BACKUP_PGHOST       Default PostgreSQL host (required unless every logical override is set).
+  HOME_BACKUP_PGPORT       Default PostgreSQL port (default: 5432).
+  HOME_BACKUP_PGUSER       Default backup role.
+  HOME_BACKUP_PGPASSWORD   Default backup role password.
+  HOME_BACKUP_<LOGICAL>_PGHOST/PGPORT/PGUSER/PGPASSWORD
+                           Per property/admin/user/ai/coordinate override.
   HOME_BACKUP_TIMESTAMP    Optional deterministic UTC timestamp (YYYYmmddTHHMMSSZ).
+  HOME_BACKUP_LOGICAL_DATABASES
+                           Comma list from property,admin,user,ai,coordinate (default: property,admin,user,ai).
   HOME_BACKUP_S3_URI       Optional s3://bucket/prefix upload destination.
   HOME_BACKUP_REPO_ROOT    Migration source root (default: repository root).
   HOME_RESTORE_TMP_ROOT    Ephemeral restore parent (default: /tmp).
 
-Only property, admin, and user databases are supported. Coordinate-source is
-intentionally excluded. Restore verification creates a temporary PostgreSQL
-cluster and never drops or overwrites an existing database.
+All five production databases are supported: property, admin, user, AI, and
+coordinate. Restore verification creates a temporary PostgreSQL cluster and
+never drops or overwrites an existing database.
 EOF
 }
 
 mode="${1:-}"
 argument="${2:-}"
-if [[ "$#" -ne 2 || ( "${mode}" != "--backup-all" && "${mode}" != "--verify-restore" && "${mode}" != "--verify-latest-s3" ) ]]; then
+if [[ "$#" -ne 2 || ( "${mode}" != "--backup-all" && "${mode}" != "--verify-restore" && "${mode}" != "--verify-latest-s3" && "${mode}" != "--data-validate-catalog" && "${mode}" != "--data-export" && "${mode}" != "--data-import" && "${mode}" != "--data-reconcile" ) ]]; then
   usage >&2
   exit 2
 fi
@@ -66,6 +75,8 @@ migration_dir() {
     property) printf '%s' 'apps/property-data/db/migration/api' ;;
     admin) printf '%s' 'apps/admin/service/migration/src/main/resources/db/migration/admin' ;;
     user) printf '%s' 'apps/user/service/db/migration/user' ;;
+    ai) printf '%s' 'apps/ai/ai_service/datasets/migrations' ;;
+    coordinate) printf '%s' 'apps/source-data/src/main/resources/db/migration/coordinate-source' ;;
     *) return 2 ;;
   esac
 }
@@ -75,6 +86,8 @@ database_name() {
     property) printf '%s' 'home_search' ;;
     admin) printf '%s' 'home_search_admin' ;;
     user) printf '%s' 'home_search_user' ;;
+    ai) printf '%s' 'home_search_ai' ;;
+    coordinate) printf '%s' 'home_search_coordinate_source' ;;
     *) return 2 ;;
   esac
 }
@@ -84,6 +97,8 @@ history_table() {
     property) printf '%s' 'public.flyway_schema_history' ;;
     admin) printf '%s' 'admin.flyway_schema_history' ;;
     user) printf '%s' 'users.flyway_schema_history' ;;
+    ai) printf '%s' 'public.ai_schema_history' ;;
+    coordinate) printf '%s' 'reference.flyway_schema_history' ;;
     *) return 2 ;;
   esac
 }
@@ -93,6 +108,8 @@ core_table() {
     property) printf '%s' 'public.raw_trade_ingest' ;;
     admin) printf '%s' 'admin.admin_account' ;;
     user) printf '%s' 'users.user_account' ;;
+    ai) printf '%s' 'public.dataset_source' ;;
+    coordinate) printf '%s' 'reference.parcel_coordinate_snapshot' ;;
     *) return 2 ;;
   esac
 }
@@ -142,10 +159,50 @@ publish_artifacts() {
   local manifest_file="$2"
   local destination="${HOME_BACKUP_S3_URI:-}"
   [[ -n "${destination}" ]] || return 0
+  local kms_key_id="${HOME_BACKUP_KMS_KEY_ID:?Set HOME_BACKUP_KMS_KEY_ID when HOME_BACKUP_S3_URI is set}"
   command -v aws >/dev/null 2>&1 || { echo "ERROR: aws CLI is required for HOME_BACKUP_S3_URI." >&2; return 1; }
   destination="${destination%/}"
-  aws s3 cp "${dump_file}" "${destination}/$(basename "${dump_file}")" --only-show-errors
-  aws s3 cp "${manifest_file}" "${destination}/$(basename "${manifest_file}")" --only-show-errors
+  aws s3 cp "${dump_file}" "${destination}/$(basename "${dump_file}")" --only-show-errors \
+    --sse aws:kms --sse-kms-key-id "${kms_key_id}"
+  aws s3 cp "${manifest_file}" "${destination}/$(basename "${manifest_file}")" --only-show-errors \
+    --sse aws:kms --sse-kms-key-id "${kms_key_id}"
+}
+
+logical_connection_value() {
+  local logical="$1"
+  local field="$2"
+  local upper variable fallback
+  upper="$(printf '%s' "${logical}" | tr '[:lower:]' '[:upper:]')"
+  variable="HOME_BACKUP_${upper}_${field}"
+  case "${field}" in
+    PGHOST) fallback="${HOME_BACKUP_PGHOST:-}" ;;
+    PGPORT) fallback="${HOME_BACKUP_PGPORT:-5432}" ;;
+    PGUSER) fallback="${HOME_BACKUP_PGUSER:-}" ;;
+    PGPASSWORD) fallback="${HOME_BACKUP_PGPASSWORD:-}" ;;
+    *) return 2 ;;
+  esac
+  printf '%s' "${!variable:-${fallback}}"
+}
+
+history_failed_count() {
+  local logical="$1" host="$2" port="$3" user="$4" database="$5" history="$6"
+  if [[ "${logical}" == 'ai' ]]; then
+    printf '0'
+  else
+    psql -X -At -h "${host}" -p "${port}" -U "${user}" -d "${database}" \
+      -c "SELECT count(*) FROM ${history} WHERE NOT success"
+  fi
+}
+
+history_success_count() {
+  local logical="$1" host="$2" port="$3" user="$4" database="$5" history="$6"
+  if [[ "${logical}" == 'ai' ]]; then
+    psql -X -At -h "${host}" -p "${port}" -U "${user}" -d "${database}" \
+      -c "SELECT count(*) FROM ${history}"
+  else
+    psql -X -At -h "${host}" -p "${port}" -U "${user}" -d "${database}" \
+      -c "SELECT count(*) FROM ${history} WHERE success"
+  fi
 }
 
 cleanup_backup_pgpass() {
@@ -155,12 +212,44 @@ cleanup_backup_pgpass() {
   fi
 }
 
+configure_logicals() {
+  local configured="${HOME_BACKUP_LOGICAL_DATABASES:-property,admin,user,ai}"
+  local logical seen=','
+  IFS=',' read -r -a BACKUP_LOGICALS <<<"${configured}"
+  [[ "${#BACKUP_LOGICALS[@]}" -gt 0 ]] || { echo 'ERROR: backup logical database list is empty.' >&2; exit 2; }
+  for logical in "${BACKUP_LOGICALS[@]}"; do
+    case "${logical}" in property|admin|user|ai|coordinate) ;; *) echo "ERROR: invalid backup logical database: ${logical}" >&2; exit 2 ;; esac
+    [[ "${seen}" != *",${logical},"* ]] || { echo "ERROR: duplicate backup logical database: ${logical}" >&2; exit 2; }
+    seen+="${logical},"
+  done
+}
+
+run_data_migration() {
+  local operation="$1"
+  local value="$2"
+  local root="${HOME_BACKUP_REPO_ROOT:-${repo_root}}"
+  local tool="${root}/infra/migration/data_only_migration.py"
+  local catalog="${HOME_MIGRATION_CATALOG:-${root}/infra/migration/data-only-allowlist.json}"
+  [[ -f "${tool}" && -f "${catalog}" ]] || { echo 'ERROR: data-only migration tool/catalog is missing.' >&2; exit 2; }
+  case "${operation}" in
+    validate-catalog) python3 "${tool}" --catalog "${value}" validate-catalog ;;
+    export)
+      local -a export_arguments=(--catalog "${catalog}" export --output "${value}")
+      if [[ -n "${HOME_MIGRATION_S3_URI:-}" || -n "${HOME_MIGRATION_KMS_KEY_ID:-}" ]]; then
+        export_arguments+=(--s3-uri "${HOME_MIGRATION_S3_URI:?Set HOME_MIGRATION_S3_URI}" --kms-key-id "${HOME_MIGRATION_KMS_KEY_ID:?Set HOME_MIGRATION_KMS_KEY_ID}")
+      fi
+      python3 "${tool}" "${export_arguments[@]}"
+      ;;
+    import) python3 "${tool}" --catalog "${catalog}" import --manifest "${value}" ;;
+    reconcile)
+      python3 "${tool}" --catalog "${catalog}" reconcile --manifest "${value}" \
+        --report "${HOME_MIGRATION_RECONCILIATION_REPORT:?Set HOME_MIGRATION_RECONCILIATION_REPORT}"
+      ;;
+  esac
+}
+
 backup_all() {
   local output_dir="$1"
-  local host="${HOME_BACKUP_PGHOST:?Set HOME_BACKUP_PGHOST}"
-  local port="${HOME_BACKUP_PGPORT:-5432}"
-  local user="${HOME_BACKUP_PGUSER:?Set HOME_BACKUP_PGUSER}"
-  local password="${HOME_BACKUP_PGPASSWORD:?Set HOME_BACKUP_PGPASSWORD}"
   local timestamp="${HOME_BACKUP_TIMESTAMP:-$(date -u +%Y%m%dT%H%M%SZ)}"
   [[ "${timestamp}" =~ ^[0-9]{8}T[0-9]{6}Z$ ]] || { echo "ERROR: invalid HOME_BACKUP_TIMESTAMP." >&2; exit 2; }
   mkdir -p "${output_dir}"
@@ -169,21 +258,31 @@ backup_all() {
   pgpass_file="$(mktemp "${TMPDIR:-/tmp}/home-search-backup-pgpass.XXXXXX")"
   BACKUP_PGPASS_FILE="${pgpass_file}"
   chmod 600 "${pgpass_file}"
-  printf '*:*:*:*:%s\n' "$(escape_pgpass_field "${password}")" > "${pgpass_file}"
+  : > "${pgpass_file}"
   export PGPASSFILE="${pgpass_file}"
   trap cleanup_backup_pgpass EXIT
 
-  local logical database history core version failed_count history_count row_count
+  local logical database history core version failed_count history_count row_count host port user password
   local dump_file manifest_file dump_checksum migrations_checksum migrations_count
-  for logical in property admin user; do
+  for logical in "${BACKUP_LOGICALS[@]}"; do
+    host="$(logical_connection_value "${logical}" PGHOST)"
+    port="$(logical_connection_value "${logical}" PGPORT)"
+    user="$(logical_connection_value "${logical}" PGUSER)"
+    password="$(logical_connection_value "${logical}" PGPASSWORD)"
+    [[ -n "${host}" && -n "${user}" && -n "${password}" ]] \
+      || { echo "ERROR: incomplete backup connection for ${logical}." >&2; exit 2; }
     database="$(database_name "${logical}")"
+    printf '%s:%s:%s:%s:%s\n' \
+      "$(escape_pgpass_field "${host}")" "$(escape_pgpass_field "${port}")" \
+      "$(escape_pgpass_field "${database}")" "$(escape_pgpass_field "${user}")" \
+      "$(escape_pgpass_field "${password}")" >> "${pgpass_file}"
     history="$(history_table "${logical}")"
     core="$(core_table "${logical}")"
     version="$(psql -X -At -h "${host}" -p "${port}" -U "${user}" -d "${database}" -c 'SHOW server_version')"
     validate_manifest_token postgres_version "${version}" '[0-9]+([.][0-9]+)*'
-    failed_count="$(psql -X -At -h "${host}" -p "${port}" -U "${user}" -d "${database}" -c "SELECT count(*) FROM ${history} WHERE NOT success")"
+    failed_count="$(history_failed_count "${logical}" "${host}" "${port}" "${user}" "${database}" "${history}")"
     [[ "${failed_count}" == "0" ]] || { echo "ERROR: ${logical} has failed Flyway history rows." >&2; exit 1; }
-    history_count="$(psql -X -At -h "${host}" -p "${port}" -U "${user}" -d "${database}" -c "SELECT count(*) FROM ${history} WHERE success")"
+    history_count="$(history_success_count "${logical}" "${host}" "${port}" "${user}" "${database}" "${history}")"
     row_count="$(psql -X -At -h "${host}" -p "${port}" -U "${user}" -d "${database}" -c "SELECT count(*) FROM ${core}")"
     validate_manifest_token history_success_count "${history_count}" '[0-9]+'
     validate_manifest_token row_count "${row_count}" '[0-9]+'
@@ -253,7 +352,7 @@ verify_restore() {
   expected_row_count="$(manifest_value "${manifest}" row_count)"
 
   [[ "${format}" == "1" ]] || { echo "ERROR: unsupported manifest format." >&2; exit 1; }
-  case "${logical}" in property|admin|user) ;; *) echo "ERROR: unsupported logical database: ${logical}" >&2; exit 1 ;; esac
+  case "${logical}" in property|admin|user|ai|coordinate) ;; *) echo "ERROR: unsupported logical database: ${logical}" >&2; exit 1 ;; esac
   [[ "${database}" == "$(database_name "${logical}")" ]] || { echo "ERROR: manifest database mismatch." >&2; exit 1; }
   [[ "${history}" == "$(history_table "${logical}")" && "${core}" == "$(core_table "${logical}")" ]] \
     || { echo "ERROR: manifest invariant table mismatch." >&2; exit 1; }
@@ -287,7 +386,11 @@ verify_restore() {
   createdb -h "${socket_dir}" -U postgres "${restored_db}"
   pg_restore -h "${socket_dir}" -U postgres -d "${restored_db}" \
     --exit-on-error --no-owner --no-acl "${dump_file}"
-  history_count="$(psql -X -At -h "${socket_dir}" -U postgres -d "${restored_db}" -c "SELECT count(*) FROM ${history} WHERE success")"
+  if [[ "${logical}" == 'ai' ]]; then
+    history_count="$(psql -X -At -h "${socket_dir}" -U postgres -d "${restored_db}" -c "SELECT count(*) FROM ${history}")"
+  else
+    history_count="$(psql -X -At -h "${socket_dir}" -U postgres -d "${restored_db}" -c "SELECT count(*) FROM ${history} WHERE success")"
+  fi
   row_count="$(psql -X -At -h "${socket_dir}" -U postgres -d "${restored_db}" -c "SELECT count(*) FROM ${core}")"
   [[ "${history_count}" == "${expected_history_count}" ]] || { echo "ERROR: restored migration history count mismatch." >&2; exit 1; }
   [[ "${row_count}" == "${expected_row_count}" ]] || { echo "ERROR: restored core table row count mismatch." >&2; exit 1; }
@@ -315,7 +418,7 @@ verify_latest_s3() {
   [[ "${prefix}" =~ ^[A-Za-z0-9._/-]*$ && "${prefix}" != *'..'* ]] \
     || { echo 'ERROR: S3 prefix contains unsupported characters.' >&2; exit 2; }
 
-  for logical in property admin user; do
+  for logical in "${BACKUP_LOGICALS[@]}"; do
     key="$(aws s3api list-objects-v2 --bucket "${bucket}" --prefix "${prefix}${logical}-" \
       --query "sort_by(Contents[?ends_with(Key, '.manifest.tsv')], &LastModified)[-1].Key" --output text)"
     [[ "${key}" != "None" && "${key}" =~ ^${prefix}${logical}-[0-9]{8}T[0-9]{6}Z[.]manifest[.]tsv$ ]] \
@@ -345,7 +448,11 @@ verify_latest_s3() {
 }
 
 case "${mode}" in
-  --backup-all) backup_all "${argument}" ;;
+  --backup-all) configure_logicals; backup_all "${argument}" ;;
   --verify-restore) verify_restore "${argument}" ;;
-  --verify-latest-s3) verify_latest_s3 "${argument}" ;;
+  --verify-latest-s3) configure_logicals; verify_latest_s3 "${argument}" ;;
+  --data-validate-catalog) run_data_migration validate-catalog "${argument}" ;;
+  --data-export) run_data_migration export "${argument}" ;;
+  --data-import) run_data_migration import "${argument}" ;;
+  --data-reconcile) run_data_migration reconcile "${argument}" ;;
 esac

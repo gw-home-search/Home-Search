@@ -12,6 +12,16 @@ import org.junit.jupiter.api.Test;
 
 class BatchJobArgumentsTest {
 
+    @Test
+    @DisplayName("map marker projection one-shot은 외부 인자 없이도 추적 가능한 실행 파라미터를 만든다")
+    void mapMarkerProjectionCreatesTraceableOneShotParameters() {
+        BatchJobArguments arguments = BatchJobArguments.from("mapMarkerProjectionJob", Map.of(), clock);
+
+        assertThat(arguments.jobName()).isEqualTo("mapMarkerProjectionJob");
+        assertThat(arguments.jobParameters().getString("requestId")).isNotBlank();
+        assertThat(arguments.jobParameters().getString("requestedAt")).isNotBlank();
+    }
+
     private final Clock clock = Clock.fixed(Instant.parse("2026-07-06T16:00:00Z"), ZoneId.of("UTC"));
 
     @Test

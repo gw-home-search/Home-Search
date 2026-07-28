@@ -112,12 +112,12 @@ markers when the backend has enough coordinate confidence:
 
 ## Backend Query Boundary
 
-`/api/v1/map/complexes` should only do enough work for map display:
-
-- Filter parcels by PostGIS bounds.
-- Join complexes under each parcel.
-- Compute or select latest trade amount.
-- Apply simple filters for unit count, price, area, and age.
+`/api/v1/map/complexes` reads only the immutable generation referenced by
+`map_marker_active_generation`. Request-time SQL must not aggregate `trade`,
+`complex`, `parcel`, or building-profile source tables. It applies bounds,
+price, area, household-count, building-age, and ratio filters to
+`map_complex_marker_projection`; `/api/v1/map/regions` applies bounds and level
+filters to `map_region_marker_projection`.
 
 The frontend aborts obsolete requests on viewport change or unmount while still
 keeping its request-sequence guard against stale responses. The API rejects
@@ -126,16 +126,33 @@ region bbox spans above `10.0`/`15.0` degrees. Public ingress separately applies
 a per-IP `10r/s`, burst `30` limit to only the two map bbox endpoints; this
 protects the query path without adding a rate-limit library to application code.
 
-The property-data map adapter owns two complete, feature-local SQL resources:
+The projection builder owns `map-marker-projection-build.sql`. After RTMS ingest
+and region household synchronization, Batch:
+
+1. creates a `BUILDING` generation with a source WAL/raw/trade watermark;
+2. builds complex and region rows without changing the active pointer;
+3. validates row counts and a deterministic SHA-256 marker hash;
+4. changes the singleton pointer only after `VALIDATED`;
+5. retains the immediately previous `RETIRED` generation for rollback.
+
+A build or activation failure records `FAILED`, marks the Batch job failed for
+deployment gating, and leaves the prior active generation serving traffic. The Redis marker cache key
+contains the active generation id, so pointer activation invalidates stale
+entries without `FLUSHALL` or a key scan. Redis failure still falls back to the
+same projection query, never to source-table aggregation.
+
+The two former request-time SQL resources remain as parity references for the
+projection persistence fixtures:
 
 - `complex-marker-trade-first.sql` is used when unit-count and building-age shape filters are absent.
 - `complex-marker-shape-filter.sql` applies unit-count and building-age filters before resolving the latest marker trade.
 
-`ComplexMarkerSql` loads both resources once when the JDBC repository is created. The repository only selects the variant,
-binds named parameters, and maps rows. Bounds and filter values are never interpolated into SQL text. Both variants keep the
-same marker identity, source `name`, latest-price, current-generation, and household-count policies; persistence fixtures
-verify their neutral-filter parity. V8's `hs_normalize_complex_search_name` remains the canonical complex search-name
-normalizer, with Java-to-database golden parity tests. Applied V8 migration SQL is not modified.
+They preserve the marker identity, source `name`, latest-price,
+current-generation, and household-count oracle used by the generation parity
+tests. Bounds and filter values remain named JDBC parameters. V8's
+`hs_normalize_complex_search_name` remains the canonical complex search-name
+normalizer, with Java-to-database golden parity tests. Applied V8 migration SQL
+is not modified.
 
 Do not require:
 
@@ -208,5 +225,10 @@ so its failure does not affect detail, trade, or trend state.
 - Detailed zoom shows complex markers.
 - Complex marker click opens detail and trade data.
 - Map display works with only project data tables.
+- Cache miss and Redis failure read the active projection without source-table aggregation.
+- A failed generation does not replace the active marker hash or response.
+- The release performance gate requires at least three cold and three warm
+  samples, p95 below 2 seconds, error rate below 1%, marker count/hash parity,
+  and twice the committed expected peak request rate.
 - Nearby facility overlay uses the viewport endpoint, stores no POI table, and does
   not change the ordinary marker or complex nearby-place endpoint.

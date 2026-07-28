@@ -1,16 +1,4 @@
 = Home Search public API
-
-== Market insight
-
-operation::market-insight-latest-unavailable[]
-
-operation::market-insight-weekly-unavailable[]
-
-== Market news
-
-operation::market-news-unavailable[]
-
-operation::complex-market-news[]
 :doctype: book
 :icons: font
 :source-highlighter: coderay
@@ -21,24 +9,115 @@ operation::complex-market-news[]
 
 == Overview
 
-Home Search exposes the minimum API surface needed to collect apartment
-trade data, store it safely, and display it on a map.
+Home Search exposes the versioned public API needed to search apartment
+complexes, display map markers, inspect trade history, and read published
+market insight. The generated examples are release artifacts; authentication,
+units, pagination, and error behavior remain governed by `docs/API_CONTRACT.md`.
+
+== Nearby Place API
+
+=== Complex nearby places
+
+operation::nearby-places-success[]
+
+=== Viewport nearby places
+
+operation::viewport-nearby-places-success[]
 
 == Map API
 
-=== Region Markers
+=== Region markers
 
-operation::map-regions-success[snippets='http-request,request-fields,http-response,response-fields']
+operation::map-regions-success[]
 
-=== Complex Markers
+=== Complex markers
 
-operation::map-complexes-success[snippets='http-request,request-fields,http-response,response-fields']
+operation::map-complexes-success[]
 
-=== Error Response
+== Search API
 
-operation::map-invalid-request[snippets='http-request,http-response,response-fields']
+=== Complex search
+
+operation::read-search-complexes-success[]
+
+=== Complex suggestions
+
+operation::read-complex-suggestions-success[]
+
+== Region API
+
+=== Root regions
+
+operation::read-root-regions-success[]
+
+=== Region detail
+
+operation::read-region-detail-success[]
+
+=== Region complexes
+
+operation::read-region-complexes-success[]
+
+== Property detail API
+
+=== Parcel detail
+
+operation::read-detail-success[]
+
+=== Parcel complexes
+
+operation::read-parcel-complexes-success[]
+
+=== Complex detail
+
+operation::read-complex-detail-success[]
+
+== Trade API
+
+=== Parcel trades
+
+operation::read-trade-success[]
+
+=== Complex trades
+
+operation::read-complex-trades-success[]
+
+=== Complex trade areas
+
+operation::read-complex-trade-areas-success[]
+
+=== Parcel trade trend
+
+operation::read-trade-trend-success[]
+
+=== Complex trade trend
+
+operation::read-complex-trade-trend-success[]
+
+== Market insight API
+
+=== Latest trades
+
+operation::market-insight-latest-unavailable[]
+
+=== Weekly trades
+
+operation::market-insight-weekly-unavailable[]
+
+== Market news API
+
+=== Published news
+
+operation::market-news-unavailable[]
+
+=== Complex news
+
+operation::complex-market-news[]
 
 [[error-code-list]]
-== Error Code List
+== Error contract
 
-Public API error responses use Spring `ProblemDetail` style fields.
+Public API errors use the canonical Spring `ProblemDetail` fields. This
+example also fixes the validation error status and response shape.
+
+operation::map-invalid-request[]

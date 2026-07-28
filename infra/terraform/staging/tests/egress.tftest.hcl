@@ -21,7 +21,7 @@ run "workload_egress_is_private_and_allowlisted" {
     admin_certificate_arn  = "arn:aws:acm:ap-northeast-2:123456789012:certificate/22222222-2222-2222-2222-222222222222"
     image_digests = { for name in [
       "property-api", "property-batch", "property-flyway", "admin-api", "admin-migration", "admin-ops",
-      "user-api", "user-insight-worker", "user-flyway", "source-data-migration", "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml",
+      "user-api", "user-insight-worker", "user-flyway", "source-data-migration", "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml", "ai", "chat-bff",
     ] : name => "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
   }
 
@@ -48,12 +48,12 @@ run "workload_egress_is_private_and_allowlisted" {
 
   assert {
     condition = toset(keys(aws_vpc_security_group_egress_rule.external_https)) == toset([
-      "property-batch", "user",
+      "property-batch", "user", "ai",
       ]) && alltrue([
       for rule in aws_vpc_security_group_egress_rule.external_https :
       rule.from_port == 443 && rule.to_port == 443 && rule.cidr_ipv4 == "0.0.0.0/0"
     ])
-    error_message = "Only provider batch and OAuth user workloads may use NAT HTTPS egress."
+    error_message = "Only provider batch, OAuth user, and AI provider workloads may use NAT HTTPS egress."
   }
 
   assert {

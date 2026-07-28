@@ -22,22 +22,22 @@ run "digest_pinned_private_rollback_capable_workloads" {
     enable_services        = true
     image_digests = { for name in [
       "property-api", "property-batch", "property-flyway", "admin-api", "admin-migration", "admin-ops",
-      "user-api", "user-insight-worker", "user-flyway", "source-data-migration", "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml",
+      "user-api", "user-insight-worker", "user-flyway", "source-data-migration", "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml", "ai", "chat-bff",
     ] : name => "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
   }
 
   assert {
     condition = alltrue([
       for digest in values(var.image_digests) : can(regex("^sha256:[0-9a-f]{64}$", digest))
-    ]) && length(var.image_digests) == 15
+    ]) && length(var.image_digests) == 17
     error_message = "Every service and one-shot task image must be immutable and digest pinned."
   }
 
   assert {
     condition = length(setsubtract(toset(keys(aws_ecs_service.service)), toset([
-      "property-api", "admin-api", "user-api", "public-gateway", "admin-gateway",
-    ]))) == 0 && length(keys(aws_ecs_service.service)) == 5
-    error_message = "Only long-running workloads may be ECS services when optional ML is disabled."
+      "property-api", "admin-api", "user-api", "public-gateway", "admin-gateway", "ai", "chat-bff",
+    ]))) == 0 && length(keys(aws_ecs_service.service)) == 7
+    error_message = "All request-serving workloads and only request-serving workloads must be ECS services when optional ML is disabled."
   }
 
   assert {
@@ -50,11 +50,20 @@ run "digest_pinned_private_rollback_capable_workloads" {
   }
 
   assert {
+    condition = alltrue([
+      for name in ["ai", "chat-bff"] :
+      local.service_specs[name].readonly_root && local.service_specs[name].stop_timeout == 120
+    ])
+    error_message = "AI and chat-bff must use read-only roots and retain enough shutdown time for admitted requests."
+  }
+
+  assert {
     condition = length(setsubtract(toset(keys(aws_ecs_task_definition.one_shot)), toset([
       "secret-bootstrap", "database-bootstrap", "property-flyway", "admin-migration",
       "user-flyway", "source-data-migration", "runtime-grants", "property-batch",
-      "property-event-relay", "property-event-maintenance", "admin-ops", "backup", "restore-verification",
-    ]))) == 0 && length(keys(aws_ecs_task_definition.one_shot)) == 13
+      "map-marker-projection", "property-event-relay", "property-event-maintenance", "admin-ops", "backup",
+      "restore-verification",
+    ]))) == 0 && length(keys(aws_ecs_task_definition.one_shot)) == 14
     error_message = "Bootstrap, migrations, batch, ops, and backup must remain one-shot task definitions."
   }
 

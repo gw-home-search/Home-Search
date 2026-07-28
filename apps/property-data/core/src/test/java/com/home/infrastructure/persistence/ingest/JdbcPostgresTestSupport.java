@@ -1,13 +1,19 @@
 package com.home.infrastructure.persistence.ingest;
 
+import com.home.infrastructure.persistence.map.JdbcMapMarkerProjectionWriter;
+import com.home.infrastructure.persistence.map.JdbcMapMarkerRepository;
+import com.home.infrastructure.persistence.map.JdbcRegionMarkerRepository;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 public abstract class JdbcPostgresTestSupport extends JdbcPostgresContainerSupport {
 
     private static final PostgreSQLContainer<?> POSTGRES = newPostgisContainer();
     private static final Object MIGRATION_LOCK = new Object();
+    private static final AtomicLong MAP_GENERATION_SEQUENCE = new AtomicLong();
     private static final List<String> RESET_TABLES = List.of(
             "public.complex_building_register_profile_summary",
             "public.building_register_profile_field_evidence",
@@ -151,6 +157,21 @@ public abstract class JdbcPostgresTestSupport extends JdbcPostgresContainerSuppo
                 .sql("SELECT count(*) FROM raw_trade_ingest")
                 .query(Long.class)
                 .single();
+    }
+
+    protected JdbcMapMarkerRepository mapMarkerRepository() {
+        refreshMapMarkerProjection();
+        return new JdbcMapMarkerRepository(jdbcClient);
+    }
+
+    protected JdbcRegionMarkerRepository regionMarkerRepository() {
+        refreshMapMarkerProjection();
+        return new JdbcRegionMarkerRepository(jdbcClient);
+    }
+
+    protected void refreshMapMarkerProjection() {
+        new JdbcMapMarkerProjectionWriter(jdbcClient, new DataSourceTransactionManager(dataSource))
+                .rebuildAndActivate("test:" + MAP_GENERATION_SEQUENCE.incrementAndGet());
     }
 
     protected void seedComplex() {

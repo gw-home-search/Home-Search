@@ -1,0 +1,191 @@
+name: Deploy production
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag: { description: "Approved immutable vMAJOR.MINOR.PATCH tag", required: true, type: string }
+      cutover_approved: { description: "Reviewed cutover window and rollback owner", required: true, type: boolean }
+permissions: { contents: read, actions: read, id-token: write }
+concurrency: { group: deploy-production, cancel-in-progress: false }
+
+jobs:
+  plan:
+    name: production-plan
+    environment: production
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with: { fetch-depth: 0 }
+      - name: Resolve immutable release evidence
+        env:
+          GH_TOKEN: "${{ github.token }}"
+          RELEASE_TAG: "${{ inputs.release_tag }}"
+          ADOT_COLLECTOR_IMAGE_URI: "${{ vars.PRODUCTION_ADOT_COLLECTOR_IMAGE_URI }}"
+        run: |
+          set -Eeuo pipefail
+          [[ "${RELEASE_TAG}" =~ ^v[0-9]+[.][0-9]+[.][0-9]+$ ]]
+          release_sha="$(git rev-list -n 1 "${RELEASE_TAG}")"
+          [[ "${release_sha}" == "${GITHUB_SHA}" ]]
+          run_id="$(gh run list --workflow release-images.yml --branch "${RELEASE_TAG}" --json databaseId,conclusion,headSha --jq ".[] | select(.conclusion == \"success\" and .headSha == \"${release_sha}\") | .databaseId" | head -n1)"
+          [[ -n "${run_id}" ]]
+          gh run download "${run_id}" --pattern "release-evidence-${RELEASE_TAG}" --dir release-evidence
+          manifest="$(find release-evidence -name release-manifest.json -print -quit)"
+          jq -e --arg tag "${RELEASE_TAG}" --arg sha "${release_sha}" '.format_version == 2 and .tag == $tag and .commit_sha == $sha and (.images | length == 17) and ([.images[].digest] | all(test("^sha256:[0-9a-f]{64}$"))) and .vulnerability_critical_gate_passed and .vulnerability_policy_gate_passed' "${manifest}"
+          cp "${manifest}" release-manifest.json
+          infra/deploy/release-manifest-to-tfvars.sh \
+            release-manifest.json "${ADOT_COLLECTOR_IMAGE_URI}" \
+            infra/terraform/production/release.auto.tfvars.json
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with: { role-to-assume: "${{ vars.AWS_PRODUCTION_PLAN_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+        with: { terraform_version: 1.15.8 }
+      - name: Create reviewed zero-destroy plan
+        working-directory: infra/terraform/production
+        env:
+          TF_VAR_owner: "${{ vars.PRODUCTION_OWNER }}"
+          TF_VAR_client_vpn_cidr: "${{ vars.PRODUCTION_CLIENT_VPN_CIDR }}"
+          TF_VAR_client_vpn_server_certificate_arn: "${{ vars.PRODUCTION_VPN_CERTIFICATE_ARN }}"
+          TF_VAR_client_vpn_saml_provider_arn: "${{ vars.PRODUCTION_SAML_PROVIDER_ARN }}"
+          TF_VAR_operator_group_id: "${{ vars.PRODUCTION_OPERATOR_GROUP_ID }}"
+          TF_VAR_public_certificate_arn: "${{ vars.PRODUCTION_PUBLIC_CERTIFICATE_ARN }}"
+          TF_VAR_admin_certificate_arn: "${{ vars.PRODUCTION_ADMIN_CERTIFICATE_ARN }}"
+          TF_VAR_public_origin: "${{ vars.PRODUCTION_PUBLIC_ORIGIN }}"
+          TF_VAR_monthly_budget_usd: "${{ vars.PRODUCTION_MONTHLY_BUDGET_USD }}"
+          TF_VAR_budget_notification_emails: "${{ vars.PRODUCTION_BUDGET_EMAILS_JSON }}"
+          TF_VAR_alarm_topic_arn: "${{ vars.PRODUCTION_ALARM_TOPIC_ARN }}"
+          TF_VAR_migration_artifact_bucket: "${{ vars.PRODUCTION_MIGRATION_ARTIFACT_BUCKET }}"
+          TF_VAR_migration_artifact_prefix: "${{ vars.PRODUCTION_MIGRATION_ARTIFACT_PREFIX }}"
+          TF_VAR_migration_artifact_kms_key_arn: "${{ vars.PRODUCTION_MIGRATION_ARTIFACT_KMS_KEY_ARN }}"
+          TF_VAR_migration_manifest_sha256: "${{ vars.PRODUCTION_MIGRATION_MANIFEST_SHA256 }}"
+        run: |
+          set -Eeuo pipefail
+          terraform init -backend-config="bucket=${{ vars.PRODUCTION_TF_STATE_BUCKET }}" -backend-config="key=home-search/production/terraform.tfstate" -backend-config="region=ap-northeast-2" -backend-config="kms_key_id=${{ vars.PRODUCTION_TF_STATE_KMS_ARN }}" -backend-config="use_lockfile=true"
+          terraform fmt -check && terraform validate && terraform test
+          terraform plan -out=production.tfplan -detailed-exitcode || code=$?
+          [[ "${code:-0}" == 0 || "${code:-0}" == 2 ]]
+          terraform show -json production.tfplan > production-plan.json
+          jq -e '[.resource_changes[]? | select(.change.actions | index("delete"))] | length == 0' production-plan.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: production-reviewed-plan-${{ inputs.release_tag }}
+          path: |
+            infra/terraform/production/production.tfplan
+            infra/terraform/production/production-plan.json
+            infra/terraform/production/release.auto.tfvars.json
+            release-manifest.json
+          if-no-files-found: error
+          retention-days: 90
+
+  apply:
+    name: production-foundation-apply
+    needs: plan
+    if: inputs.cutover_approved
+    environment: production
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with: { name: "production-reviewed-plan-${{ inputs.release_tag }}" }
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with: { role-to-assume: "${{ vars.AWS_PRODUCTION_APPLY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+        with: { terraform_version: 1.15.8 }
+      - name: Capture rollback state and apply exact plan
+        env: { ECS_CLUSTER: "home-search-production" }
+        run: |
+          set -Eeuo pipefail
+          mkdir -p deployment-evidence
+          infra/deploy/capture-service-state.sh "${ECS_CLUSTER}" deployment-evidence/pre-deploy-services.json
+          cp release-manifest.json deployment-evidence/release-manifest.json
+          terraform -chdir=infra/terraform/production init -backend-config="bucket=${{ vars.PRODUCTION_TF_STATE_BUCKET }}" -backend-config="key=home-search/production/terraform.tfstate" -backend-config="region=ap-northeast-2" -backend-config="kms_key_id=${{ vars.PRODUCTION_TF_STATE_KMS_ARN }}" -backend-config="use_lockfile=true"
+          terraform -chdir=infra/terraform/production apply -auto-approve production.tfplan
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with: { name: "production-foundation-evidence-${{ inputs.release_tag }}", path: deployment-evidence/, if-no-files-found: error, retention-days: 365 }
+
+  rollout:
+    name: production-migrate-and-activate
+    needs: apply
+    environment: production
+    runs-on: ubuntu-latest
+    env:
+      TF_VAR_owner: "${{ vars.PRODUCTION_OWNER }}"
+      TF_VAR_client_vpn_cidr: "${{ vars.PRODUCTION_CLIENT_VPN_CIDR }}"
+      TF_VAR_client_vpn_server_certificate_arn: "${{ vars.PRODUCTION_VPN_CERTIFICATE_ARN }}"
+      TF_VAR_client_vpn_saml_provider_arn: "${{ vars.PRODUCTION_SAML_PROVIDER_ARN }}"
+      TF_VAR_operator_group_id: "${{ vars.PRODUCTION_OPERATOR_GROUP_ID }}"
+      TF_VAR_public_certificate_arn: "${{ vars.PRODUCTION_PUBLIC_CERTIFICATE_ARN }}"
+      TF_VAR_admin_certificate_arn: "${{ vars.PRODUCTION_ADMIN_CERTIFICATE_ARN }}"
+      TF_VAR_public_origin: "${{ vars.PRODUCTION_PUBLIC_ORIGIN }}"
+      TF_VAR_monthly_budget_usd: "${{ vars.PRODUCTION_MONTHLY_BUDGET_USD }}"
+      TF_VAR_budget_notification_emails: "${{ vars.PRODUCTION_BUDGET_EMAILS_JSON }}"
+      TF_VAR_alarm_topic_arn: "${{ vars.PRODUCTION_ALARM_TOPIC_ARN }}"
+      TF_VAR_migration_artifact_bucket: "${{ vars.PRODUCTION_MIGRATION_ARTIFACT_BUCKET }}"
+      TF_VAR_migration_artifact_prefix: "${{ vars.PRODUCTION_MIGRATION_ARTIFACT_PREFIX }}"
+      TF_VAR_migration_artifact_kms_key_arn: "${{ vars.PRODUCTION_MIGRATION_ARTIFACT_KMS_KEY_ARN }}"
+      TF_VAR_migration_manifest_sha256: "${{ vars.PRODUCTION_MIGRATION_MANIFEST_SHA256 }}"
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with: { name: "production-reviewed-plan-${{ inputs.release_tag }}" }
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with: { name: "production-foundation-evidence-${{ inputs.release_tag }}", path: deployment-evidence }
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with: { role-to-assume: "${{ vars.AWS_PRODUCTION_APPLY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+        with: { terraform_version: 1.15.8 }
+      - name: Bootstrap, migrate, import, and reconcile before services
+        run: |
+          set -Eeuo pipefail
+          terraform -chdir=infra/terraform/production init -backend-config="bucket=${{ vars.PRODUCTION_TF_STATE_BUCKET }}" -backend-config="key=home-search/production/terraform.tfstate" -backend-config="region=ap-northeast-2" -backend-config="kms_key_id=${{ vars.PRODUCTION_TF_STATE_KMS_ARN }}" -backend-config="use_lockfile=true"
+          cluster="$(terraform -chdir=infra/terraform/production output -json ecs_cluster | jq -er '.arn')"
+          subnets="$(terraform -chdir=infra/terraform/production output -json application_subnet_ids | jq -ec '.')"
+          ops_security_group="$(terraform -chdir=infra/terraform/production output -json ops_security_group_id | jq -ec '[.]')"
+          task_definitions="$(terraform -chdir=infra/terraform/production output -json one_shot_task_definition_arns | jq -ec '.')"
+          database_identifiers="$(terraform -chdir=infra/terraform/production output -json database_instance_identifiers | jq -ec '.')"
+          deployment_name="$(terraform -chdir=infra/terraform/production output -raw deployment_name)"
+          infra/deploy/capture-production-state.sh "${database_identifiers}" "${deployment_name}" \
+            "pre-${GITHUB_RUN_ID}" deployment-evidence/pre-deploy-data-state.json
+          run_task() {
+            local name="$1" task_definition
+            task_definition="$(jq -er --arg name "${name}" '.[$name]' <<<"${task_definitions}")"
+            infra/deploy/run-ecs-task.sh "${cluster}" "${task_definition}" "${subnets}" "${ops_security_group}" \
+              | tee -a deployment-evidence/one-shot-task-arns.txt
+          }
+          for task in secret-bootstrap secret-readiness database-bootstrap property-flyway admin-migration user-flyway ai-migration data-import-reconcile runtime-grants map-marker-projection; do
+            run_task "${task}"
+          done
+          printf '%s\n' 'secret-bootstrap' 'secret-readiness' 'database-bootstrap' \
+            'property-flyway' 'admin-migration' 'user-flyway' 'ai-migration' \
+            'data-import-reconcile' 'runtime-grants' 'map-marker-projection' \
+            >deployment-evidence/deploy-order.txt
+      - name: Activate consumers, private services, then public gateway
+        run: |
+          set -Eeuo pipefail
+          cluster="$(terraform -chdir=infra/terraform/production output -json ecs_cluster | jq -er '.arn')"
+          core_count="$(terraform -chdir=infra/terraform/production output -raw core_desired_count)"
+          for phase in consumers private all; do
+            plan="activation-${phase}.tfplan"
+            plan_json="deployment-evidence/activation-${phase}-plan.json"
+            code=0
+            terraform -chdir=infra/terraform/production plan -refresh=false \
+              -var="service_activation_phase=${phase}" -out="${plan}" -detailed-exitcode || code=$?
+            [[ "${code:-0}" == '2' ]]
+            terraform -chdir=infra/terraform/production show -json "${plan}" >"${plan_json}"
+            infra/deploy/verify-terraform-plan.sh "${plan_json}" activation
+            terraform -chdir=infra/terraform/production apply -auto-approve "${plan}"
+            aws ecs wait services-stable --cluster "${cluster}" --services \
+              property-api admin-api user-api public-gateway admin-gateway ml ai chat-bff user-insight-worker
+            infra/deploy/verify-service-activation.sh "${cluster}" "${phase}" "${core_count}" \
+              release-manifest.json "deployment-evidence/activation-${phase}.json"
+            if [[ "${phase}" == 'private' ]]; then
+              curl --fail-with-body --silent --show-error --output /dev/null \
+                "${{ vars.PRODUCTION_INTERNAL_ADMIN_ORIGIN }}/"
+            fi
+          done
+          infra/deploy/staging-smoke.sh \
+            "${{ vars.PRODUCTION_DARK_PUBLIC_ORIGIN }}" \
+            "${{ vars.PRODUCTION_INTERNAL_ADMIN_ORIGIN }}" \
+            deployment-evidence/dark-smoke.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with: { name: "production-deployment-evidence-${{ inputs.release_tag }}", path: deployment-evidence/, if-no-files-found: error, retention-days: 365 }

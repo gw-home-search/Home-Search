@@ -1,5 +1,6 @@
 server:
   port: 8081
+  shutdown: graceful
   servlet:
     session:
       timeout: 30m
@@ -8,6 +9,8 @@ server:
         secure: true
         same-site: lax
 spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 90s
   flyway:
     enabled: false
   session:
@@ -32,3 +35,12 @@ home:
       property-data-base-url: ${PROPERTY_DATA_INTERNAL_BASE_URL:http://localhost:8080}
       connect-timeout: ${PROPERTY_DATA_INTERNAL_CONNECT_TIMEOUT:2s}
       read-timeout: ${PROPERTY_DATA_INTERNAL_READ_TIMEOUT:10s}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true

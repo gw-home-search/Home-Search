@@ -9,6 +9,7 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.LongSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -27,6 +28,7 @@ final class RedisCachingComplexMarkerRepository implements ComplexMarkerReposito
     private final ObjectMapper objectMapper;
     private final Duration ttl;
     private final MeterRegistry meterRegistry;
+    private final LongSupplier activeGenerationIdSupplier;
 
     RedisCachingComplexMarkerRepository(
             ComplexMarkerRepository delegate,
@@ -34,6 +36,16 @@ final class RedisCachingComplexMarkerRepository implements ComplexMarkerReposito
             ObjectMapper objectMapper,
             Duration ttl,
             MeterRegistry meterRegistry) {
+        this(delegate, redisTemplate, objectMapper, ttl, meterRegistry, () -> 0L);
+    }
+
+    RedisCachingComplexMarkerRepository(
+            ComplexMarkerRepository delegate,
+            StringRedisTemplate redisTemplate,
+            ObjectMapper objectMapper,
+            Duration ttl,
+            MeterRegistry meterRegistry,
+            LongSupplier activeGenerationIdSupplier) {
         this.delegate = Objects.requireNonNull(delegate);
         this.redisTemplate = Objects.requireNonNull(redisTemplate);
         this.objectMapper = Objects.requireNonNull(objectMapper);
@@ -42,6 +54,7 @@ final class RedisCachingComplexMarkerRepository implements ComplexMarkerReposito
         }
         this.ttl = ttl;
         this.meterRegistry = Objects.requireNonNull(meterRegistry);
+        this.activeGenerationIdSupplier = Objects.requireNonNull(activeGenerationIdSupplier);
     }
 
     @Override
@@ -104,6 +117,7 @@ final class RedisCachingComplexMarkerRepository implements ComplexMarkerReposito
         return String.join(
                 "|",
                 CACHE_KEY_PREFIX,
+                "generation=" + activeGenerationIdSupplier.getAsLong(),
                 "swLat=" + canonicalDouble(query.swLat()),
                 "swLng=" + canonicalDouble(query.swLng()),
                 "neLat=" + canonicalDouble(query.neLat()),

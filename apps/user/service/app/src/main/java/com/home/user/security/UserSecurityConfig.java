@@ -51,7 +51,8 @@ public class UserSecurityConfig {
                                 "/login/oauth2/code/**",
                                 "/auth/access",
                                 "/auth/logout",
-                                "/actuator/health")
+                                "/actuator/health/**",
+                                "/actuator/prometheus")
                         .permitAll()
                         .requestMatchers("/api/v1/users/me")
                         .authenticated()

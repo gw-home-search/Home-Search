@@ -22,7 +22,7 @@ run "encrypted_scheduled_backup_and_restore_verification" {
     enable_backup_schedules = true
     image_digests = { for name in [
       "property-api", "property-batch", "property-flyway", "admin-api", "admin-migration", "admin-ops",
-      "user-api", "user-insight-worker", "user-flyway", "source-data-migration", "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml",
+      "user-api", "user-insight-worker", "user-flyway", "source-data-migration", "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml", "ai", "chat-bff",
     ] : name => "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
   }
 
@@ -58,6 +58,9 @@ run "encrypted_scheduled_backup_and_restore_verification" {
     condition = alltrue([
       local.one_shot_specs["backup"].command[0] == "--backup-all",
       local.one_shot_specs["restore-verification"].command[0] == "--verify-latest-s3",
+      one([for item in local.one_shot_specs["backup"].environment : item.value if item.name == "HOME_BACKUP_LOGICAL_DATABASES"]) == "property,admin,user",
+      length([for item in local.one_shot_specs["backup"].environment : item.name if item.name == "HOME_BACKUP_KMS_KEY_ID"]) == 1,
+      one([for item in local.one_shot_specs["restore-verification"].environment : item.value if item.name == "HOME_BACKUP_LOGICAL_DATABASES"]) == "property,admin,user",
       output.backup_automation.included_databases == ["home_search", "home_search_admin", "home_search_user"],
       output.backup_automation.excluded_databases == ["home_search_coordinate_source"],
     ])

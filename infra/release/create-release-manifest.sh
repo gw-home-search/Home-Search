@@ -10,6 +10,7 @@ output="${4:?output path is required}"
 images=(
   property-api property-batch property-flyway admin-api admin-migration admin-ops
   user-api user-insight-worker user-flyway source-data-migration public-gateway admin-gateway backup ops-bootstrap ml
+  ai chat-bff
 )
 tmp="$(mktemp)"
 cleanup() { unlink "${tmp}" 2>/dev/null || true; unlink "${tmp}.next" 2>/dev/null || true; }
@@ -33,4 +34,4 @@ done
 jq -n --arg tag "${tag}" --arg commit_sha "${commit_sha}" \
   --arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --slurpfile images "${tmp}" \
   '{format_version:1,tag:$tag,commit_sha:$commit_sha,generated_at:$generated_at,images:$images[0]}' >"${output}"
-jq -e '.format_version == 1 and (.images | length == 15) and ([.images[].digest] | all(test("^sha256:[0-9a-f]{64}$")))' "${output}" >/dev/null
+jq -e '.format_version == 1 and (.images | length == 17) and ([.images[].digest] | all(test("^sha256:[0-9a-f]{64}$")))' "${output}" >/dev/null

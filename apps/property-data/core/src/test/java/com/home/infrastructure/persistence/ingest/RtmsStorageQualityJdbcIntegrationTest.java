@@ -17,7 +17,6 @@ import com.home.infrastructure.persistence.ingest.matching.JdbcComplexMatcher;
 import com.home.infrastructure.persistence.ingest.matching.JdbcTradeMatchEvidenceRepository;
 import com.home.infrastructure.persistence.ingest.normalization.JdbcNormalizedTradeRepository;
 import com.home.infrastructure.persistence.ingest.raw.JdbcRawTradeIngestRepository;
-import com.home.infrastructure.persistence.map.JdbcMapMarkerRepository;
 import com.home.infrastructure.persistence.tradehistory.JdbcTradeHistoryReader;
 import com.home.ingestcore.rtms.OpenApiTradeItem;
 import java.math.BigDecimal;
@@ -57,7 +56,7 @@ class RtmsStorageQualityJdbcIntegrationTest extends JdbcPostgresTestSupport {
                 .sql("UPDATE complex SET unit_cnt = 500 WHERE parcel_id = :parcelId")
                 .param("parcelId", parcelId("1168010300101850000"))
                 .update();
-        List<ComplexMarkerResult> markers = new JdbcMapMarkerRepository(jdbcClient).findComplexMarkers(bounds());
+        List<ComplexMarkerResult> markers = mapMarkerRepository().findComplexMarkers(bounds());
         assertThat(markers).singleElement().satisfies(marker -> {
             assertThat(marker.parcelId()).isEqualTo(parcelId("1168010300101850000"));
             assertThat(marker.latestDealAmount()).isEqualTo(318000L);
@@ -91,7 +90,7 @@ class RtmsStorageQualityJdbcIntegrationTest extends JdbcPostgresTestSupport {
         assertThat(activeTradeWithoutComplexParcel()).isZero();
         assertThat(new JdbcTradeHistoryReader(jdbcClient).findTradeList(1001L, null, 0, 25))
                 .hasValueSatisfying(response -> assertThat(response.trades()).isEmpty());
-        assertThat(new JdbcMapMarkerRepository(jdbcClient).findComplexMarkers(bounds()))
+        assertThat(mapMarkerRepository().findComplexMarkers(bounds()))
                 .singleElement()
                 .extracting(ComplexMarkerResult::latestDealAmount)
                 .isNull();

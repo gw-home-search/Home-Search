@@ -50,6 +50,11 @@ if [[ "$*" == *'get-secret-value'* ]]; then
   case "${secret_id}" in
     arn:primary) printf '%s\n' '{"host":"primary.internal","port":5432,"username":"primary_admin","password":"MASTER_SENTINEL_PRIMARY"}' ;;
     arn:coordinate) printf '%s\n' '{"host":"coordinate.internal","port":5432,"username":"coordinate_admin","password":"MASTER_SENTINEL_COORDINATE"}' ;;
+    arn:production-property) printf '%s\n' '{"host":"property.production.internal","port":5432,"username":"cluster_admin","password":"MASTER_SENTINEL_PROPERTY"}' ;;
+    arn:production-admin) printf '%s\n' '{"host":"admin.production.internal","port":5432,"username":"cluster_admin","password":"MASTER_SENTINEL_ADMIN"}' ;;
+    arn:production-user) printf '%s\n' '{"host":"user.production.internal","port":5432,"username":"cluster_admin","password":"MASTER_SENTINEL_USER"}' ;;
+    arn:production-ai) printf '%s\n' '{"host":"ai.production.internal","port":5432,"username":"cluster_admin","password":"MASTER_SENTINEL_AI"}' ;;
+    arn:production-coordinate) printf '%s\n' '{"host":"coordinate.production.internal","port":5432,"username":"cluster_admin","password":"MASTER_SENTINEL_COORDINATE"}' ;;
     arn:property-ai-reader)
       if [[ "${FAKE_RUNTIME_WITHOUT_AI_READER:-false}" == 'true' ]]; then
         printf '%s\n' '{}'
@@ -66,6 +71,9 @@ if [[ "$*" == *'get-secret-value'* ]]; then
     arn:user-migrator) printf '%s\n' '{"password":"BOOTSTRAP_SENTINEL_USER"}' ;;
     arn:coordinate-migrator) printf '%s\n' '{"password":"BOOTSTRAP_SENTINEL_COORDINATE"}' ;;
     arn:coordinate-importer) printf '%s\n' '{"password":"BOOTSTRAP_SENTINEL_IMPORTER"}' ;;
+    arn:ai-migrator) printf '%s\n' '{"password":"BOOTSTRAP_SENTINEL_AI_MIGRATOR"}' ;;
+    arn:ai-importer) printf '%s\n' '{"password":"BOOTSTRAP_SENTINEL_AI_IMPORTER"}' ;;
+    arn:ai-runtime) printf '%s\n' '{"password":"RUNTIME_SENTINEL_AI"}' ;;
     arn:backup) printf '%s\n' '{"password":"BOOTSTRAP_SENTINEL_BACKUP"}' ;;
     *)
       [[ -f "${FAKE_AWS_STATE}/${secret_id//\//_}" ]] \
@@ -86,6 +94,13 @@ cat >"${tmp_dir}/bin/psql" <<'FAKE_PSQL'
 set -Eeuo pipefail
 printf '%q ' "$@" >>"${FAKE_DB_ARGV_LOG}"
 printf '\n' >>"${FAKE_DB_ARGV_LOG}"
+previous=''
+for argument in "$@"; do
+  if [[ "${previous}" == '-f' ]]; then
+    sed '/WITH LOGIN PASSWORD/d' "${argument}" >>"${FAKE_DB_SQL_LOG}"
+  fi
+  previous="${argument}"
+done
 if [[ "$*" == *'SELECT 1 FROM pg_database'* ]]; then
   printf '1\n'
 fi
@@ -104,9 +119,11 @@ export PATH="${tmp_dir}/bin:${PATH}"
 export FAKE_AWS_ARGV_LOG="${tmp_dir}/aws.argv"
 export FAKE_AWS_STATE="${tmp_dir}/aws-state"
 export FAKE_DB_ARGV_LOG="${tmp_dir}/db.argv"
+export FAKE_DB_SQL_LOG="${tmp_dir}/db.sql"
 mkdir -p "${FAKE_AWS_STATE}"
 : >"${FAKE_AWS_ARGV_LOG}"
 : >"${FAKE_DB_ARGV_LOG}"
+: >"${FAKE_DB_SQL_LOG}"
 
 PROPERTY_RUNTIME_DB_SECRET_ARN=arn:new-property-runtime \
 PROPERTY_AI_READER_DB_SECRET_ARN=arn:new-property-ai-reader \
@@ -219,6 +236,73 @@ grep -Fq 'admin JWT public secret만 존재하여 안전하게 private key를 �
   "${tmp_dir}/public-only.err"
 cp "${tmp_dir}/saved-admin-private.json" "${admin_private_state}"
 
+production_secret_env=(
+  PROPERTY_RUNTIME_DB_SECRET_ARN=arn:prod-property-runtime
+  PROPERTY_AI_READER_DB_SECRET_ARN=arn:prod-property-ai-reader
+  ADMIN_RUNTIME_DB_SECRET_ARN=arn:prod-admin-runtime
+  USER_RUNTIME_DB_SECRET_ARN=arn:prod-user-runtime
+  COORDINATE_READER_DB_SECRET_ARN=arn:prod-coordinate-reader
+  PROPERTY_MIGRATOR_DB_SECRET_ARN=arn:prod-property-migrator
+  ADMIN_MIGRATOR_DB_SECRET_ARN=arn:prod-admin-migrator
+  USER_MIGRATOR_DB_SECRET_ARN=arn:prod-user-migrator
+  COORDINATE_MIGRATOR_DB_SECRET_ARN=arn:prod-coordinate-migrator
+  COORDINATE_IMPORTER_DB_SECRET_ARN=arn:prod-coordinate-importer
+  AI_MIGRATOR_DB_SECRET_ARN=arn:prod-ai-migrator
+  AI_IMPORTER_DB_SECRET_ARN=arn:prod-ai-importer
+  AI_RUNTIME_DB_SECRET_ARN=arn:prod-ai-runtime-db
+  AI_RUNTIME_SECRET_ARN=arn:prod-ai-runtime
+  BACKUP_DB_SECRET_ARN=arn:prod-backup
+  USER_JWT_SECRET_ARN=arn:prod-user-jwt
+  ADMIN_JWT_SECRET_ARN=arn:prod-admin-jwt
+  ADMIN_JWT_PUBLIC_SECRET_ARN=arn:prod-admin-jwt-public
+  PROPERTY_DB_HOST=property.production.internal
+  AI_DB_HOST=ai.production.internal
+)
+production_put_before="$(grep -c 'put-secret-value' "${FAKE_AWS_ARGV_LOG}")"
+env "${production_secret_env[@]}" \
+  "${script}" production-secret-bootstrap >"${tmp_dir}/production-secret.out" 2>"${tmp_dir}/production-secret.err"
+production_put_after="$(grep -c 'put-secret-value' "${FAKE_AWS_ARGV_LOG}")"
+[[ "$((production_put_after - production_put_before))" == '18' ]]
+jq -e '.active_kid == "production-1"' "${FAKE_AWS_STATE}/arn:prod-user-jwt" >/dev/null
+jq -e '.active_kid == "production-1"' "${FAKE_AWS_STATE}/arn:prod-admin-jwt" >/dev/null
+jq -e '.dsn | contains("host=ai.production.internal") and contains("user=home_search_ai_migrator")' \
+  "${FAKE_AWS_STATE}/arn:prod-ai-migrator" >/dev/null
+jq -e '.property_dsn | contains("host=property.production.internal") and contains("user=home_search_ai_reader")' \
+  "${FAKE_AWS_STATE}/arn:prod-ai-runtime" >/dev/null
+jq -e '.reference_dsn | contains("host=ai.production.internal") and contains("user=home_search_ai_runtime")' \
+  "${FAKE_AWS_STATE}/arn:prod-ai-runtime" >/dev/null
+env "${production_secret_env[@]}" \
+  "${script}" production-secret-bootstrap >>"${tmp_dir}/production-secret.out" 2>>"${tmp_dir}/production-secret.err"
+[[ "$(grep -c 'put-secret-value' "${FAKE_AWS_ARGV_LOG}")" == "${production_put_after}" ]]
+! grep -Eq 'PRIVATE KEY|private_key_pem|[[:xdigit:]]{64}|password=' \
+  "${FAKE_AWS_ARGV_LOG}" "${tmp_dir}/production-secret.out" "${tmp_dir}/production-secret.err"
+
+printf '%s\n' '{"api_key":"provider-key","primary_model":"approved-primary","secondary_model":"approved-secondary"}' \
+  >"${FAKE_AWS_STATE}/arn:prod-openai"
+printf '%s\n' '{"google_client_id":"id","google_client_secret":"secret","kakao_client_id":"id","kakao_client_secret":"secret","naver_client_id":"id","naver_client_secret":"secret"}' \
+  >"${FAKE_AWS_STATE}/arn:prod-oauth"
+printf '%s\n' '{"rest_api_key":"key"}' >"${FAKE_AWS_STATE}/arn:prod-kakao"
+printf '%s\n' '{"apt_service_key":"key"}' >"${FAKE_AWS_STATE}/arn:prod-public-data"
+readiness_env=(
+  "${production_secret_env[@]}"
+  OPENAI_PROVIDER_SECRET_ARN=arn:prod-openai
+  OAUTH_PROVIDERS_SECRET_ARN=arn:prod-oauth
+  KAKAO_LOCAL_PROVIDER_SECRET_ARN=arn:prod-kakao
+  PUBLIC_DATA_PROVIDERS_SECRET_ARN=arn:prod-public-data
+)
+env "${readiness_env[@]}" \
+  "${script}" production-secret-readiness >"${tmp_dir}/readiness.out" 2>"${tmp_dir}/readiness.err"
+grep -Fq '상태: Pass' "${tmp_dir}/readiness.out"
+rm "${FAKE_AWS_STATE}/arn:prod-openai"
+set +e
+env "${readiness_env[@]}" \
+  "${script}" production-secret-readiness >"${tmp_dir}/readiness-missing.out" 2>"${tmp_dir}/readiness-missing.err"
+readiness_missing_code=$?
+set -e
+[[ "${readiness_missing_code}" == '1' ]]
+grep -Fq 'OPENAI_PROVIDER_SECRET_ARN' "${tmp_dir}/readiness-missing.err"
+! grep -Fq 'provider-key' "${tmp_dir}/readiness-missing.out" "${tmp_dir}/readiness-missing.err"
+
 set +e
 FAKE_RUNTIME_WITHOUT_AI_READER=true \
 PRIMARY_RDS_SECRET_ARN=arn:primary \
@@ -259,6 +343,43 @@ BACKUP_DB_SECRET_ARN=arn:backup \
   "${script}" db-bootstrap >"${tmp_dir}/db.out" 2>"${tmp_dir}/db.err"
 ! grep -Eq 'SENTINEL|password' "${FAKE_AWS_ARGV_LOG}" "${FAKE_DB_ARGV_LOG}" "${tmp_dir}/db.out" "${tmp_dir}/db.err"
 
+: >"${FAKE_DB_ARGV_LOG}"
+PROPERTY_RDS_SECRET_ARN=arn:production-property \
+ADMIN_RDS_SECRET_ARN=arn:production-admin \
+USER_RDS_SECRET_ARN=arn:production-user \
+AI_RDS_SECRET_ARN=arn:production-ai \
+COORDINATE_RDS_SECRET_ARN=arn:production-coordinate \
+PROPERTY_RUNTIME_DB_SECRET_ARN=arn:property-runtime \
+PROPERTY_AI_READER_DB_SECRET_ARN=arn:property-ai-reader \
+ADMIN_RUNTIME_DB_SECRET_ARN=arn:admin-runtime \
+USER_RUNTIME_DB_SECRET_ARN=arn:user-runtime \
+COORDINATE_READER_DB_SECRET_ARN=arn:coordinate-reader \
+PROPERTY_MIGRATOR_DB_SECRET_ARN=arn:property-migrator \
+ADMIN_MIGRATOR_DB_SECRET_ARN=arn:admin-migrator \
+USER_MIGRATOR_DB_SECRET_ARN=arn:user-migrator \
+AI_MIGRATOR_DB_SECRET_ARN=arn:ai-migrator \
+AI_IMPORTER_DB_SECRET_ARN=arn:ai-importer \
+AI_RUNTIME_DB_SECRET_ARN=arn:ai-runtime \
+COORDINATE_MIGRATOR_DB_SECRET_ARN=arn:coordinate-migrator \
+COORDINATE_IMPORTER_DB_SECRET_ARN=arn:coordinate-importer \
+BACKUP_DB_SECRET_ARN=arn:backup \
+  "${script}" production-db-bootstrap >"${tmp_dir}/production-db.out" 2>"${tmp_dir}/production-db.err"
+for boundary in \
+  'property.production.internal home_search' \
+  'admin.production.internal home_search_admin' \
+  'user.production.internal home_search_user' \
+  'ai.production.internal home_search_ai' \
+  'coordinate.production.internal home_search_coordinate_source'; do
+  host="${boundary%% *}"
+  database="${boundary#* }"
+  grep -Fq -- "-h ${host}" "${FAKE_DB_ARGV_LOG}"
+  grep -Fq -- "-d ${database}" "${FAKE_DB_ARGV_LOG}"
+done
+! grep -Eq 'SENTINEL|password' "${FAKE_AWS_ARGV_LOG}" "${FAKE_DB_ARGV_LOG}" \
+  "${tmp_dir}/production-db.out" "${tmp_dir}/production-db.err"
+grep -Fq "membership.member = 'home_search_backup'::regrole" "${FAKE_DB_SQL_LOG}"
+grep -Fq 'ALTER ROLE home_search_backup NOINHERIT NOSUPERUSER' "${FAKE_DB_SQL_LOG}"
+
 PRIMARY_DB_HOST=primary.internal \
 PRIMARY_DB_PORT=5432 \
 PROPERTY_MIGRATOR_DB_SECRET_ARN=arn:property-migrator \
@@ -266,6 +387,22 @@ ADMIN_MIGRATOR_DB_SECRET_ARN=arn:admin-migrator \
 USER_MIGRATOR_DB_SECRET_ARN=arn:user-migrator \
   "${script}" runtime-grants >"${tmp_dir}/grants.out" 2>"${tmp_dir}/grants.err"
 ! grep -Eq 'SENTINEL|password' "${FAKE_AWS_ARGV_LOG}" "${FAKE_DB_ARGV_LOG}" "${tmp_dir}/grants.out" "${tmp_dir}/grants.err"
+
+: >"${FAKE_DB_ARGV_LOG}"
+PROPERTY_DB_HOST=property.production.internal PROPERTY_DB_PORT=5432 \
+ADMIN_DB_HOST=admin.production.internal ADMIN_DB_PORT=5432 \
+USER_DB_HOST=user.production.internal USER_DB_PORT=5432 \
+PROPERTY_MIGRATOR_DB_SECRET_ARN=arn:property-migrator \
+ADMIN_MIGRATOR_DB_SECRET_ARN=arn:admin-migrator \
+USER_MIGRATOR_DB_SECRET_ARN=arn:user-migrator \
+  "${script}" runtime-grants >"${tmp_dir}/split-grants.out" 2>"${tmp_dir}/split-grants.err"
+grep -Fq -- '-h property.production.internal' "${FAKE_DB_ARGV_LOG}"
+grep -Fq -- '-d home_search' "${FAKE_DB_ARGV_LOG}"
+grep -Fq -- '-h admin.production.internal' "${FAKE_DB_ARGV_LOG}"
+grep -Fq -- '-d home_search_admin' "${FAKE_DB_ARGV_LOG}"
+grep -Fq -- '-h user.production.internal' "${FAKE_DB_ARGV_LOG}"
+grep -Fq -- '-d home_search_user' "${FAKE_DB_ARGV_LOG}"
+! grep -Eq 'SENTINEL|password' "${FAKE_AWS_ARGV_LOG}" "${FAKE_DB_ARGV_LOG}" "${tmp_dir}/split-grants.out" "${tmp_dir}/split-grants.err"
 grep -Fq 'GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public, reference, batch TO home_search_property_runtime;' "${script}"
 grep -Fq 'REVOKE DELETE ON ALL TABLES IN SCHEMA public, reference, batch FROM home_search_property_runtime;' "${script}"
 grep -Fq 'GRANT DELETE ON TABLE market_news_collection_execution,' "${script}"

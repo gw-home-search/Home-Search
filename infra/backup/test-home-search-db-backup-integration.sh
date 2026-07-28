@@ -42,7 +42,9 @@ done
 
 docker exec "${source_container}" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
   -c 'CREATE DATABASE home_search_admin' \
-  -c 'CREATE DATABASE home_search_user' >/dev/null
+  -c 'CREATE DATABASE home_search_user' \
+  -c 'CREATE DATABASE home_search_ai' \
+  -c 'CREATE DATABASE home_search_coordinate_source' >/dev/null
 docker exec -i "${source_container}" psql -X -v ON_ERROR_STOP=1 -U postgres -d home_search <<'SQL' >/dev/null
 CREATE TABLE public.flyway_schema_history (installed_rank integer PRIMARY KEY, success boolean NOT NULL);
 CREATE TABLE public.raw_trade_ingest (id bigint PRIMARY KEY);
@@ -63,6 +65,19 @@ CREATE TABLE users.user_account (id bigint PRIMARY KEY);
 INSERT INTO users.flyway_schema_history VALUES (1, true), (2, true);
 INSERT INTO users.user_account VALUES (20), (21), (22);
 SQL
+docker exec -i "${source_container}" psql -X -v ON_ERROR_STOP=1 -U postgres -d home_search_ai <<'SQL' >/dev/null
+CREATE TABLE public.ai_schema_history (version integer PRIMARY KEY, description text NOT NULL, checksum char(64) NOT NULL);
+CREATE TABLE public.dataset_source (source_id text PRIMARY KEY);
+INSERT INTO public.ai_schema_history VALUES (1, 'fixture', repeat('a', 64));
+INSERT INTO public.dataset_source VALUES ('academy'), ('rail');
+SQL
+docker exec -i "${source_container}" psql -X -v ON_ERROR_STOP=1 -U postgres -d home_search_coordinate_source <<'SQL' >/dev/null
+CREATE SCHEMA reference;
+CREATE TABLE reference.flyway_schema_history (installed_rank integer PRIMARY KEY, success boolean NOT NULL);
+CREATE TABLE reference.parcel_coordinate_snapshot (pnu text PRIMARY KEY);
+INSERT INTO reference.flyway_schema_history VALUES (1, true), (2, true), (3, true), (4, true);
+INSERT INTO reference.parcel_coordinate_snapshot VALUES ('1111010100100010000'), ('1111010100100020000');
+SQL
 
 docker run --rm --network "${network}" \
   --volume "${repo_root}:/workspace:ro" \
@@ -71,10 +86,11 @@ docker run --rm --network "${network}" \
   --env HOME_BACKUP_PGPORT=5432 \
   --env HOME_BACKUP_PGUSER=postgres \
   --env HOME_BACKUP_PGPASSWORD="${password}" \
+  --env HOME_BACKUP_LOGICAL_DATABASES=property,admin,user,ai,coordinate \
   --env HOME_BACKUP_TIMESTAMP=20260716T020304Z \
   "${image}" bash /workspace/infra/backup/home-search-db-backup.sh --backup-all /backup
 
-for logical in property admin user; do
+for logical in property admin user ai coordinate; do
   docker run --rm --user postgres \
     --volume "${repo_root}:/workspace:ro" \
     --volume "${backup_dir}:/backup:ro" \
@@ -85,7 +101,9 @@ done
 property_count="$(docker exec "${source_container}" psql -X -At -U postgres -d home_search -c 'SELECT count(*) FROM public.raw_trade_ingest')"
 admin_count="$(docker exec "${source_container}" psql -X -At -U postgres -d home_search_admin -c 'SELECT count(*) FROM admin.admin_account')"
 user_count="$(docker exec "${source_container}" psql -X -At -U postgres -d home_search_user -c 'SELECT count(*) FROM users.user_account')"
-[[ "${property_count}|${admin_count}|${user_count}" == '2|1|3' ]]
+ai_count="$(docker exec "${source_container}" psql -X -At -U postgres -d home_search_ai -c 'SELECT count(*) FROM public.dataset_source')"
+coordinate_count="$(docker exec "${source_container}" psql -X -At -U postgres -d home_search_coordinate_source -c 'SELECT count(*) FROM reference.parcel_coordinate_snapshot')"
+[[ "${property_count}|${admin_count}|${user_count}|${ai_count}|${coordinate_count}" == '2|1|3|2|2' ]]
 
 docker run --rm \
   --volume "${backup_dir}:/backup" \

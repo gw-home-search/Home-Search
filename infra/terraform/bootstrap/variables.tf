@@ -76,3 +76,33 @@ variable "github_release_workflow_name" {
   type    = string
   default = "Publish release images"
 }
+
+variable "github_production_environment" {
+  description = "Protected GitHub Environment required for production plan, apply, and rollback."
+  type        = string
+  default     = "production"
+}
+
+variable "github_production_workflow_name" {
+  description = "Exact workflow claim allowed to plan and apply production."
+  type        = string
+  default     = "Deploy production"
+}
+
+variable "github_production_deploy_workflow_names" {
+  description = "Exact rollback workflow claims allowed to update existing production ECS services."
+  type        = list(string)
+  default     = ["Roll back production application", "Roll back Supervisor Graph"]
+}
+
+variable "github_production_allowed_refs" {
+  description = "Protected refs allowed to use production OIDC roles."
+  type        = list(string)
+  default     = ["refs/heads/main", "refs/tags/v*"]
+  validation {
+    condition = length(var.github_production_allowed_refs) > 0 && alltrue([
+      for ref in var.github_production_allowed_refs : ref == "refs/heads/main" || startswith(ref, "refs/tags/v")
+    ])
+    error_message = "github_production_allowed_refs may contain only main or version tag refs."
+  }
+}

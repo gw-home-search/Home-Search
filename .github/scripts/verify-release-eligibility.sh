@@ -30,7 +30,7 @@ for check_name in "${required_checks[@]}"; do
     [.check_runs[] | select(.name == $name and .status == "completed")]
     | sort_by(.completed_at) | last | .conclusion // "missing"
   ' "${check_runs_file}")"
-  if [[ "${conclusion}" != "success" && "${conclusion}" != "skipped" ]]; then
+  if [[ "${conclusion}" != "success" ]]; then
     missing+=("${check_name}=${conclusion}")
   fi
 done

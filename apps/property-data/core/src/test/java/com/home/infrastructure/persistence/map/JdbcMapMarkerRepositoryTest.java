@@ -18,7 +18,7 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
     @DisplayName("bounds query는 latest trade amount와 unit sum이 있는 parcel complex marker를 반환한다")
     void boundsQueryReturnsComplexMarkers() {
         seedMapData();
-        JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
+        JdbcMapMarkerRepository repository = mapMarkerRepository();
 
         var markers = repository.findComplexMarkers(request(null, null));
 
@@ -38,7 +38,7 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
     @DisplayName("price eok filter는 10,000 KRW trade amount unit으로 변환된다")
     void priceEokFiltersUseTradeAmountUnits() {
         seedMapData();
-        JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
+        JdbcMapMarkerRepository repository = mapMarkerRepository();
 
         assertThat(repository.findComplexMarkers(request(12.0, 13.0))).hasSize(1);
         assertThat(repository.findComplexMarkers(request(13.0, null))).isEmpty();
@@ -48,7 +48,7 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
     @DisplayName("unit filter는 반환 marker의 세대수 합계를 기준으로 적용된다")
     void unitFilterUsesReturnedMarkerUnitSum() {
         seedMapData();
-        JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
+        JdbcMapMarkerRepository repository = mapMarkerRepository();
 
         assertThat(repository.findComplexMarkers(unitRequest(800L, 900L)))
                 .extracting(
@@ -64,7 +64,7 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
         jdbcClient
                 .sql("UPDATE complex SET use_date = DATE '2010-01-01' WHERE parcel_id = 1001")
                 .update();
-        JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
+        JdbcMapMarkerRepository repository = mapMarkerRepository();
 
         var tradeFirstMarkers = repository.findComplexMarkers(request(null, null));
         var markerShapeFilterMarkers = repository.findComplexMarkers(shapeFilterRequest());
@@ -79,7 +79,7 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
         jdbcClient
                 .sql("UPDATE complex SET use_date = DATE '2010-01-01' WHERE parcel_id = 1001")
                 .update();
-        JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
+        JdbcMapMarkerRepository repository = mapMarkerRepository();
 
         assertThat(repository.findComplexMarkers(combinedFilterRequest()))
                 .extracting(
@@ -99,7 +99,7 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
         jdbcClient
                 .sql("UPDATE complex SET bc_rat=40.0, vl_rat=120.0 WHERE id=501")
                 .update();
-        JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
+        JdbcMapMarkerRepository repository = mapMarkerRepository();
 
         assertThat(repository.findComplexMarkers(ratioRequest("60.0", "80.0", "200.0", "260.0")))
                 .isEmpty();
@@ -107,6 +107,7 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
         jdbcClient
                 .sql("UPDATE complex SET bc_rat=NULL, vl_rat=NULL WHERE id=501")
                 .update();
+        repository = mapMarkerRepository();
         assertThat(repository.findComplexMarkers(ratioRequest("60.0", "80.0", "200.0", "260.0")))
                 .hasSize(1);
     }
@@ -166,7 +167,7 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
     @DisplayName("bounds query는 complex 세대수 metadata가 없으면 marker를 반환하지 않는다")
     void boundsQueryExcludesMarkerWhenComplexMetadataIsMissing() {
         seedMissingUnitCountMapData();
-        JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
+        JdbcMapMarkerRepository repository = mapMarkerRepository();
 
         assertThat(repository.findComplexMarkers(request(null, null))).isEmpty();
     }
@@ -175,7 +176,7 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
     @DisplayName("좌표가 없는 coordinate-pending parcel은 거래가 있어도 marker로 반환하지 않는다")
     void coordinatePendingParcelWithTradeIsExcludedFromMarkers() {
         seedCoordinatePendingMapData();
-        JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
+        JdbcMapMarkerRepository repository = mapMarkerRepository();
 
         assertThat(repository.findComplexMarkers(request(null, null))).isEmpty();
     }
@@ -189,7 +190,7 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 			SET deleted_at = now()
 			WHERE source_key = 'rtms-map-marker-2'
 			""").update();
-        JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
+        JdbcMapMarkerRepository repository = mapMarkerRepository();
 
         assertThat(repository.findComplexMarkers(request(null, null)))
                 .singleElement()
@@ -201,7 +202,7 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
     @DisplayName("재건축 필지 마커는 현재 세대 complex 기준 좌표와 거래값을 반환한다")
     void redevelopmentMarkerUsesCurrentGenerationComplexCoordinateAndTrade() {
         seedRedevelopmentParcel();
-        JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
+        JdbcMapMarkerRepository repository = mapMarkerRepository();
 
         assertThat(repository.findComplexMarkers(request(null, null)))
                 .extracting(
@@ -218,7 +219,7 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
     @DisplayName("동시 존재 단지가 building 좌표로 확정되면 complex별 marker를 반환한다")
     void concurrentComplexesWithBuildingCoordinatesReturnComplexLevelMarkers() {
         seedConcurrentComplexMarkers();
-        JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
+        JdbcMapMarkerRepository repository = mapMarkerRepository();
 
         assertThat(repository.findComplexMarkers(request(null, null)))
                 .extracting(
@@ -237,7 +238,7 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
     @DisplayName("3세대+ 순차 재건축 마커는 현재 세대 단위수만 반영하고 철거 세대를 합산하지 않는다")
     void multiGenerationRedevelopmentMarkerMustNotSumDemolishedUnits() {
         seedMultiGenerationRedevelopmentParcel();
-        JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
+        JdbcMapMarkerRepository repository = mapMarkerRepository();
 
         assertThat(repository.findComplexMarkers(request(null, null)))
                 .extracting(ComplexMarkerResult::parcelId, ComplexMarkerResult::unitCntSum)
@@ -248,7 +249,7 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
     @DisplayName("동시 존재 단지의 building 좌표 confidence가 낮으면 parcel fallback marker를 반환한다")
     void concurrentComplexesWithLowConfidenceBuildingCoordinatesReturnParcelFallbackMarker() {
         seedLowConfidenceConcurrentComplexMarkers();
-        JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
+        JdbcMapMarkerRepository repository = mapMarkerRepository();
 
         assertThat(repository.findComplexMarkers(request(null, null)))
                 .extracting(
@@ -265,7 +266,7 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
     @DisplayName("동시 존재 단지의 building 좌표 confidence가 섞이면 확정 marker와 fallback marker를 분리한다")
     void concurrentComplexesWithMixedConfidenceBuildingCoordinatesReturnPartialSplitMarkers() {
         seedMixedConfidenceConcurrentComplexMarkers();
-        JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
+        JdbcMapMarkerRepository repository = mapMarkerRepository();
 
         assertThat(repository.findComplexMarkers(request(null, null)))
                 .extracting(
@@ -284,7 +285,7 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
     @DisplayName("고신뢰 building 좌표가 이미 있으면 coordinate case가 없어도 확정 complex marker를 분리한다")
     void trustedBuildingCoordinatesWithoutCoordinateCaseReturnSplitMarkers() {
         seedTrustedBuildingCoordinatesWithoutCoordinateCase();
-        JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
+        JdbcMapMarkerRepository repository = mapMarkerRepository();
 
         assertThat(repository.findComplexMarkers(request(null, null)))
                 .extracting(
@@ -303,7 +304,7 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
     @DisplayName("split marker 좌표가 bounds 밖이면 parcel이 bounds 안이어도 반환하지 않는다")
     void splitMarkerCoordinateOutsideBoundsIsExcluded() {
         seedTrustedBuildingCoordinateOutsideBounds();
-        JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
+        JdbcMapMarkerRepository repository = mapMarkerRepository();
 
         assertThat(repository.findComplexMarkers(request(null, null)))
                 .extracting(
@@ -320,7 +321,7 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
     @DisplayName("LOW confidence 재건축 필지는 현재 세대 확정 marker로 노출하지 않는다")
     void lowConfidenceRedevelopmentReturnsParcelFallbackMarker() {
         seedLowConfidenceRedevelopmentParcel();
-        JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
+        JdbcMapMarkerRepository repository = mapMarkerRepository();
 
         assertThat(repository.findComplexMarkers(request(null, null)))
                 .extracting(

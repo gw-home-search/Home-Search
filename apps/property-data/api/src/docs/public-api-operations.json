@@ -1,0 +1,27 @@
+{
+  "formatVersion": 1,
+  "operations": [
+    {"method":"GET","path":"/api/v1/complex/{complexId}/nearby-places","snippet":"nearby-places-success"},
+    {"method":"POST","path":"/api/v1/map/nearby-places","snippet":"viewport-nearby-places-success"},
+    {"method":"POST","path":"/api/v1/map/regions","snippet":"map-regions-success"},
+    {"method":"POST","path":"/api/v1/map/complexes","snippet":"map-complexes-success"},
+    {"method":"GET","path":"/api/v1/search/complexes","snippet":"read-search-complexes-success"},
+    {"method":"GET","path":"/api/v1/search/complexes/suggestions","snippet":"read-complex-suggestions-success"},
+    {"method":"GET","path":"/api/v1/region","snippet":"read-root-regions-success"},
+    {"method":"GET","path":"/api/v1/region/{regionId}","snippet":"read-region-detail-success"},
+    {"method":"GET","path":"/api/v1/region/{regionId}/complexes","snippet":"read-region-complexes-success"},
+    {"method":"GET","path":"/api/v1/detail/{parcelId}","snippet":"read-detail-success"},
+    {"method":"GET","path":"/api/v1/detail/{parcelId}/complexes","snippet":"read-parcel-complexes-success"},
+    {"method":"GET","path":"/api/v1/complex/{complexId}","snippet":"read-complex-detail-success"},
+    {"method":"GET","path":"/api/v1/trade/{parcelId}","snippet":"read-trade-success"},
+    {"method":"GET","path":"/api/v1/complex/{complexId}/trades","snippet":"read-complex-trades-success"},
+    {"method":"GET","path":"/api/v1/complex/{complexId}/trade-areas","snippet":"read-complex-trade-areas-success"},
+    {"method":"GET","path":"/api/v1/trade/{parcelId}/trend","snippet":"read-trade-trend-success"},
+    {"method":"GET","path":"/api/v1/complex/{complexId}/trade-trend","snippet":"read-complex-trade-trend-success"},
+    {"method":"GET","path":"/api/v1/insights/trades/latest","snippet":"market-insight-latest-unavailable"},
+    {"method":"GET","path":"/api/v1/insights/trades/weekly","snippet":"market-insight-weekly-unavailable"},
+    {"method":"GET","path":"/api/v1/insights/news","snippet":"market-news-unavailable"},
+    {"method":"GET","path":"/api/v1/complex/{complexId}/news","snippet":"complex-market-news"}
+  ],
+  "supplementalSnippets": ["map-invalid-request"]
+}

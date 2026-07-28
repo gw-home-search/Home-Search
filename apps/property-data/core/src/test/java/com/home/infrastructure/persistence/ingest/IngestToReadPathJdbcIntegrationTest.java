@@ -58,7 +58,7 @@ class IngestToReadPathJdbcIntegrationTest extends JdbcPostgresTestSupport {
         assertThat(evidenceStatuses())
                 .containsExactly(TradeMatchStatus.MATCHED, TradeMatchStatus.MATCHED, TradeMatchStatus.PNU_CONFLICT);
 
-        JdbcMapMarkerRepository mapRepository = new JdbcMapMarkerRepository(jdbcClient);
+        JdbcMapMarkerRepository mapRepository = mapMarkerRepository();
         assertThat(mapRepository.findComplexMarkers(boundsRequest()))
                 .extracting(
                         ComplexMarkerResult::parcelId,
@@ -108,7 +108,7 @@ class IngestToReadPathJdbcIntegrationTest extends JdbcPostgresTestSupport {
         assertThat(activeTradeCount()).isEqualTo(1);
         assertThat(deletedTradeCount()).isEqualTo(1);
 
-        JdbcMapMarkerRepository mapRepository = new JdbcMapMarkerRepository(jdbcClient);
+        JdbcMapMarkerRepository mapRepository = mapMarkerRepository();
         assertThat(mapRepository.findComplexMarkers(boundsRequest()))
                 .singleElement()
                 .extracting(ComplexMarkerResult::latestDealAmount)

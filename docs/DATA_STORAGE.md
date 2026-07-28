@@ -428,6 +428,36 @@ This stored aggregate preserves the existing region marker household-count
 field, type, and `NULL` meaning; it is not a trade count, parcel count, or
 current-generation-only metric.
 
+### Versioned Map Marker Read Model
+
+V38 adds an immutable, generation-scoped read model without changing public
+map fields or identifier meaning:
+
+- `map_marker_generation` stores lifecycle, source watermark, complex/region
+  row counts, and the deterministic SHA-256 marker hash.
+- `map_complex_marker_projection` stores marker identity, display coordinates,
+  latest trade fields, household count, building age, and the same-complex
+  ratio members required by public filters.
+- `map_region_marker_projection` stores region-level coordinates and household
+  counts.
+- `map_marker_active_generation` is a singleton pointer. Its trigger accepts
+  only `VALIDATED` candidates, retires the previous active generation, and
+  performs the switch in one transaction.
+
+Lifecycle values are `BUILDING`, `VALIDATED`, `ACTIVE`, `RETIRED`, and
+`FAILED`. Their durable meaning belongs to `domain/map`; database checks and
+the activation trigger enforce the same transition boundary. Projection rows
+reference their generation with cascade cleanup, while the active pointer uses
+a restrictive reference so the served generation cannot be deleted.
+
+The RTMS daily and backfill jobs run region synchronization before projection
+refresh. Complex projection creation is one SQL statement and therefore one
+source snapshot; validation and activation are separate transactions, so a
+failed candidate never makes partial rows public. Only the active and immediate
+rollback generations are retained during normal cleanup. V39 grants the
+property runtime explicit privileges for these tables, the identity sequence,
+and the activation function; it does not expand the AI reader boundary.
+
 ## Complex Metadata Enrichment
 
 `complex` rows keep identity data on the ingest path. Optional complex
@@ -747,3 +777,27 @@ queryable last-good result.
 Raw retention is seven days, normalized news 30 days, and execution/review
 evidence 180 days. Retention deletes children before parents and never removes
 the current published snapshot.
+
+## Production data-only transfer
+
+Production transfer uses `infra/migration/data-only-allowlist.json` as the
+reviewed table, column, key, dependency-order, chunk, and conflict-policy
+boundary. The current catalog covers 79 Property datasets and 21 AI Reference
+datasets. It structurally excludes User/Admin databases, session/token state,
+Flyway/AI schema history, Spring Batch metadata, roles, secrets, PostGIS system
+rows, and map marker generations. Marker projections are rebuilt after import.
+
+`data_only_migration.py` exports each logical database under one PostgreSQL
+`REPEATABLE READ READ ONLY` snapshot. Every zstd chunk has compressed/canonical
+CSV SHA-256, row count, min/max key, and source WAL watermark. Import validates
+the checked-in catalog checksum and exact selected column set before writing.
+Repeated chunks are idempotent. Corrected Property evidence and the AI active
+snapshot pointer may update only differing rows; conflicting immutable AI
+history fails the import.
+
+Reconciliation compares every target chunk hash and table row count, then
+requires no source-key/fallback normalized duplicate, no normalized trade
+without raw evidence, no invalid coordinate/SRID, no unqueryable
+`MATCH_FAILED`, and no active AI snapshot without rows. A final reconciliation
+snapshot is imported only after source schedulers pause. Source databases and
+Docker volumes remain untouched and recoverable throughout this process.

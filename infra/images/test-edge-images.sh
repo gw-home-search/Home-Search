@@ -8,13 +8,15 @@ admin_image="home-search-admin-gateway:test-${suffix}"
 property_upstream="home-search-property-upstream-${suffix}"
 user_upstream="home-search-user-upstream-${suffix}"
 admin_upstream="home-search-admin-upstream-${suffix}"
+chat_bff_upstream="home-search-chat-bff-upstream-${suffix}"
 public_gateway="home-search-public-gateway-${suffix}"
 admin_gateway="home-search-admin-gateway-${suffix}"
 tmp_dir="$(mktemp -d)"
 
 cleanup() {
   docker stop --time 1 "${public_gateway}" "${admin_gateway}" \
-    "${property_upstream}" "${user_upstream}" "${admin_upstream}" >/dev/null 2>&1 || true
+    "${property_upstream}" "${user_upstream}" "${admin_upstream}" \
+    "${chat_bff_upstream}" >/dev/null 2>&1 || true
   docker network remove "${network}" >/dev/null 2>&1 || true
   find "${tmp_dir}" -depth -delete 2>/dev/null || true
 }
@@ -45,6 +47,9 @@ EOF
 cat >"${tmp_dir}/admin.conf" <<'EOF'
 server { listen 8080; location / { default_type text/plain; return 200 "admin:$request_uri"; } }
 EOF
+cat >"${tmp_dir}/chat-bff.conf" <<'EOF'
+server { listen 8080; location / { default_type text/plain; return 200 "chat-bff:$request_uri"; } }
+EOF
 
 docker network create "${network}" >/dev/null
 docker run --rm --detach --name "${property_upstream}" --network "${network}" \
@@ -53,8 +58,10 @@ docker run --rm --detach --name "${user_upstream}" --network "${network}" \
   --network-alias user-api --volume "${tmp_dir}/user.conf:/etc/nginx/conf.d/default.conf:ro" nginx:1.27-alpine >/dev/null
 docker run --rm --detach --name "${admin_upstream}" --network "${network}" \
   --network-alias admin-api --volume "${tmp_dir}/admin.conf:/etc/nginx/conf.d/default.conf:ro" nginx:1.27-alpine >/dev/null
+docker run --rm --detach --name "${chat_bff_upstream}" --network "${network}" \
+  --network-alias chat-bff --volume "${tmp_dir}/chat-bff.conf:/etc/nginx/conf.d/default.conf:ro" nginx:1.27-alpine >/dev/null
 docker run --rm --detach --name "${public_gateway}" --network "${network}" \
-  --publish 127.0.0.1::8080 --env USER_API_PORT=8080 "${public_image}" >/dev/null
+  --publish 127.0.0.1::8080 --env USER_API_PORT=8080 --env CHAT_BFF_PORT=8080 "${public_image}" >/dev/null
 docker run --rm --detach --name "${admin_gateway}" --network "${network}" \
   --publish 127.0.0.1::8080 --env ADMIN_API_PORT=8080 "${admin_image}" >/dev/null
 
@@ -85,11 +92,14 @@ assert_body() {
 assert_body "http://127.0.0.1:${public_port}/api/v1/map/regions" 'property:/api/v1/map/regions'
 assert_body "http://127.0.0.1:${public_port}/api/v1/users/me" 'user:/api/v1/users/me'
 assert_body "http://127.0.0.1:${public_port}/auth/access" 'user:/auth/access'
+assert_body "http://127.0.0.1:${public_port}/api/v1/chatbot/query" 'chat-bff:/api/v1/chatbot/query'
+assert_body "http://127.0.0.1:${public_port}/api/v1/chatbot/query/stream" 'chat-bff:/api/v1/chatbot/query/stream'
 assert_body "http://127.0.0.1:${admin_port}/api/v1/admin/auth/me" 'admin:/api/v1/admin/auth/me'
 
 for endpoint in \
   "http://127.0.0.1:${public_port}/api/v1/admin/accounts" \
   "http://127.0.0.1:${public_port}/actuator/health" \
+  "http://127.0.0.1:${public_port}/api/v1/chatbot/unknown" \
   "http://127.0.0.1:${admin_port}/api/v1/map/regions" \
   "http://127.0.0.1:${admin_port}/actuator/prometheus"; do
   [[ "$(curl --silent --output /dev/null --write-out '%{http_code}' "${endpoint}")" == '404' ]]

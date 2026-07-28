@@ -118,7 +118,7 @@ resource "aws_cloudwatch_metric_alarm" "ecs_running_task" {
   evaluation_periods  = 2
   datapoints_to_alarm = 2
   comparison_operator = "LessThanThreshold"
-  threshold           = var.enable_services ? var.core_desired_count : 0
+  threshold           = local.service_desired_counts[each.key]
   treat_missing_data  = "notBreaching"
   alarm_actions       = local.alarm_actions
 }
@@ -169,7 +169,7 @@ resource "aws_cloudwatch_metric_alarm" "public_unhealthy_targets" {
   datapoints_to_alarm = 2
   comparison_operator = "GreaterThanThreshold"
   threshold           = 0
-  treat_missing_data  = var.enable_services ? "breaching" : "notBreaching"
+  treat_missing_data  = var.service_activation_phase == "all" ? "breaching" : "notBreaching"
   alarm_actions       = local.alarm_actions
 }
 

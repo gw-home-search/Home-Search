@@ -180,6 +180,14 @@ locals {
     for name, spec in local.service_specs : name => spec
     if spec.metrics_path != null
   }
+  service_desired_counts = {
+    for name in keys(local.service_specs) : name => (
+      var.service_activation_phase == "off" ? 0 :
+      var.service_activation_phase == "consumers" ? (name == "user-insight-worker" ? var.core_desired_count : 0) :
+      var.service_activation_phase == "private" ? (name == "public-gateway" ? 0 : var.core_desired_count) :
+      var.core_desired_count
+    )
+  }
 }
 
 resource "aws_cloudwatch_log_group" "service" {
@@ -359,7 +367,7 @@ resource "aws_ecs_service" "service" {
   name                               = each.key
   cluster                            = aws_ecs_cluster.this.id
   task_definition                    = aws_ecs_task_definition.service[each.key].arn
-  desired_count                      = var.enable_services ? var.core_desired_count : 0
+  desired_count                      = local.service_desired_counts[each.key]
   launch_type                        = "FARGATE"
   platform_version                   = "LATEST"
   deployment_minimum_healthy_percent = 100

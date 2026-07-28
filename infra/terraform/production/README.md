@@ -31,8 +31,10 @@ rejected. It creates nine private ECS services, production service discovery,
 MSK Serverless, the ML model EFS, a WAF-protected public ALB, and a VPN-only
 internal Admin ALB. Services start at desired count zero by default. The
 deployment workflow must run schema migrations, runtime grants, data import,
-and dark validation before applying `enable_services=true`; the enabled desired
-count cannot be lower than two and ECS availability-zone rebalancing remains on.
+and reconciliation before advancing through `service_activation_phase=consumers`,
+`private`, and finally `all`. The `public-gateway` remains stopped through private
+dark validation; enabled desired counts cannot be lower than two and ECS
+availability-zone rebalancing remains on.
 
 Property, Admin, User, ML, AI, and chat-bff run a digest-pinned ADOT sidecar
 that scrapes only the loopback metrics endpoint and remote-writes to the

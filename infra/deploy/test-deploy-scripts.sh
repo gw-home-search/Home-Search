@@ -109,6 +109,24 @@ if "${root}/infra/deploy/verify-terraform-plan.sh" "${tmp_dir}/alarm-delete.json
   exit 1
 fi
 
+jq -n '{resource_changes:[
+  {address:"aws_ecs_service.service[\"user-insight-worker\"]",type:"aws_ecs_service",change:{actions:["update"],before:{desired_count:0,name:"user-insight-worker"},after:{desired_count:2,name:"user-insight-worker"}}},
+  {address:"aws_cloudwatch_metric_alarm.ecs_running_task[\"user-insight-worker\"]",type:"aws_cloudwatch_metric_alarm",change:{actions:["update"],before:{threshold:0,treat_missing_data:"notBreaching"},after:{threshold:2,treat_missing_data:"notBreaching"}}}
+]}' >"${tmp_dir}/activation.json"
+"${root}/infra/deploy/verify-terraform-plan.sh" "${tmp_dir}/activation.json" activation >/dev/null
+jq '.resource_changes += [{address:"aws_ecs_task_definition.service[\"user-insight-worker\"]",type:"aws_ecs_task_definition",change:{actions:["update"],before:{cpu:"512"},after:{cpu:"1024"}}}]' \
+  "${tmp_dir}/activation.json" >"${tmp_dir}/activation-task-change.json"
+if "${root}/infra/deploy/verify-terraform-plan.sh" "${tmp_dir}/activation-task-change.json" activation >/dev/null 2>&1; then
+  echo '상태: Fail - activation plan이 task definition 변경을 허용했습니다.' >&2
+  exit 1
+fi
+jq '.resource_changes[0].change.after.name = "unexpected"' \
+  "${tmp_dir}/activation.json" >"${tmp_dir}/activation-field-change.json"
+if "${root}/infra/deploy/verify-terraform-plan.sh" "${tmp_dir}/activation-field-change.json" activation >/dev/null 2>&1; then
+  echo '상태: Fail - activation plan이 desired_count 이외 service 변경을 허용했습니다.' >&2
+  exit 1
+fi
+
 "${root}/infra/deploy/migration-checksums.sh" >"${tmp_dir}/checksums.json"
 jq -e 'keys == ["admin","property","source_data","user"] and ([.[]] | all(test("^[0-9a-f]{64}$")))' \
   "${tmp_dir}/checksums.json" >/dev/null

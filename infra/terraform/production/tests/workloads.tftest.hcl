@@ -20,7 +20,7 @@ run "private_digest_pinned_production_workloads" {
     monthly_budget_usd                = 5000
     budget_notification_emails        = ["ops@example.invalid"]
     alarm_topic_arn                   = "arn:aws:sns:ap-northeast-2:123456789012:alarms"
-    enable_services                   = true
+    service_activation_phase          = "all"
     image_uris = {
       property-api          = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/property-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       property-batch        = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/property-batch@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

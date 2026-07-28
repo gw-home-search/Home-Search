@@ -34,10 +34,14 @@ variable "public_origin" {
     error_message = "public_origin must be an HTTPS origin without a path."
   }
 }
-variable "enable_services" {
-  description = "Activate ECS desired counts only after migrations and dark validation are complete."
-  type        = bool
-  default     = false
+variable "service_activation_phase" {
+  description = "Fail-closed service rollout phase: off, consumers, private, then all."
+  type        = string
+  default     = "off"
+  validation {
+    condition     = contains(["off", "consumers", "private", "all"], var.service_activation_phase)
+    error_message = "service_activation_phase must be one of off, consumers, private, or all."
+  }
 }
 variable "core_desired_count" {
   type    = number

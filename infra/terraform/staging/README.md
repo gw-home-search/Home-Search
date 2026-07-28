@@ -48,8 +48,7 @@ wait for the following one-shot task families in order:
 
 1. `home-search-staging-secret-bootstrap`
 2. `home-search-staging-database-bootstrap`
-3. `home-search-staging-property-flyway`, `admin-migration`, `user-flyway`, and
-   `source-data-migration`
+3. `home-search-staging-property-flyway`, `admin-migration`, and `user-flyway`
 4. `home-search-staging-runtime-grants`
 
 Only after every task exits with code 0 should a reviewed plan set
@@ -65,3 +64,10 @@ reviewed last-good publication is ready. The
 optional ML service additionally requires `enable_ml=true` and a model artifact
 in the encrypted EFS `/model` mount; its entrypoint fails instead of serving
 without that artifact.
+
+The nationwide coordinate source import is deferred and never runs in the
+normal deployment loop. Keep `enable_coordinate_source_runtime=false`; this
+omits its DSN/reader secret from Property workloads and removes their coordinate
+database SG routes. A VPN-authorized operator may later run the retained
+`source-data-migration` one-shot task. Set the flag to `true` only in a separate
+reviewed plan after checksum, row-count, and read-only lookup reconciliation.

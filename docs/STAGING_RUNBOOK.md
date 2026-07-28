@@ -20,7 +20,8 @@ restore rehearsal 절차를 소유한다. production cutover, DNS 전환, produc
 | live-capable optional | `ml` | EFS `/model` artifact가 있을 때만 `enable_ml=true` |
 | maintenance | `property-batch`, `admin-ops` | 요청된 작업마다 ECS one-shot task |
 | bootstrap one-shot | `secret-bootstrap`, `database-bootstrap`, `runtime-grants` | 최초 생성 및 credential rotation 후 명시 실행 |
-| migration one-shot | `property-flyway`, `admin-migration`, `user-flyway`, `source-data-migration` | service update 전에 모두 exit code 0 필요 |
+| migration one-shot | `property-flyway`, `admin-migration`, `user-flyway` | service update 전에 모두 exit code 0 필요 |
+| deferred operator one-shot | `source-data-migration` | 전국 coordinate snapshot 별도 승인 후 수동 실행; 일반 deploy에서 실행 금지 |
 | continuity one-shot | `backup`, `restore-verification` | EventBridge Scheduler 또는 수동 rehearsal |
 | later-scope | authenticated chatbot, ranking, alarms, recommendations, production cutover | 이번 staging critical path에서 제외 |
 

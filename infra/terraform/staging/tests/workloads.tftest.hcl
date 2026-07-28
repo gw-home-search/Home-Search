@@ -145,10 +145,11 @@ run "digest_pinned_private_rollback_capable_workloads" {
 
   assert {
     condition = alltrue([
-      local.workload_execution_secret_names["property-api"] == ["property-runtime-db", "coordinate-reader-db", "admin-internal-jwt-public", "kakao-local-provider"],
+      local.workload_execution_secret_names["property-api"] == ["property-runtime-db", "admin-internal-jwt-public", "kakao-local-provider"],
       local.workload_execution_secret_names["admin-api"] == ["admin-runtime-db", "admin-internal-jwt"],
       local.workload_execution_secret_names["user-api"] == ["user-runtime-db", "oauth-providers", "user-jwt"],
-      local.workload_execution_secret_names["property-batch"] == ["property-runtime-db", "coordinate-reader-db", "public-data-providers"],
+      local.workload_execution_secret_names["property-batch"] == ["property-runtime-db", "public-data-providers"],
+      local.workload_execution_secret_names["map-marker-projection"] == ["property-runtime-db"],
       local.workload_execution_secret_names["property-event-relay"] == ["property-runtime-db"],
       local.workload_execution_secret_names["property-event-maintenance"] == ["property-runtime-db"],
       alltrue(flatten([
@@ -170,6 +171,33 @@ run "digest_pinned_private_rollback_capable_workloads" {
 
   assert {
     condition = alltrue([
+      var.enable_coordinate_source_runtime == false,
+      alltrue([
+        for item in local.service_specs["property-api"].environment :
+        !startswith(item.name, "COORDINATE_SOURCE_DB_")
+      ]),
+      alltrue([
+        for item in local.service_specs["property-api"].secrets :
+        !startswith(item.name, "COORDINATE_SOURCE_DB_")
+      ]),
+      alltrue([
+        for name in ["property-batch", "map-marker-projection"] : alltrue([
+          for item in local.one_shot_specs[name].environment :
+          !startswith(item.name, "COORDINATE_SOURCE_DB_")
+        ])
+      ]),
+      alltrue([
+        for name in ["property-batch", "map-marker-projection"] : alltrue([
+          for item in local.one_shot_specs[name].secrets :
+          !startswith(item.name, "COORDINATE_SOURCE_DB_")
+        ])
+      ]),
+    ])
+    error_message = "Coordinate source runtime credentials and endpoints must remain disabled until operator migration is approved."
+  }
+
+  assert {
+    condition = alltrue([
       one([
         for item in local.service_specs["property-api"].environment :
         item.value if item.name == "HOME_PLACE_KAKAO_ENABLED"
@@ -178,7 +206,7 @@ run "digest_pinned_private_rollback_capable_workloads" {
         for secret in local.service_specs["property-api"].secrets :
         secret.name if secret.name == "KAKAO_REST_API_KEY"
       ]) == "KAKAO_REST_API_KEY",
-      length(local.service_specs["property-api"].secrets) == 3,
+      length(local.service_specs["property-api"].secrets) == 2,
       !contains(local.workload_execution_secret_names["property-api"], "public-data-providers"),
     ])
     error_message = "The staging property API must enable Kakao Local and materialize only its server-side REST API key."

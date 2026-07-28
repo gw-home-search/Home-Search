@@ -111,8 +111,14 @@ resource "aws_vpc_security_group_egress_rule" "operator_https" {
   ip_protocol       = "tcp"
 }
 resource "aws_security_group" "database" {
-  name   = "${local.name}-database"
-  vpc_id = aws_vpc.this.id
+  name        = "${local.name}-database-primary"
+  description = "Primary service databases from owning workloads"
+  vpc_id      = aws_vpc.this.id
+}
+resource "aws_security_group" "database_coordinate" {
+  name        = "${local.name}-database-coordinate"
+  description = "Deferred coordinate source from operator tasks and explicitly activated readers"
+  vpc_id      = aws_vpc.this.id
 }
 resource "aws_security_group" "valkey" {
   name   = "${local.name}-valkey"
@@ -208,23 +214,25 @@ resource "aws_db_parameter_group" "postgres" {
   }
 }
 resource "aws_db_instance" "service" {
-  for_each                        = local.database_names
-  identifier                      = "${local.name}-${each.key}"
-  engine                          = "postgres"
-  engine_version                  = "17.10"
-  db_name                         = each.value
-  instance_class                  = var.rds_instance_class
-  username                        = "cluster_admin"
-  manage_master_user_password     = true
-  master_user_secret_kms_key_id   = aws_kms_key.data.arn
-  allocated_storage               = 100
-  max_allocated_storage           = 1000
-  storage_type                    = "gp3"
-  storage_encrypted               = true
-  kms_key_id                      = aws_kms_key.data.arn
-  db_subnet_group_name            = aws_db_subnet_group.this.name
-  parameter_group_name            = aws_db_parameter_group.postgres.name
-  vpc_security_group_ids          = [aws_security_group.database.id]
+  for_each                      = local.database_names
+  identifier                    = "${local.name}-${each.key}"
+  engine                        = "postgres"
+  engine_version                = "17.10"
+  db_name                       = each.value
+  instance_class                = var.rds_instance_class
+  username                      = "cluster_admin"
+  manage_master_user_password   = true
+  master_user_secret_kms_key_id = aws_kms_key.data.arn
+  allocated_storage             = 100
+  max_allocated_storage         = 1000
+  storage_type                  = "gp3"
+  storage_encrypted             = true
+  kms_key_id                    = aws_kms_key.data.arn
+  db_subnet_group_name          = aws_db_subnet_group.this.name
+  parameter_group_name          = aws_db_parameter_group.postgres.name
+  vpc_security_group_ids = [
+    local.database_security_group_keys[each.key] == "coordinate" ? aws_security_group.database_coordinate.id : aws_security_group.database.id
+  ]
   publicly_accessible             = false
   multi_az                        = true
   deletion_protection             = true

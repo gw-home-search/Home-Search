@@ -178,7 +178,7 @@ jobs:
           subnets="$(jq -c '.application_subnet_ids' <<<"${network}")"
           security_groups="$(jq -c '[.task_security_group_ids.ops]' <<<"${network}")"
           evidence='{}'
-          for task in property-flyway admin-migration user-flyway source-data-migration runtime-grants map-marker-projection; do
+          for task in property-flyway admin-migration user-flyway runtime-grants map-marker-projection; do
             task_definition="$(jq -r --arg task "${task}" '.one_shot_task_arns[$task]' <<<"${release}")"
             task_arn="$(infra/deploy/run-ecs-task.sh "${cluster}" "${task_definition}" "${subnets}" "${security_groups}")"
             evidence="$(jq --arg task "${task}" --arg task_arn "${task_arn}" '. + {($task):$task_arn}' <<<"${evidence}")"

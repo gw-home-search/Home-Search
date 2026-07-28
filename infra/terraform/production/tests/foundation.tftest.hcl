@@ -65,7 +65,13 @@ run "two_az_private_production_foundation" {
     error_message = "Grafana PrivateLink ingress must be limited to the Client VPN network."
   }
   assert {
-    condition     = length(aws_db_instance.service) == 5 && alltrue([for db in aws_db_instance.service : db.multi_az && !db.publicly_accessible && db.deletion_protection])
+    condition = (
+      length(aws_db_instance.service) == 5
+      && alltrue([for db in aws_db_instance.service : db.multi_az && !db.publicly_accessible && db.deletion_protection])
+      && local.database_security_group_keys["coordinate"] == "coordinate"
+      && alltrue([for name, boundary in local.database_security_group_keys : boundary == "primary" if name != "coordinate"])
+      && aws_security_group.database.name != aws_security_group.database_coordinate.name
+    )
     error_message = "Five databases must be Multi-AZ and private."
   }
   assert {

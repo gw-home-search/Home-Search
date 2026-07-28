@@ -35,9 +35,9 @@ home:
       public-keys: "${HOME_ADMIN_INTERNAL_PUBLIC_KEYS}"
   coordinate-source:
     db:
-      jdbc-url: "${COORDINATE_SOURCE_DB_JDBC_URL}"
-      username: "${COORDINATE_SOURCE_DB_USERNAME}"
-      password: "${COORDINATE_SOURCE_DB_PASSWORD}"
+      jdbc-url: "${COORDINATE_SOURCE_DB_JDBC_URL:}"
+      username: "${COORDINATE_SOURCE_DB_USERNAME:}"
+      password: "${COORDINATE_SOURCE_DB_PASSWORD:}"
       connect-timeout-seconds: "${COORDINATE_SOURCE_DB_CONNECT_TIMEOUT_SECONDS:5}"
       socket-timeout-seconds: "${COORDINATE_SOURCE_DB_SOCKET_TIMEOUT_SECONDS:10}"
       lock-timeout-millis: "${COORDINATE_SOURCE_DB_LOCK_TIMEOUT_MILLIS:1000}"

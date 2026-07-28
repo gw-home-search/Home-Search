@@ -14,6 +14,14 @@ locals {
       }
     }
   }
+  coordinate_source_environment = var.enable_coordinate_source_runtime ? [
+    { name = "COORDINATE_SOURCE_DB_JDBC_URL", value = "jdbc:postgresql://${aws_db_instance.coordinate_source.address}:5432/home_search_coordinate_source?sslmode=require" },
+    { name = "COORDINATE_SOURCE_DB_USERNAME", value = "home_search_coordinate_reader" },
+    { name = "COORDINATE_SOURCE_DB_READ_ONLY", value = "true" },
+  ] : []
+  coordinate_source_secrets = var.enable_coordinate_source_runtime ? [
+    { name = "COORDINATE_SOURCE_DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["coordinate-reader-db"].arn}:password::" },
+  ] : []
   service_specs = {
     property-api = {
       image  = "property-api"
@@ -21,14 +29,11 @@ locals {
       sg     = "property"
       cpu    = 512
       memory = 1024
-      environment = [
+      environment = concat([
         { name = "SPRING_PROFILES_ACTIVE", value = "staging" },
         { name = "SERVER_PORT", value = "8080" },
         { name = "DB_JDBC_URL", value = "jdbc:postgresql://${aws_db_instance.primary.address}:5432/home_search?sslmode=require" },
         { name = "DB_USERNAME", value = "home_search_property_runtime" },
-        { name = "COORDINATE_SOURCE_DB_JDBC_URL", value = "jdbc:postgresql://${aws_db_instance.coordinate_source.address}:5432/home_search_coordinate_source?sslmode=require" },
-        { name = "COORDINATE_SOURCE_DB_USERNAME", value = "home_search_coordinate_reader" },
-        { name = "COORDINATE_SOURCE_DB_READ_ONLY", value = "true" },
         { name = "SPRING_DATA_REDIS_HOST", value = aws_elasticache_replication_group.this.primary_endpoint_address },
         { name = "SPRING_DATA_REDIS_PORT", value = "6379" },
         { name = "SPRING_DATA_REDIS_SSL_ENABLED", value = "true" },
@@ -42,12 +47,11 @@ locals {
         { name = "HOME_ADMIN_INTERNAL_MAXIMUM_LIFETIME", value = "60s" },
         { name = "HOME_ADMIN_INTERNAL_PUBLIC_KEYS", value = "staging-1=/run/keys/public.pem" },
         { name = "FRONTEND_URL", value = var.public_origin },
-      ]
-      secrets = [
+      ], local.coordinate_source_environment)
+      secrets = concat([
         { name = "DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["property-runtime-db"].arn}:password::" },
-        { name = "COORDINATE_SOURCE_DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["coordinate-reader-db"].arn}:password::" },
         { name = "KAKAO_REST_API_KEY", valueFrom = "${aws_secretsmanager_secret.container["kakao-local-provider"].arn}:rest_api_key::" },
-      ]
+      ], local.coordinate_source_secrets)
       key_secrets = [
         { name = "PUBLIC_KEY_PEM", valueFrom = "${aws_secretsmanager_secret.container["admin-internal-jwt-public"].arn}:public_key_pem::" },
       ]
@@ -579,24 +583,20 @@ locals {
       image   = "property-batch"
       role    = aws_iam_role.workload_task["property-batch"].arn
       command = []
-      environment = [
+      environment = concat([
         { name = "SPRING_PROFILES_ACTIVE", value = "staging" },
         { name = "DB_JDBC_URL", value = "jdbc:postgresql://${aws_db_instance.primary.address}:5432/home_search?sslmode=require" },
         { name = "DB_USERNAME", value = "home_search_property_runtime" },
-        { name = "COORDINATE_SOURCE_DB_JDBC_URL", value = "jdbc:postgresql://${aws_db_instance.coordinate_source.address}:5432/home_search_coordinate_source?sslmode=require" },
-        { name = "COORDINATE_SOURCE_DB_USERNAME", value = "home_search_coordinate_reader" },
-        { name = "COORDINATE_SOURCE_DB_READ_ONLY", value = "true" },
         { name = "SPRING_DATA_REDIS_HOST", value = aws_elasticache_replication_group.this.primary_endpoint_address },
         { name = "SPRING_DATA_REDIS_PORT", value = "6379" },
         { name = "SPRING_DATA_REDIS_SSL_ENABLED", value = "true" },
-      ]
-      secrets = [
+      ], local.coordinate_source_environment)
+      secrets = concat([
         { name = "DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["property-runtime-db"].arn}:password::" },
-        { name = "COORDINATE_SOURCE_DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["coordinate-reader-db"].arn}:password::" },
         { name = "APT_SERVICE_KEY", valueFrom = "${aws_secretsmanager_secret.container["public-data-providers"].arn}:apt_service_key::" },
         { name = "NAVER_NEWS_API_KEY_ID", valueFrom = "${aws_secretsmanager_secret.container["public-data-providers"].arn}:naver_news_api_key_id::" },
         { name = "NAVER_NEWS_API_KEY", valueFrom = "${aws_secretsmanager_secret.container["public-data-providers"].arn}:naver_news_api_key::" },
-      ]
+      ], local.coordinate_source_secrets)
     }
     map-marker-projection = {
       image   = "property-batch"
@@ -607,16 +607,12 @@ locals {
         { name = "SPRING_BATCH_JOB_NAME", value = "mapMarkerProjectionJob" },
         { name = "DB_JDBC_URL", value = "jdbc:postgresql://${aws_db_instance.primary.address}:5432/home_search?sslmode=require" },
         { name = "DB_USERNAME", value = "home_search_property_runtime" },
-        { name = "COORDINATE_SOURCE_DB_JDBC_URL", value = "jdbc:postgresql://${aws_db_instance.coordinate_source.address}:5432/home_search_coordinate_source?sslmode=require" },
-        { name = "COORDINATE_SOURCE_DB_USERNAME", value = "home_search_coordinate_reader" },
-        { name = "COORDINATE_SOURCE_DB_READ_ONLY", value = "true" },
         { name = "SPRING_DATA_REDIS_HOST", value = aws_elasticache_replication_group.this.primary_endpoint_address },
         { name = "SPRING_DATA_REDIS_PORT", value = "6379" },
         { name = "SPRING_DATA_REDIS_SSL_ENABLED", value = "true" },
       ]
       secrets = [
         { name = "DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["property-runtime-db"].arn}:password::" },
-        { name = "COORDINATE_SOURCE_DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["coordinate-reader-db"].arn}:password::" },
       ]
     }
     property-event-relay = {

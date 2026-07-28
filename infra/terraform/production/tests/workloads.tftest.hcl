@@ -116,6 +116,20 @@ run "private_digest_pinned_production_workloads" {
   }
 
   assert {
+    condition = alltrue([
+      var.enable_coordinate_source_runtime == false,
+      !contains(local.workload_secret_names["property-api"], "coordinate-reader-db"),
+      !contains(local.workload_secret_names["property-batch"], "coordinate-reader-db"),
+      local.coordinate_database_clients == toset(["ops"]),
+      alltrue([for item in local.service_specs["property-api"].environment : !startswith(item.name, "COORDINATE_SOURCE_DB_")]),
+      alltrue([for item in local.service_specs["property-api"].secrets : !startswith(item.name, "COORDINATE_SOURCE_DB_")]),
+      alltrue([for item in local.one_shot_specs["property-batch"].environment : !startswith(item.name, "COORDINATE_SOURCE_DB_")]),
+      alltrue([for item in local.one_shot_specs["property-batch"].secrets : !startswith(item.name, "COORDINATE_SOURCE_DB_")]),
+    ])
+    error_message = "Initial Production deployment must deny coordinate source credentials and network access to Property workloads."
+  }
+
+  assert {
     condition = (
       contains(local.secret_containers, "property-ai-reader-db")
       && contains(local.secret_containers, "ai-migrator-db")

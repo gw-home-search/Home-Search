@@ -26,6 +26,9 @@ locals {
     ai         = "home_search_ai"
     coordinate = "home_search_coordinate_source"
   }
+  database_security_group_keys = {
+    for name in keys(local.database_names) : name => name == "coordinate" ? "coordinate" : "primary"
+  }
   data_kms_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [

@@ -136,6 +136,12 @@ variable "enable_backup_schedules" {
   default     = false
 }
 
+variable "enable_coordinate_source_runtime" {
+  description = "Operator-only activation after the deferred nationwide coordinate import and reconciliation are approved."
+  type        = bool
+  default     = false
+}
+
 variable "enable_property_event_relay_schedule" {
   description = "Enables the five-minute property outbox relay only after MSK topics and the property database are ready."
   type        = bool

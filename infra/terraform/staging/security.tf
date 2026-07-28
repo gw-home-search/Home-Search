@@ -118,7 +118,11 @@ resource "aws_vpc_security_group_egress_rule" "external_https" {
 }
 
 locals {
-  task_internal_egress = {
+  coordinate_source_ingress_sources = concat(
+    ["ops"],
+    var.enable_coordinate_source_runtime ? ["property", "property-batch"] : [],
+  )
+  task_internal_egress = merge({
     public-gateway-property       = { source = "public-gateway", destination = "property", port = 8080 }
     public-gateway-user           = { source = "public-gateway", destination = "user", port = 8082 }
     public-gateway-chat-bff       = { source = "public-gateway", destination = "chat-bff", port = 8083 }
@@ -128,7 +132,6 @@ locals {
     admin-gateway-admin           = { source = "admin-gateway", destination = "admin", port = 8081 }
     admin-property                = { source = "admin", destination = "property", port = 8080 }
     property-db                   = { source = "property", destination = "database-primary", port = 5432 }
-    property-coordinate           = { source = "property", destination = "database-coordinate", port = 5432 }
     property-redis                = { source = "property", destination = "redis", port = 6379 }
     property-ml                   = { source = "property", destination = "ml", port = 8001 }
     admin-db                      = { source = "admin", destination = "database-primary", port = 5432 }
@@ -142,10 +145,12 @@ locals {
     property-event-relay-msk      = { source = "property-event-relay", destination = "streaming", port = 9098 }
     property-event-maintenance-db = { source = "property-event-maintenance", destination = "database-primary", port = 5432 }
     property-batch-db             = { source = "property-batch", destination = "database-primary", port = 5432 }
-    property-batch-coordinate     = { source = "property-batch", destination = "database-coordinate", port = 5432 }
     property-batch-redis          = { source = "property-batch", destination = "redis", port = 6379 }
     ml-efs                        = { source = "ml", destination = "efs", port = 2049 }
-  }
+    }, var.enable_coordinate_source_runtime ? {
+    property-coordinate       = { source = "property", destination = "database-coordinate", port = 5432 }
+    property-batch-coordinate = { source = "property-batch", destination = "database-coordinate", port = 5432 }
+  } : {})
   internal_destination_security_groups = {
     property            = aws_security_group.task["property"].id
     admin               = aws_security_group.task["admin"].id
@@ -267,18 +272,13 @@ resource "aws_security_group" "database_primary" {
 
 resource "aws_security_group" "database_coordinate" {
   name        = "${local.name}-database-coordinate"
-  description = "Coordinate source PostgreSQL from property and ops tasks"
+  description = "Coordinate source PostgreSQL from operator tasks and explicitly activated readers"
   vpc_id      = aws_vpc.this.id
   ingress {
-    from_port = 5432
-    to_port   = 5432
-    protocol  = "tcp"
-    security_groups = [
-      aws_security_group.task["property"].id,
-      aws_security_group.task["property-batch"].id,
-      aws_security_group.task["ops"].id,
-      aws_security_group.task["chat-bff"].id,
-    ]
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [for name in local.coordinate_source_ingress_sources : aws_security_group.task[name].id]
   }
 }
 

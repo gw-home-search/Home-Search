@@ -71,6 +71,7 @@ home:
 server:
   port: 8082
   shutdown: graceful
+  forward-headers-strategy: framework
   servlet:
     session:
       cookie:

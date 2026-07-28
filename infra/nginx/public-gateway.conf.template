@@ -3,6 +3,12 @@ map $request_method $public_rate_limit_key {
     OPTIONS "";
 }
 
+map $http_x_forwarded_proto $external_forwarded_proto {
+    default $scheme;
+    https https;
+    http http;
+}
+
 limit_req_zone $public_rate_limit_key zone=nearby_place_per_ip:10m rate=5r/s;
 limit_req_zone $public_rate_limit_key zone=map_bbox_per_ip:10m rate=10r/s;
 
@@ -40,7 +46,7 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Request-Id $http_x_request_id;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto $external_forwarded_proto;
     }
 
     location ~ ^/api/v1/(?:users(?:/|$)|favorites(?:/|$)) {
@@ -48,7 +54,7 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Request-Id $http_x_request_id;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto $external_forwarded_proto;
     }
 
     location = /api/v1/insights/subscription {
@@ -56,7 +62,7 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Request-Id $http_x_request_id;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto $external_forwarded_proto;
     }
 
     location = /api/v1/insights/inbox {
@@ -64,7 +70,7 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Request-Id $http_x_request_id;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto $external_forwarded_proto;
     }
 
     location = /api/v1/insights/trades/latest {
@@ -72,7 +78,7 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Request-Id $http_x_request_id;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto $external_forwarded_proto;
     }
 
     location = /api/v1/insights/trades/weekly {
@@ -80,7 +86,7 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Request-Id $http_x_request_id;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto $external_forwarded_proto;
     }
 
     location = /api/v1/insights/trends {
@@ -88,7 +94,7 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Request-Id $http_x_request_id;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto $external_forwarded_proto;
     }
 
     location = /api/v1/insights/news {
@@ -96,7 +102,7 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Request-Id $http_x_request_id;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto $external_forwarded_proto;
     }
 
     location = /api/v1/insights { return 404; }
@@ -114,7 +120,7 @@ server {
         proxy_set_header Authorization $http_authorization;
         proxy_set_header X-Request-Id $http_x_request_id;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto $external_forwarded_proto;
     }
 
     location = /api/v1/chatbot/query/stream {
@@ -131,7 +137,7 @@ server {
         proxy_set_header Authorization $http_authorization;
         proxy_set_header X-Request-Id $http_x_request_id;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto $external_forwarded_proto;
     }
 
     location ^~ /api/v1/chatbot/ { return 404; }
@@ -142,7 +148,7 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Request-Id $http_x_request_id;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto $external_forwarded_proto;
     }
 
     location ~ ^/api/v1/map/(?:regions|complexes)$ {
@@ -151,7 +157,7 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Request-Id $http_x_request_id;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto $external_forwarded_proto;
     }
 
     location ~ "^/api/v1/map/nearby-places(?:$|[;/])" {
@@ -160,7 +166,7 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Request-Id $http_x_request_id;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto $external_forwarded_proto;
     }
 
     location /api/ {
@@ -168,7 +174,7 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Request-Id $http_x_request_id;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto $external_forwarded_proto;
     }
 
     location ^~ /assets/ {

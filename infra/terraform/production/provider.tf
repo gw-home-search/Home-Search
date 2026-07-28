@@ -64,7 +64,7 @@ locals {
     "ml", "ai", "chat-bff", "user-insight-worker",
   ])
   one_shot_names = toset([
-    "database-bootstrap", "property-flyway", "admin-migration", "user-flyway", "ai-migration", "source-data-migration",
+    "secret-bootstrap", "secret-readiness", "database-bootstrap", "property-flyway", "admin-migration", "user-flyway", "ai-migration", "source-data-migration",
     "runtime-grants", "property-batch", "map-marker-projection", "admin-ops", "backup",
   ])
   workload_names = setunion(local.service_names, local.one_shot_names)

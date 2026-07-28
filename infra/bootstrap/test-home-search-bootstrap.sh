@@ -236,6 +236,73 @@ grep -Fq 'admin JWT public secret만 존재하여 안전하게 private key를 �
   "${tmp_dir}/public-only.err"
 cp "${tmp_dir}/saved-admin-private.json" "${admin_private_state}"
 
+production_secret_env=(
+  PROPERTY_RUNTIME_DB_SECRET_ARN=arn:prod-property-runtime
+  PROPERTY_AI_READER_DB_SECRET_ARN=arn:prod-property-ai-reader
+  ADMIN_RUNTIME_DB_SECRET_ARN=arn:prod-admin-runtime
+  USER_RUNTIME_DB_SECRET_ARN=arn:prod-user-runtime
+  COORDINATE_READER_DB_SECRET_ARN=arn:prod-coordinate-reader
+  PROPERTY_MIGRATOR_DB_SECRET_ARN=arn:prod-property-migrator
+  ADMIN_MIGRATOR_DB_SECRET_ARN=arn:prod-admin-migrator
+  USER_MIGRATOR_DB_SECRET_ARN=arn:prod-user-migrator
+  COORDINATE_MIGRATOR_DB_SECRET_ARN=arn:prod-coordinate-migrator
+  COORDINATE_IMPORTER_DB_SECRET_ARN=arn:prod-coordinate-importer
+  AI_MIGRATOR_DB_SECRET_ARN=arn:prod-ai-migrator
+  AI_IMPORTER_DB_SECRET_ARN=arn:prod-ai-importer
+  AI_RUNTIME_DB_SECRET_ARN=arn:prod-ai-runtime-db
+  AI_RUNTIME_SECRET_ARN=arn:prod-ai-runtime
+  BACKUP_DB_SECRET_ARN=arn:prod-backup
+  USER_JWT_SECRET_ARN=arn:prod-user-jwt
+  ADMIN_JWT_SECRET_ARN=arn:prod-admin-jwt
+  ADMIN_JWT_PUBLIC_SECRET_ARN=arn:prod-admin-jwt-public
+  PROPERTY_DB_HOST=property.production.internal
+  AI_DB_HOST=ai.production.internal
+)
+production_put_before="$(grep -c 'put-secret-value' "${FAKE_AWS_ARGV_LOG}")"
+env "${production_secret_env[@]}" \
+  "${script}" production-secret-bootstrap >"${tmp_dir}/production-secret.out" 2>"${tmp_dir}/production-secret.err"
+production_put_after="$(grep -c 'put-secret-value' "${FAKE_AWS_ARGV_LOG}")"
+[[ "$((production_put_after - production_put_before))" == '18' ]]
+jq -e '.active_kid == "production-1"' "${FAKE_AWS_STATE}/arn:prod-user-jwt" >/dev/null
+jq -e '.active_kid == "production-1"' "${FAKE_AWS_STATE}/arn:prod-admin-jwt" >/dev/null
+jq -e '.dsn | contains("host=ai.production.internal") and contains("user=home_search_ai_migrator")' \
+  "${FAKE_AWS_STATE}/arn:prod-ai-migrator" >/dev/null
+jq -e '.property_dsn | contains("host=property.production.internal") and contains("user=home_search_ai_reader")' \
+  "${FAKE_AWS_STATE}/arn:prod-ai-runtime" >/dev/null
+jq -e '.reference_dsn | contains("host=ai.production.internal") and contains("user=home_search_ai_runtime")' \
+  "${FAKE_AWS_STATE}/arn:prod-ai-runtime" >/dev/null
+env "${production_secret_env[@]}" \
+  "${script}" production-secret-bootstrap >>"${tmp_dir}/production-secret.out" 2>>"${tmp_dir}/production-secret.err"
+[[ "$(grep -c 'put-secret-value' "${FAKE_AWS_ARGV_LOG}")" == "${production_put_after}" ]]
+! grep -Eq 'PRIVATE KEY|private_key_pem|[[:xdigit:]]{64}|password=' \
+  "${FAKE_AWS_ARGV_LOG}" "${tmp_dir}/production-secret.out" "${tmp_dir}/production-secret.err"
+
+printf '%s\n' '{"api_key":"provider-key","primary_model":"approved-primary","secondary_model":"approved-secondary"}' \
+  >"${FAKE_AWS_STATE}/arn:prod-openai"
+printf '%s\n' '{"google_client_id":"id","google_client_secret":"secret","kakao_client_id":"id","kakao_client_secret":"secret","naver_client_id":"id","naver_client_secret":"secret"}' \
+  >"${FAKE_AWS_STATE}/arn:prod-oauth"
+printf '%s\n' '{"rest_api_key":"key"}' >"${FAKE_AWS_STATE}/arn:prod-kakao"
+printf '%s\n' '{"apt_service_key":"key"}' >"${FAKE_AWS_STATE}/arn:prod-public-data"
+readiness_env=(
+  "${production_secret_env[@]}"
+  OPENAI_PROVIDER_SECRET_ARN=arn:prod-openai
+  OAUTH_PROVIDERS_SECRET_ARN=arn:prod-oauth
+  KAKAO_LOCAL_PROVIDER_SECRET_ARN=arn:prod-kakao
+  PUBLIC_DATA_PROVIDERS_SECRET_ARN=arn:prod-public-data
+)
+env "${readiness_env[@]}" \
+  "${script}" production-secret-readiness >"${tmp_dir}/readiness.out" 2>"${tmp_dir}/readiness.err"
+grep -Fq '상태: Pass' "${tmp_dir}/readiness.out"
+rm "${FAKE_AWS_STATE}/arn:prod-openai"
+set +e
+env "${readiness_env[@]}" \
+  "${script}" production-secret-readiness >"${tmp_dir}/readiness-missing.out" 2>"${tmp_dir}/readiness-missing.err"
+readiness_missing_code=$?
+set -e
+[[ "${readiness_missing_code}" == '1' ]]
+grep -Fq 'OPENAI_PROVIDER_SECRET_ARN' "${tmp_dir}/readiness-missing.err"
+! grep -Fq 'provider-key' "${tmp_dir}/readiness-missing.out" "${tmp_dir}/readiness-missing.err"
+
 set +e
 FAKE_RUNTIME_WITHOUT_AI_READER=true \
 PRIMARY_RDS_SECRET_ARN=arn:primary \

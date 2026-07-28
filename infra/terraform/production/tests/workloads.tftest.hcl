@@ -96,6 +96,8 @@ run "private_digest_pinned_production_workloads" {
   assert {
     condition = (
       length(aws_ecs_task_definition.one_shot) >= 9
+      && contains(keys(aws_ecs_task_definition.one_shot), "secret-bootstrap")
+      && contains(keys(aws_ecs_task_definition.one_shot), "secret-readiness")
       && contains(keys(aws_ecs_task_definition.one_shot), "property-flyway")
       && contains(keys(aws_ecs_task_definition.one_shot), "database-bootstrap")
       && contains(keys(aws_ecs_task_definition.one_shot), "admin-migration")
@@ -116,8 +118,12 @@ run "private_digest_pinned_production_workloads" {
       && contains(local.secret_containers, "coordinate-reader-db")
       && contains(local.secret_containers, "coordinate-importer-db")
       && local.one_shot_specs["database-bootstrap"].command == ["production-db-bootstrap"]
+      && local.one_shot_specs["secret-bootstrap"].command == ["production-secret-bootstrap"]
+      && local.one_shot_specs["secret-readiness"].command == ["production-secret-readiness"]
       && one(local.one_shot_specs["ai-migration"].secrets).name == "HOME_AI_MIGRATOR_DSN"
       && local.workload_secret_names["ai-migration"] == ["ai-migrator-db"]
+      && contains(local.secret_bootstrap_actions, "secretsmanager:PutSecretValue")
+      && !contains(local.secret_readiness_actions, "secretsmanager:PutSecretValue")
     )
     error_message = "Production must bootstrap split-RDS roles and run the AI schema migration with a dedicated migrator secret."
   }

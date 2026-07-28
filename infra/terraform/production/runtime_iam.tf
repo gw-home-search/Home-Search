@@ -17,6 +17,8 @@ locals {
     ai                    = ["ai-runtime", "openai-provider", "user-jwt"]
     chat-bff              = ["user-jwt"]
     user-insight-worker   = ["user-runtime-db"]
+    secret-bootstrap      = []
+    secret-readiness      = []
     database-bootstrap    = []
     property-flyway       = ["property-migrator-db"]
     admin-migration       = ["admin-migrator-db"]
@@ -30,6 +32,8 @@ locals {
     backup                = ["backup-db"]
   }
   amp_remote_write_actions = ["aps:RemoteWrite"]
+  secret_bootstrap_actions = ["secretsmanager:GetSecretValue", "secretsmanager:PutSecretValue"]
+  secret_readiness_actions = ["secretsmanager:GetSecretValue"]
 }
 
 resource "aws_iam_role" "workload_execution" {
@@ -127,6 +131,48 @@ resource "aws_iam_role_policy" "database_bootstrap" {
             "coordinate-importer-db", "backup-db",
           ] : aws_secretsmanager_secret.container[name].arn],
         )
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt"]
+        Resource = [aws_kms_key.data.arn]
+      },
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "secret_bootstrap" {
+  name = "initialize-production-generated-secrets"
+  role = aws_iam_role.workload_task["secret-bootstrap"].id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = local.secret_bootstrap_actions
+        Resource = [for name in local.generated_secret_names : aws_secretsmanager_secret.container[name].arn]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt", "kms:GenerateDataKey"]
+        Resource = [aws_kms_key.data.arn]
+      },
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "secret_readiness" {
+  name = "verify-production-secret-readiness"
+  role = aws_iam_role.workload_task["secret-readiness"].id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = local.secret_readiness_actions
+        Resource = [
+          for item in local.readiness_secret_environment : item.value
+        ]
       },
       {
         Effect   = "Allow"

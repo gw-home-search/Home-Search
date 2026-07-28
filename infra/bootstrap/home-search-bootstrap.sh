@@ -65,8 +65,9 @@ reconcile_admin_jwt_secrets() {
   if [[ "${private_present}" == 'false' ]]; then
     openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 \
       -out "${tmp_dir}/admin-private-candidate.pem" 2>/dev/null
-    jq -n --rawfile private "${tmp_dir}/admin-private-candidate.pem" \
-      '{active_kid:"staging-1",private_key_pem:$private}' >"${tmp_dir}/admin-jwt-candidate.json"
+    jq -n --arg active_kid "${HOME_BOOTSTRAP_KEY_ID:-staging-1}" \
+      --rawfile private "${tmp_dir}/admin-private-candidate.pem" \
+      '{active_kid:$active_kid,private_key_pem:$private}' >"${tmp_dir}/admin-jwt-candidate.json"
     put_if_empty "${ADMIN_JWT_SECRET_ARN}" "${tmp_dir}/admin-jwt-candidate.json"
   fi
 
@@ -132,12 +133,118 @@ secret_bootstrap() {
 
   openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out "${tmp_dir}/user-private.pem" 2>/dev/null
   openssl pkey -in "${tmp_dir}/user-private.pem" -pubout -out "${tmp_dir}/user-public.pem" 2>/dev/null
-  jq -n --rawfile private "${tmp_dir}/user-private.pem" --rawfile public "${tmp_dir}/user-public.pem" \
-    '{active_kid:"staging-1",private_key_pem:$private,public_key_pem:$public}' >"${tmp_dir}/user-jwt.json"
+  jq -n --arg active_kid "${HOME_BOOTSTRAP_KEY_ID:-staging-1}" \
+    --rawfile private "${tmp_dir}/user-private.pem" --rawfile public "${tmp_dir}/user-public.pem" \
+    '{active_kid:$active_kid,private_key_pem:$private,public_key_pem:$public}' >"${tmp_dir}/user-jwt.json"
 
   put_if_empty "${USER_JWT_SECRET_ARN}" "${tmp_dir}/user-jwt.json"
   reconcile_admin_jwt_secrets
-  echo '상태: Pass - staging secret bootstrap을 idempotent하게 확인했습니다.'
+  echo "상태: Pass - ${HOME_BOOTSTRAP_ENVIRONMENT:-staging} secret bootstrap을 idempotent하게 확인했습니다."
+}
+
+write_ai_database_candidate() {
+  local output="$1" host="$2" username="$3" password
+  password="$(random_hex)"
+  jq -n --arg password "${password}" \
+    --arg dsn "host=${host} port=5432 dbname=home_search_ai user=${username} password=${password} sslmode=require" \
+    '{password:$password,dsn:$dsn}' >"${output}"
+}
+
+production_secret_bootstrap() {
+  local name spec environment_name file_stem username
+  local property_reader_password ai_runtime_password
+  for name in \
+    AI_MIGRATOR_DB_SECRET_ARN AI_IMPORTER_DB_SECRET_ARN AI_RUNTIME_DB_SECRET_ARN \
+    AI_RUNTIME_SECRET_ARN PROPERTY_DB_HOST AI_DB_HOST; do
+    required "${name}"
+  done
+
+  HOME_BOOTSTRAP_KEY_ID=production-1 HOME_BOOTSTRAP_ENVIRONMENT=production secret_bootstrap
+
+  for spec in \
+    AI_MIGRATOR_DB_SECRET_ARN:ai-migrator:home_search_ai_migrator \
+    AI_IMPORTER_DB_SECRET_ARN:ai-importer:home_search_ai_importer \
+    AI_RUNTIME_DB_SECRET_ARN:ai-runtime-db:home_search_ai_runtime; do
+    environment_name="${spec%%:*}"
+    spec="${spec#*:}"
+    file_stem="${spec%%:*}"
+    username="${spec#*:}"
+    write_ai_database_candidate "${tmp_dir}/${file_stem}-candidate.json" "${AI_DB_HOST}" "${username}"
+    put_if_empty "${!environment_name}" "${tmp_dir}/${file_stem}-candidate.json"
+  done
+
+  read_secret "${PROPERTY_AI_READER_DB_SECRET_ARN}" "${tmp_dir}/production-property-ai-reader.json"
+  read_secret "${AI_RUNTIME_DB_SECRET_ARN}" "${tmp_dir}/production-ai-runtime-db.json"
+  property_reader_password="$(jq -er '.password | select(type == "string" and length > 0)' \
+    "${tmp_dir}/production-property-ai-reader.json")"
+  ai_runtime_password="$(jq -er '.password | select(type == "string" and length > 0)' \
+    "${tmp_dir}/production-ai-runtime-db.json")"
+  jq -n \
+    --arg property_dsn "host=${PROPERTY_DB_HOST} port=5432 dbname=home_search user=home_search_ai_reader password=${property_reader_password} sslmode=require" \
+    --arg reference_dsn "host=${AI_DB_HOST} port=5432 dbname=home_search_ai user=home_search_ai_runtime password=${ai_runtime_password} sslmode=require" \
+    '{property_dsn:$property_dsn,reference_dsn:$reference_dsn}' >"${tmp_dir}/ai-runtime-candidate.json"
+  put_if_empty "${AI_RUNTIME_SECRET_ARN}" "${tmp_dir}/ai-runtime-candidate.json"
+
+  for spec in \
+    AI_MIGRATOR_DB_SECRET_ARN:password:dsn \
+    AI_IMPORTER_DB_SECRET_ARN:password:dsn \
+    AI_RUNTIME_DB_SECRET_ARN:password:dsn \
+    AI_RUNTIME_SECRET_ARN:property_dsn:reference_dsn; do
+    environment_name="${spec%%:*}"
+    spec="${spec#*:}"
+    read_secret "${!environment_name}" "${tmp_dir}/production-secret-validation.json"
+    while [[ -n "${spec}" ]]; do
+      name="${spec%%:*}"
+      jq -e --arg key "${name}" '.[$key] | type == "string" and length > 0' \
+        "${tmp_dir}/production-secret-validation.json" >/dev/null || {
+        echo "상태: Fail - ${environment_name}에 ${name} 설정이 필요합니다." >&2
+        exit 1
+      }
+      [[ "${spec}" == *:* ]] || break
+      spec="${spec#*:}"
+    done
+  done
+  echo '상태: Pass - production DB/JWT secret과 AI DSN을 idempotent하게 확인했습니다.'
+}
+
+validate_secret_keys() {
+  local environment_name="$1" keys="$2" key
+  required "${environment_name}"
+  if ! read_secret_if_present "${!environment_name}" "${tmp_dir}/readiness-secret.json"; then
+    echo "상태: Fail - ${environment_name} 값이 아직 주입되지 않았습니다." >&2
+    exit 1
+  fi
+  for key in ${keys}; do
+    jq -e --arg key "${key}" '.[$key] | type == "string" and length > 0' \
+      "${tmp_dir}/readiness-secret.json" >/dev/null || {
+      echo "상태: Fail - ${environment_name}에 필수 key가 없습니다: ${key}" >&2
+      exit 1
+    }
+  done
+}
+
+production_secret_readiness() {
+  local spec environment_name keys
+  for spec in \
+    PROPERTY_RUNTIME_DB_SECRET_ARN:password PROPERTY_AI_READER_DB_SECRET_ARN:password \
+    ADMIN_RUNTIME_DB_SECRET_ARN:password USER_RUNTIME_DB_SECRET_ARN:password \
+    COORDINATE_READER_DB_SECRET_ARN:password PROPERTY_MIGRATOR_DB_SECRET_ARN:password \
+    ADMIN_MIGRATOR_DB_SECRET_ARN:password USER_MIGRATOR_DB_SECRET_ARN:password \
+    COORDINATE_MIGRATOR_DB_SECRET_ARN:password COORDINATE_IMPORTER_DB_SECRET_ARN:password \
+    AI_MIGRATOR_DB_SECRET_ARN:'password dsn' AI_IMPORTER_DB_SECRET_ARN:'password dsn' \
+    AI_RUNTIME_DB_SECRET_ARN:'password dsn' AI_RUNTIME_SECRET_ARN:'property_dsn reference_dsn' \
+    BACKUP_DB_SECRET_ARN:password USER_JWT_SECRET_ARN:'active_kid private_key_pem public_key_pem' \
+    ADMIN_JWT_SECRET_ARN:'active_kid private_key_pem' \
+    ADMIN_JWT_PUBLIC_SECRET_ARN:'active_kid public_key_pem' \
+    OPENAI_PROVIDER_SECRET_ARN:'api_key primary_model secondary_model' \
+    OAUTH_PROVIDERS_SECRET_ARN:'google_client_id google_client_secret kakao_client_id kakao_client_secret naver_client_id naver_client_secret' \
+    KAKAO_LOCAL_PROVIDER_SECRET_ARN:rest_api_key \
+    PUBLIC_DATA_PROVIDERS_SECRET_ARN:apt_service_key; do
+    environment_name="${spec%%:*}"
+    keys="${spec#*:}"
+    validate_secret_keys "${environment_name}" "${keys}"
+  done
+  echo '상태: Pass - production runtime/provider secret readiness를 확인했습니다.'
 }
 
 read_secret() {
@@ -510,9 +617,11 @@ materialize_keys() {
 
 case "${1:-}" in
   secret-bootstrap) secret_bootstrap ;;
+  production-secret-bootstrap) production_secret_bootstrap ;;
+  production-secret-readiness) production_secret_readiness ;;
   db-bootstrap) db_bootstrap ;;
   production-db-bootstrap) production_db_bootstrap ;;
   runtime-grants) runtime_grants ;;
   materialize-keys) materialize_keys ;;
-  *) echo '사용법: home-search-bootstrap secret-bootstrap|db-bootstrap|production-db-bootstrap|runtime-grants|materialize-keys' >&2; exit 64 ;;
+  *) echo '사용법: home-search-bootstrap secret-bootstrap|production-secret-bootstrap|production-secret-readiness|db-bootstrap|production-db-bootstrap|runtime-grants|materialize-keys' >&2; exit 64 ;;
 esac

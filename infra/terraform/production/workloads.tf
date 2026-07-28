@@ -403,7 +403,39 @@ resource "aws_ecs_service" "service" {
 }
 
 locals {
+  generated_secret_names = toset([
+    "property-runtime-db", "property-ai-reader-db", "admin-runtime-db", "user-runtime-db",
+    "coordinate-reader-db", "property-migrator-db", "admin-migrator-db", "user-migrator-db",
+    "coordinate-migrator-db", "coordinate-importer-db", "ai-migrator-db", "ai-importer-db",
+    "ai-runtime-db", "ai-runtime", "backup-db", "user-jwt", "admin-internal-jwt",
+    "admin-internal-jwt-public",
+  ])
+  generated_secret_environment = [
+    for name in sort(tolist(local.generated_secret_names)) : {
+      name  = upper(replace(name, "-", "_")) == "ADMIN_INTERNAL_JWT" ? "ADMIN_JWT_SECRET_ARN" : upper(replace(name, "-", "_")) == "ADMIN_INTERNAL_JWT_PUBLIC" ? "ADMIN_JWT_PUBLIC_SECRET_ARN" : upper(replace(name, "-", "_")) == "AI_RUNTIME" ? "AI_RUNTIME_SECRET_ARN" : "${upper(replace(name, "-", "_"))}_SECRET_ARN"
+      value = aws_secretsmanager_secret.container[name].arn
+    }
+  ]
+  readiness_secret_environment = concat(local.generated_secret_environment, [
+    { name = "OPENAI_PROVIDER_SECRET_ARN", value = aws_secretsmanager_secret.container["openai-provider"].arn },
+    { name = "OAUTH_PROVIDERS_SECRET_ARN", value = aws_secretsmanager_secret.container["oauth-providers"].arn },
+    { name = "KAKAO_LOCAL_PROVIDER_SECRET_ARN", value = aws_secretsmanager_secret.container["kakao-local-provider"].arn },
+    { name = "PUBLIC_DATA_PROVIDERS_SECRET_ARN", value = aws_secretsmanager_secret.container["public-data-providers"].arn },
+  ])
   one_shot_specs = {
+    secret-bootstrap = {
+      image = "ops-bootstrap", command = ["production-secret-bootstrap"]
+      environment = concat(local.generated_secret_environment, [
+        { name = "PROPERTY_DB_HOST", value = aws_db_instance.service["property"].address },
+        { name = "AI_DB_HOST", value = aws_db_instance.service["ai"].address },
+      ])
+      secrets = []
+    }
+    secret-readiness = {
+      image       = "ops-bootstrap", command = ["production-secret-readiness"]
+      environment = local.readiness_secret_environment
+      secrets     = []
+    }
     database-bootstrap = {
       image = "ops-bootstrap", command = ["production-db-bootstrap"]
       environment = [

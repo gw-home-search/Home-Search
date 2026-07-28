@@ -206,8 +206,8 @@ jq -n '{format_version:1,cluster:"arn:cluster",cluster_exists:true,services:{
 : >"${tmp_dir}/ordered-rollback.log"
 PATH="${tmp_dir}/bin:${PATH}" FAKE_AWS_LOG="${tmp_dir}/ordered-rollback.log" \
   "${root}/infra/deploy/rollback-services.sh" "${tmp_dir}/ordered-rollback.json" >/dev/null
-[[ "$(grep -n 'ecs update-service' "${tmp_dir}/ordered-rollback.log" | sed -n '1p')" == *'public-gateway'* ]]
-[[ "$(grep -n 'ecs update-service' "${tmp_dir}/ordered-rollback.log" | sed -n '2p')" == *'property-api'* ]]
+[[ "$(grep -n 'ecs update-service' "${tmp_dir}/ordered-rollback.log" | sed -n '1p')" == *'property-api'* ]]
+[[ "$(grep -n 'ecs update-service' "${tmp_dir}/ordered-rollback.log" | sed -n '2p')" == *'public-gateway'* ]]
 [[ "$(grep -n 'ecs update-service' "${tmp_dir}/ordered-rollback.log" | sed -n '3p')" == *'user-insight-worker'* ]]
 
 PATH="${tmp_dir}/bin:${PATH}" FAKE_AWS_LOG="${tmp_dir}/aws.log" FAKE_CLUSTER_FAILURE=missing \

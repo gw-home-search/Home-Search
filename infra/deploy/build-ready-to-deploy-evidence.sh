@@ -132,7 +132,7 @@ cleanup() { unlink "${temporary}" 2>/dev/null || true; }
 trap cleanup EXIT
 jq -n --arg release_tag "${release_tag}" --arg commit_sha "$(jq -r '.commit_sha' "${release}")" \
   --arg created_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson artifacts "${artifact_hashes}" \
-  '{status:"READY_TO_DEPLOY",release_tag:$release_tag,commit_sha:$commit_sha,created_at:$created_at,artifacts:$artifacts,security_impact:"Production orchestration·network·observability·migration boundary added; public property API and stored identifier semantics unchanged",security_audit:"지적사항 = none"}' \
+  '{status:"READY_TO_DEPLOY",release_tag:$release_tag,commit_sha:$commit_sha,created_at:$created_at,artifacts:$artifacts,security_impact:"보안 영향: Production orchestration·network·관측·migration 경계 추가, 공개 property API와 저장 식별자 의미 변경 없음",security_audit:"security-audit: 지적사항 = none"}' \
   >"${temporary}"
 chmod 0600 "${temporary}"
 mv "${temporary}" "${output}"

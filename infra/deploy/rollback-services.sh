@@ -22,7 +22,7 @@ jq -e '
 }
 
 services=()
-rollback_order=(public-gateway admin-gateway chat-bff ai ml property-api admin-api user-api user-insight-worker)
+rollback_order=(property-api user-api admin-api ai ml chat-bff admin-gateway public-gateway user-insight-worker)
 for service in "${rollback_order[@]}"; do
   jq -e --arg service "${service}" '.services | has($service)' "${state_file}" >/dev/null || continue
   task_definition="$(jq -er --arg service "${service}" '.services[$service].task_definition' "${state_file}")"

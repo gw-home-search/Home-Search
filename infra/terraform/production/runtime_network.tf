@@ -70,7 +70,11 @@ locals {
     worker-msk      = { source = "user-insight-worker", destination_sg = aws_security_group.streaming.id, port = 9098 }
     ml-efs          = { source = "ml", destination_sg = aws_security_group.efs.id, port = 2049 }
   }
-  database_clients       = toset(["property", "admin", "user", "ai", "user-insight-worker", "ops"])
+  database_clients = toset(["property", "admin", "user", "ai", "user-insight-worker", "ops"])
+  coordinate_database_clients = toset(concat(
+    ["ops"],
+    var.enable_coordinate_source_runtime ? ["property"] : [],
+  ))
   valkey_clients         = toset(["property", "chat-bff", "ops"])
   external_https_clients = toset(["property", "user", "ai", "ops"])
 }
@@ -106,6 +110,24 @@ resource "aws_vpc_security_group_egress_rule" "database" {
   for_each                     = local.database_clients
   security_group_id            = aws_security_group.task[each.key].id
   referenced_security_group_id = aws_security_group.database.id
+  from_port                    = 5432
+  to_port                      = 5432
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "coordinate_database" {
+  for_each                     = local.coordinate_database_clients
+  security_group_id            = aws_security_group.database_coordinate.id
+  referenced_security_group_id = aws_security_group.task[each.key].id
+  from_port                    = 5432
+  to_port                      = 5432
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_egress_rule" "coordinate_database" {
+  for_each                     = local.coordinate_database_clients
+  security_group_id            = aws_security_group.task[each.key].id
+  referenced_security_group_id = aws_security_group.database_coordinate.id
   from_port                    = 5432
   to_port                      = 5432
   ip_protocol                  = "tcp"

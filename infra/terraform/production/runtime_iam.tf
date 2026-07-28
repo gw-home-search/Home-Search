@@ -8,7 +8,7 @@ locals {
     }]
   })
   workload_secret_names = {
-    property-api          = ["property-runtime-db", "admin-internal-jwt-public", "kakao-local-provider"]
+    property-api          = concat(["property-runtime-db"], var.enable_coordinate_source_runtime ? ["coordinate-reader-db"] : [], ["admin-internal-jwt-public", "kakao-local-provider"])
     admin-api             = ["admin-runtime-db", "admin-internal-jwt"]
     user-api              = ["user-runtime-db", "oauth-providers", "user-jwt"]
     public-gateway        = []
@@ -27,7 +27,7 @@ locals {
     data-import-reconcile = ["property-migrator-db", "ai-importer-db"]
     source-data-migration = ["coordinate-migrator-db"]
     runtime-grants        = ["property-migrator-db", "admin-migrator-db", "user-migrator-db"]
-    property-batch        = ["property-runtime-db", "public-data-providers"]
+    property-batch        = concat(["property-runtime-db"], var.enable_coordinate_source_runtime ? ["coordinate-reader-db"] : [], ["public-data-providers"])
     map-marker-projection = ["property-runtime-db"]
     admin-ops             = ["admin-runtime-db"]
     backup                = ["backup-db"]

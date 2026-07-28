@@ -782,10 +782,22 @@ the current published snapshot.
 
 Production transfer uses `infra/migration/data-only-allowlist.json` as the
 reviewed table, column, key, dependency-order, chunk, and conflict-policy
-boundary. The current catalog covers 79 Property datasets and 21 AI Reference
-datasets. It structurally excludes User/Admin databases, session/token state,
+boundary. The initial-deployment catalog covers 46 Property datasets and 21 AI
+Reference datasets. It structurally excludes User/Admin databases, session/token state,
 Flyway/AI schema history, Spring Batch metadata, roles, secrets, PostGIS system
 rows, and map marker generations. Marker projections are rebuilt after import.
+The previously collected nationwide building-register recap-title/title-line
+corpus is also excluded: every `building_register*` and
+`complex_building_register*` table starts empty after fresh Flyway. The nullable
+public `buildingProfile` therefore remains contract-compatible, while compact
+fields already stored on `complex` and separate `building_ratio_*` evidence stay
+in the transfer. A later recollection/publication requires explicit operator
+approval and its own quality evidence.
+The nationwide coordinate source snapshot (approximately forty million rows)
+is not part of this transfer. Its dedicated RDS may exist empty, but only the
+operator migration task retains a network path; Property API/Batch/projection
+receive no coordinate DSN, reader secret, or security-group route while
+`enable_coordinate_source_runtime=false`.
 
 `data_only_migration.py` exports each logical database under one PostgreSQL
 `REPEATABLE READ READ ONLY` snapshot. Every zstd chunk has compressed/canonical
@@ -801,3 +813,10 @@ without raw evidence, no invalid coordinate/SRID, no unqueryable
 `MATCH_FAILED`, and no active AI snapshot without rows. A final reconciliation
 snapshot is imported only after source schedulers pause. Source databases and
 Docker volumes remain untouched and recoverable throughout this process.
+
+S3-backed AI Reference raw objects are part of the same manifest. Export reads
+the exact recorded source version and verifies content SHA-256/length. Import
+uses the content-addressed key in the target versioned bucket, requires SSE-KMS
+on AWS, records the new target version in the staged database row, and verifies
+the DB/version/checksum relationship again during reconciliation. It never
+overwrites a mismatched object at an existing content-addressed key.

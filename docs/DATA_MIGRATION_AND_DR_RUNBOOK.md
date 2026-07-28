@@ -22,7 +22,23 @@
 6. published insight/news snapshot과 lineage
 7. user-owned identity/subscription/inbox 데이터
 8. AI filtered bootstrap artifact
-9. coordinate source snapshot은 기존 source-data import/cutover 도구 사용
+9. 전국 coordinate source snapshot(약 4천만 건)은 이번 이관에서 제외하며,
+   이후 operator 전용 source-data import/cutover로 별도 진행
+10. 기존 전국 건축물대장 총괄표제부·표제부 수집 원문, typed line,
+    분석·publication 이력은 이번 이관에서 제외
+
+9번이 완료되기 전에는 `enable_coordinate_source_runtime=false`를 유지한다.
+Property API/Batch/projection에 coordinate DSN·reader secret·SG route를 제공하지
+않고, 일반 deploy workflow도 `source-data-migration`을 자동 실행하지 않는다.
+Operator가 snapshot checksum/row count와 read-only lookup을 검증한 뒤 별도
+reviewed Terraform plan으로만 runtime 연결을 활성화한다.
+
+10번은 `building_register*`와 `complex_building_register*` table 전체를 뜻한다.
+Fresh Flyway schema는 유지하되 초기 target row는 비워 두며, 공개 detail의
+nullable `buildingProfile`은 `null`을 반환할 수 있다. 지도·거래에 필요한
+`complex` row와 별도 `building_ratio_*` 소형 파생 evidence는 계속 이관한다.
+원본 DB/volume은 삭제하지 않고, 이후 재수집·publication은 별도 operator 승인과
+품질 검증을 거쳐야 한다.
 
 각 large table은 deterministic ID/date chunk로 나누고 chunk마다 SHA-256,
 row count, min/max key, source snapshot watermark를 기록한다. Parent→child

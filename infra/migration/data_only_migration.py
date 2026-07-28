@@ -28,6 +28,7 @@ RAW_OBJECT_KEY = re.compile(r"^raw/(?:[A-Za-z0-9._-]+/)*[A-Za-z0-9._-]+$")
 FORBIDDEN_TABLE = re.compile(
     r"(^|_)(user_account|admin_account|session|token|flyway_schema_history|ai_schema_history|batch_job)(_|$)"
 )
+DEFERRED_BUILDING_REGISTER_TABLE = re.compile(r"(^|_)building_register(_|$)")
 
 
 class MigrationError(RuntimeError):
@@ -98,6 +99,8 @@ def validate_catalog(catalog: dict[str, Any]) -> dict[str, Any]:
             raise MigrationError("home_migration is reserved for resumable import evidence")
         if FORBIDDEN_TABLE.search(table):
             raise MigrationError(f"forbidden data-only table: {schema}.{table}")
+        if logical == "property" and DEFERRED_BUILDING_REGISTER_TABLE.search(table):
+            raise MigrationError(f"building-register history is deferred from initial deployment: {schema}.{table}")
         name = dataset_name(item)
         if name in names:
             raise MigrationError(f"duplicate catalog dataset: {name}")

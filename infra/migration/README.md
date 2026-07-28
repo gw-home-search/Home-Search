@@ -2,9 +2,19 @@
 
 `data_only_migration.py` moves only the checked-in
 `data-only-allowlist.json` datasets. User/Admin/session/token data, schema,
-roles, secrets, Flyway history, Spring Batch metadata, marker projections, and
-sequences are not exported. Apply fresh Property and AI migrations before
-import. Rebuild `mapMarkerProjectionJob` after reconciliation.
+roles, secrets, Flyway history, Spring Batch metadata, marker projections,
+nationwide coordinate rows, and historical building-register collection/raw/
+analysis/publication rows are not exported. Apply fresh Property and AI
+migrations before import. Rebuild `mapMarkerProjectionJob` after reconciliation.
+
+The initial target keeps every `building_register*` and
+`complex_building_register*` table created by fresh Flyway empty. This avoids
+uploading the previously collected nationwide recap-title/title-line corpus.
+Public detail remains contract-compatible because `buildingProfile` is
+nullable. Existing compact fields already stored on `complex` and the separate
+`building_ratio_*` evidence remain in scope. Recollection/publication requires
+a later reviewed operator run; this tool rejects adding building-register
+history back to the catalog accidentally.
 
 The exporter holds one `REPEATABLE READ READ ONLY` exported snapshot per
 logical database. Large tables use stable key ranges; every zstd chunk records
@@ -81,6 +91,9 @@ PostgreSQL 17 clients, and PostGIS restore libraries. Its entrypoint exposes
 5. Reconcile before enabling target schedulers.
 6. Run `mapMarkerProjectionJob`, verify marker parity/public golden responses,
    then activate target schedulers.
+
+The source databases, transfer artifacts, and local Docker volumes are retained.
+Exclusion from this initial transfer is not authorization to delete them.
 
 ```bash
 python3 infra/migration/data_only_migration.py validate-catalog

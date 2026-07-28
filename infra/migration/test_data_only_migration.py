@@ -22,8 +22,9 @@ class CatalogValidationTest(unittest.TestCase):
         catalog = migration.load_catalog(CATALOG)
         names = [migration.dataset_name(item) for item in catalog["datasets"]]
 
-        self.assertEqual(len(names), 100)
-        self.assertIn("property:public.building_register_record_snapshot", names)
+        self.assertEqual(len(names), 67)
+        self.assertNotIn("property:public.building_register_record_snapshot", names)
+        self.assertFalse(any("building_register" in name for name in names))
         self.assertIn("property:public.market_news_raw_item", names)
         self.assertTrue(all(item["conflictPolicy"] == "update" for item in catalog["datasets"] if item["logicalDatabase"] == "property"))
         self.assertEqual(
@@ -47,6 +48,23 @@ class CatalogValidationTest(unittest.TestCase):
                 item["table"],
                 {"user_account", "admin_account", "session", "token", "flyway_schema_history", "ai_schema_history"},
             )
+
+    def test_catalog_rejects_building_register_history(self) -> None:
+        invalid = {
+            "formatVersion": 1,
+            "datasets": [{
+                "order": 10,
+                "logicalDatabase": "property",
+                "conflictPolicy": "update",
+                "schema": "public",
+                "table": "building_register_raw_page",
+                "columns": ["id"],
+                "keyColumns": ["id"],
+            }],
+        }
+
+        with self.assertRaisesRegex(migration.MigrationError, "building-register history"):
+            migration.validate_catalog(invalid)
 
     def test_catalog_rejects_reserved_resume_evidence_schema(self) -> None:
         invalid = {

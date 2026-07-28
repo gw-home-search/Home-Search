@@ -10,10 +10,18 @@ locals {
       }
     }
   }
+  coordinate_source_environment = var.enable_coordinate_source_runtime ? [
+    { name = "COORDINATE_SOURCE_DB_JDBC_URL", value = "jdbc:postgresql://${aws_db_instance.service["coordinate"].address}:5432/home_search_coordinate_source?sslmode=require" },
+    { name = "COORDINATE_SOURCE_DB_USERNAME", value = "home_search_coordinate_reader" },
+    { name = "COORDINATE_SOURCE_DB_READ_ONLY", value = "true" },
+  ] : []
+  coordinate_source_secrets = var.enable_coordinate_source_runtime ? [
+    { name = "COORDINATE_SOURCE_DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["coordinate-reader-db"].arn}:password::" },
+  ] : []
   service_specs = {
     property-api = {
       image = "property-api", port = 8080, sg = "property", cpu = 1024, memory = 2048
-      environment = [
+      environment = concat([
         { name = "SPRING_PROFILES_ACTIVE", value = "prod" },
         { name = "SERVER_PORT", value = "8080" },
         { name = "DB_JDBC_URL", value = "jdbc:postgresql://${aws_db_instance.service["property"].address}:5432/home_search?sslmode=require" },
@@ -28,11 +36,11 @@ locals {
         { name = "HOME_ADMIN_INTERNAL_AUDIENCE", value = "property-data-admin" },
         { name = "HOME_ADMIN_INTERNAL_PUBLIC_KEYS", value = "production-1=/run/keys/public.pem" },
         { name = "FRONTEND_URL", value = var.public_origin },
-      ]
-      secrets = [
+      ], local.coordinate_source_environment)
+      secrets = concat([
         { name = "DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["property-runtime-db"].arn}:password::" },
         { name = "KAKAO_REST_API_KEY", valueFrom = "${aws_secretsmanager_secret.container["kakao-local-provider"].arn}:rest_api_key::" },
-      ]
+      ], local.coordinate_source_secrets)
       key_secrets  = [{ name = "PUBLIC_KEY_PEM", valueFrom = "${aws_secretsmanager_secret.container["admin-internal-jwt-public"].arn}:public_key_pem::" }]
       health       = ["CMD-SHELL", "timeout 3 bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080; printf \"GET /actuator/health/readiness HTTP/1.0\\r\\n\\r\\n\" >&3; head -1 <&3 | grep -q \" 200 \"' || exit 1"]
       metrics_path = "/actuator/prometheus"
@@ -541,15 +549,15 @@ locals {
     }
     property-batch = {
       image = "property-batch", command = []
-      environment = [
+      environment = concat([
         { name = "SPRING_PROFILES_ACTIVE", value = "prod" },
         { name = "DB_JDBC_URL", value = "jdbc:postgresql://${aws_db_instance.service["property"].address}:5432/home_search?sslmode=require" },
         { name = "DB_USERNAME", value = "home_search_property_runtime" },
-      ]
-      secrets = [
+      ], local.coordinate_source_environment)
+      secrets = concat([
         { name = "DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["property-runtime-db"].arn}:password::" },
         { name = "APT_SERVICE_KEY", valueFrom = "${aws_secretsmanager_secret.container["public-data-providers"].arn}:apt_service_key::" },
-      ]
+      ], local.coordinate_source_secrets)
     }
     map-marker-projection = {
       image = "property-batch", command = []

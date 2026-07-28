@@ -37,7 +37,7 @@ locals {
     "property-migrator-db", "admin-migrator-db", "user-migrator-db",
   ])
   workload_execution_secret_names = {
-    property-api               = ["property-runtime-db", "coordinate-reader-db", "admin-internal-jwt-public", "kakao-local-provider"]
+    property-api               = concat(["property-runtime-db"], var.enable_coordinate_source_runtime ? ["coordinate-reader-db"] : [], ["admin-internal-jwt-public", "kakao-local-provider"])
     admin-api                  = ["admin-runtime-db", "admin-internal-jwt"]
     user-api                   = ["user-runtime-db", "oauth-providers", "user-jwt"]
     user-insight-worker        = ["user-runtime-db"]
@@ -53,8 +53,8 @@ locals {
     admin-migration            = ["admin-migrator-db"]
     user-flyway                = ["user-migrator-db"]
     source-data-migration      = ["coordinate-migrator-db"]
-    property-batch             = ["property-runtime-db", "coordinate-reader-db", "public-data-providers"]
-    map-marker-projection      = ["property-runtime-db", "coordinate-reader-db"]
+    property-batch             = concat(["property-runtime-db"], var.enable_coordinate_source_runtime ? ["coordinate-reader-db"] : [], ["public-data-providers"])
+    map-marker-projection      = ["property-runtime-db"]
     property-event-relay       = ["property-runtime-db"]
     property-event-maintenance = ["property-runtime-db"]
     admin-ops                  = ["admin-runtime-db"]

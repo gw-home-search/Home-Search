@@ -62,6 +62,9 @@ run "workload_egress_is_private_and_allowlisted" {
       aws_vpc_security_group_egress_rule.internal["property-event-maintenance-db"].from_port == 5432,
       aws_vpc_security_group_egress_rule.internal["public-gateway-property"].from_port == 8080,
       aws_vpc_security_group_egress_rule.internal["public-gateway-user"].from_port == 8082,
+      !contains(keys(aws_vpc_security_group_egress_rule.internal), "property-coordinate"),
+      !contains(keys(aws_vpc_security_group_egress_rule.internal), "property-batch-coordinate"),
+      contains(keys(aws_vpc_security_group_egress_rule.internal), "ops-coordinate"),
     ])
     error_message = "Internal egress must remain explicit by source workload, destination SG, and port."
   }

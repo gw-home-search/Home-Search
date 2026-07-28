@@ -43,6 +43,11 @@ variable "service_activation_phase" {
     error_message = "service_activation_phase must be one of off, consumers, private, or all."
   }
 }
+variable "enable_coordinate_source_runtime" {
+  description = "Operator-only activation after the deferred nationwide coordinate import and reconciliation are approved."
+  type        = bool
+  default     = false
+}
 variable "deployment_release_tag" {
   description = "Immutable release tag used to partition deployment evidence."
   type        = string

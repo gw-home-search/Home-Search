@@ -26,8 +26,23 @@ variable "client_vpn_server_certificate_arn" { type = string }
 variable "client_vpn_saml_provider_arn" { type = string }
 variable "operator_group_id" { type = string }
 variable "public_certificate_arn" { type = string }
-variable "monthly_budget_usd" { type = number }
-variable "budget_notification_emails" { type = set(string) }
+variable "monthly_budget_usd" {
+  type = number
+  validation {
+    condition     = var.monthly_budget_usd > 0 && var.monthly_budget_usd <= 1000000000
+    error_message = "monthly_budget_usd must be greater than zero and no more than one billion USD."
+  }
+}
+variable "budget_notification_emails" {
+  type = set(string)
+  validation {
+    condition = (
+      length(var.budget_notification_emails) > 0
+      && alltrue([for address in var.budget_notification_emails : can(regex("^[^@\\s]+@[^@\\s]+[.][^@\\s]+$", address))])
+    )
+    error_message = "budget_notification_emails must contain at least one valid email address."
+  }
+}
 variable "alarm_topic_arn" { type = string }
 variable "rds_instance_class" {
   type    = string

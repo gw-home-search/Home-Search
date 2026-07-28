@@ -20,6 +20,11 @@ restores the latest RDS recovery point into the private data subnet and leaves
 a 24-hour validation window. Application checksum reconciliation remains a
 deployment evidence step after AWS Backup reports the restore job complete.
 
+Monthly cost budgets notify at 50/80/100 percent. Cost Anomaly Detection also
+monitors spend by AWS service and sends a daily notification when total anomaly
+impact reaches the greater of USD 10 or one percent of the approved monthly
+budget.
+
 Validation:
 
 ```bash

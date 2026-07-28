@@ -64,4 +64,14 @@ run "production_audit_and_grafana_boundary" {
     )
     error_message = "Audit storage must be versioned and fail closed against public access."
   }
+
+  assert {
+    condition = (
+      aws_ce_anomaly_monitor.services.monitor_type == "DIMENSIONAL"
+      && aws_ce_anomaly_monitor.services.monitor_dimension == "SERVICE"
+      && aws_ce_anomaly_subscription.daily.frequency == "DAILY"
+      && length(aws_ce_anomaly_subscription.daily.subscriber) > 0
+    )
+    error_message = "Cost Anomaly Detection must notify the production cost owners daily."
+  }
 }

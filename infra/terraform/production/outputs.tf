@@ -12,6 +12,7 @@ output "backup_vault_arns" {
   }
 }
 output "restore_testing_plan_arn" { value = aws_backup_restore_testing_plan.monthly.arn }
+output "cost_anomaly_subscription_arn" { value = aws_ce_anomaly_subscription.daily.arn }
 output "database_secret_arns" {
   value     = { for name, db in aws_db_instance.service : name => db.master_user_secret[0].secret_arn }
   sensitive = true

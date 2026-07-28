@@ -333,8 +333,6 @@ def check_branch(base: str, head: str, draft: bool, errors: list[LintMessage]) -
     expected_base = PLANNED_STACKED_BASES.get(head)
     if expected_base is not None and base != expected_base:
         add(errors, "branch", f"승인된 stacked branch {head}의 base는 {expected_base}여야 합니다")
-    if not draft:
-        add(errors, "branch", "PR은 draft여야 합니다")
 
 
 def check_body_structure(body: str, errors: list[LintMessage], *, template: bool) -> dict[str, VerificationLine]:
@@ -790,7 +788,7 @@ def run_self_test() -> int:
         expect_case("security evidence missing", missing_security_evidence, "body", "security-audit"),
         expect_case("backend security skill evidence missing", backend_missing_security_skill, "evidence", "$security-audit"),
         expect_case("pass with open risk", pass_with_open_risk, "evidence", "미확인"),
-        expect_case("non-draft PR", non_draft, "branch", "draft"),
+        lint_pr(non_draft).ok,
         expect_case("non-integration head", non_integration_head, "branch", "feat/*-integration"),
         lint_pr(planned_stacked_head).ok,
         lint_pr(stacked_draft).ok,

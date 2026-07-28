@@ -18,6 +18,10 @@ output "database_secret_arns" {
   value     = { for name, db in aws_db_instance.service : name => db.master_user_secret[0].secret_arn }
   sensitive = true
 }
+output "database_instance_identifiers" {
+  value = { for name, database in aws_db_instance.service : name => database.identifier }
+}
+output "deployment_name" { value = local.name }
 output "ecs_cluster" {
   value = {
     arn  = aws_ecs_cluster.this.arn

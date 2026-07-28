@@ -9,6 +9,7 @@ count="$(jq '.services | length' "${state_file}")"
 jq -e '
   .format_version == 1
   and (.services | type == "object")
+  and ((.services | keys) - ["admin-api","admin-gateway","ai","chat-bff","ml","property-api","public-gateway","user-api","user-insight-worker"] | length == 0)
   and ([.services[] |
     (.task_definition | type == "string")
     and (.desired_count | type == "number")
@@ -21,11 +22,15 @@ jq -e '
 }
 
 services=()
-while IFS=$'\t' read -r service task_definition desired_count; do
+rollback_order=(public-gateway admin-gateway chat-bff ai ml property-api admin-api user-api user-insight-worker)
+for service in "${rollback_order[@]}"; do
+  jq -e --arg service "${service}" '.services | has($service)' "${state_file}" >/dev/null || continue
+  task_definition="$(jq -er --arg service "${service}" '.services[$service].task_definition' "${state_file}")"
+  desired_count="$(jq -er --arg service "${service}" '.services[$service].desired_count' "${state_file}")"
   aws ecs update-service --cluster "${cluster}" --service "${service}" \
     --task-definition "${task_definition}" --desired-count "${desired_count}" \
     --force-new-deployment >/dev/null
   services+=("${service}")
-done < <(jq -r '.services | to_entries[] | [.key,.value.task_definition,.value.desired_count] | @tsv' "${state_file}")
+done
 aws ecs wait services-stable --cluster "${cluster}" --services "${services[@]}"
 echo '상태: Pass - 이전 task definition ARN으로 ECS service rollback을 완료했습니다.'

@@ -198,6 +198,18 @@ PATH="${tmp_dir}/bin:${PATH}" FAKE_AWS_LOG="${tmp_dir}/aws.log" \
   "${root}/infra/deploy/rollback-services.sh" "${tmp_dir}/service-state.json" >/dev/null
 grep -F -- '--desired-count 0' "${tmp_dir}/aws.log" >/dev/null
 
+jq -n '{format_version:1,cluster:"arn:cluster",cluster_exists:true,services:{
+  "user-insight-worker":{task_definition:"arn:worker:1",desired_count:2},
+  "public-gateway":{task_definition:"arn:gateway:1",desired_count:2},
+  "property-api":{task_definition:"arn:property:1",desired_count:2}
+}}' >"${tmp_dir}/ordered-rollback.json"
+: >"${tmp_dir}/ordered-rollback.log"
+PATH="${tmp_dir}/bin:${PATH}" FAKE_AWS_LOG="${tmp_dir}/ordered-rollback.log" \
+  "${root}/infra/deploy/rollback-services.sh" "${tmp_dir}/ordered-rollback.json" >/dev/null
+[[ "$(grep -n 'ecs update-service' "${tmp_dir}/ordered-rollback.log" | sed -n '1p')" == *'public-gateway'* ]]
+[[ "$(grep -n 'ecs update-service' "${tmp_dir}/ordered-rollback.log" | sed -n '2p')" == *'property-api'* ]]
+[[ "$(grep -n 'ecs update-service' "${tmp_dir}/ordered-rollback.log" | sed -n '3p')" == *'user-insight-worker'* ]]
+
 PATH="${tmp_dir}/bin:${PATH}" FAKE_AWS_LOG="${tmp_dir}/aws.log" FAKE_CLUSTER_FAILURE=missing \
   "${root}/infra/deploy/capture-service-state.sh" arn:cluster "${tmp_dir}/first-deploy-state.json"
 jq -e '.cluster_exists == false and (.services | length) == 0' "${tmp_dir}/first-deploy-state.json" >/dev/null

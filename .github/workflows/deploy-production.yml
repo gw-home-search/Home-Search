@@ -138,6 +138,10 @@ jobs:
           subnets="$(terraform -chdir=infra/terraform/production output -json application_subnet_ids | jq -ec '.')"
           ops_security_group="$(terraform -chdir=infra/terraform/production output -json ops_security_group_id | jq -ec '[.]')"
           task_definitions="$(terraform -chdir=infra/terraform/production output -json one_shot_task_definition_arns | jq -ec '.')"
+          database_identifiers="$(terraform -chdir=infra/terraform/production output -json database_instance_identifiers | jq -ec '.')"
+          deployment_name="$(terraform -chdir=infra/terraform/production output -raw deployment_name)"
+          infra/deploy/capture-production-state.sh "${database_identifiers}" "${deployment_name}" \
+            "pre-${GITHUB_RUN_ID}" deployment-evidence/pre-deploy-data-state.json
           run_task() {
             local name="$1" task_definition
             task_definition="$(jq -er --arg name "${name}" '.[$name]' <<<"${task_definitions}")"

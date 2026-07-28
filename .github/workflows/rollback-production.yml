@@ -1,0 +1,49 @@
+name: Roll back production application
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag: { description: "Release evidence tag to roll back", required: true, type: string }
+      evidence_run_id: { description: "Deploy production run containing pre-deploy state", required: true, type: string }
+permissions: { contents: read, actions: read, id-token: write }
+concurrency: { group: deploy-production, cancel-in-progress: false }
+
+jobs:
+  rollback:
+    environment: production
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Resolve exact pre-deploy evidence
+        env:
+          GH_TOKEN: "${{ github.token }}"
+          RELEASE_TAG: "${{ inputs.release_tag }}"
+          EVIDENCE_RUN_ID: "${{ inputs.evidence_run_id }}"
+        run: |
+          set -Eeuo pipefail
+          [[ "${RELEASE_TAG}" =~ ^v[0-9]+[.][0-9]+[.][0-9]+$ ]]
+          [[ "${EVIDENCE_RUN_ID}" =~ ^[0-9]+$ ]]
+          gh run view "${EVIDENCE_RUN_ID}" --json workflowName \
+            --jq 'select(.workflowName == "Deploy production") | .workflowName' | grep -Fx 'Deploy production'
+          mkdir -m 0700 rollback-evidence
+          gh run download "${EVIDENCE_RUN_ID}" \
+            --name "production-foundation-evidence-${RELEASE_TAG}" \
+            --dir rollback-evidence
+          jq -e '.format_version == 1 and (.services | type == "object")' \
+            rollback-evidence/pre-deploy-services.json >/dev/null
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with: { role-to-assume: "${{ vars.AWS_PRODUCTION_APPLY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
+      - name: Restore previous task definitions producer to consumer
+        run: |
+          set -Eeuo pipefail
+          started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          started_epoch="$(date +%s)"
+          infra/deploy/rollback-services.sh rollback-evidence/pre-deploy-services.json
+          elapsed_seconds="$(($(date +%s) - started_epoch))"
+          jq -n --arg started_at "${started_at}" --arg completed_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --argjson elapsed_seconds "${elapsed_seconds}" \
+            '{status:"pass",started_at:$started_at,completed_at:$completed_at,elapsed_seconds:$elapsed_seconds,target_seconds:1800,within_target:($elapsed_seconds <= 1800)}' \
+            >rollback-evidence/application-rollback.json
+          jq -e '.within_target == true' rollback-evidence/application-rollback.json >/dev/null
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with: { name: "production-rollback-evidence-${{ inputs.release_tag }}", path: rollback-evidence/, if-no-files-found: error, retention-days: 365 }

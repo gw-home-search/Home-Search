@@ -4,6 +4,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 workflow="${root}/.github/workflows/deploy-production.yml"
 staging_workflow="${root}/.github/workflows/deploy-staging.yml"
 rollback="${root}/.github/workflows/rollback-supervisor-graph.yml"
+application_rollback="${root}/.github/workflows/rollback-production.yml"
 grep -Fq 'environment: production' "${workflow}"
 grep -Fq '(.images | length == 17)' "${workflow}"
 grep -Fq '.vulnerability_policy_gate_passed' "${workflow}"
@@ -34,7 +35,10 @@ if grep -F 'for task in ' "${staging_workflow}" | grep -Fq 'source-data-migratio
   exit 1
 fi
 grep -Fq 'HOME_AI_SUPERVISOR_GRAPH_MODE",value:"off"' "${rollback}"
-if grep -Eq 'down -v|volume (rm|prune)|flyway.*clean|terraform destroy' "${workflow}" "${rollback}"; then
+grep -Fq 'production-foundation-evidence-${RELEASE_TAG}' "${application_rollback}"
+grep -Fq 'rollback-services.sh rollback-evidence/pre-deploy-services.json' "${application_rollback}"
+grep -Fq 'target_seconds:1800' "${application_rollback}"
+if grep -Eq 'down -v|volume (rm|prune)|flyway.*clean|terraform destroy|delete-db|delete-table|delete-topic' "${workflow}" "${rollback}" "${application_rollback}"; then
   echo '상태: Fail - production workflow에 destructive rollback이 포함됐습니다.' >&2
   exit 1
 fi

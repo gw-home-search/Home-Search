@@ -1,25 +1,34 @@
-FROM python:3.10-slim@sha256:c1e4e6c01eb489c422288b2de34b0761ca316f7a2d98e2c33f47659a73ed108a
+FROM ghcr.io/astral-sh/uv:0.9.28@sha256:59240a65d6b57e6c507429b45f01b8f2c7c0bbeee0fb697c41a39c6a8e3a4cfb AS uv
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
+FROM cgr.dev/chainguard/wolfi-base:latest@sha256:003627df3c1e1bba0c4116afcddb314aca9594ee2328c7e876a8081a6c988b2e
+
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PIP_NO_CACHE_DIR=1 \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_CACHE_DIR=/app/.cache/uv \
     F37_ARTIFACT_DIR=/model
 
 WORKDIR /app
 
-RUN groupadd --gid 10001 ml \
-    && useradd --uid 10001 --gid 10001 --no-create-home \
-        --home-dir /nonexistent --shell /usr/sbin/nologin ml
+USER 0
+RUN apk add --no-cache ca-certificates libstdc++ python-3.13 \
+    && addgroup -S -g 10001 ml \
+    && adduser -S -D -H -u 10001 -G ml -s /sbin/nologin ml \
+    && mkdir -p /app/.cache/uv \
+    && chown -R 10001:10001 /app
+COPY --from=uv /uv /uvx /usr/local/bin/
 
-COPY requirements.lock ./requirements.lock
-RUN python -m pip install --no-cache-dir --requirement requirements.lock \
-    && python -m pip check
+USER 10001:10001
+COPY --chown=10001:10001 requirements.lock ./requirements.lock
+RUN uv venv --python /usr/bin/python3.13 /app/.venv \
+    && uv pip install --python /app/.venv/bin/python --requirement requirements.lock \
+    && uv pip check --python /app/.venv/bin/python \
+    && find /app/.cache/uv -depth -delete
 
 COPY --chown=10001:10001 ml_service ./ml_service
 COPY --chmod=0555 docker-entrypoint.sh /usr/local/bin/ml-entrypoint
-
-USER 10001:10001
 
 EXPOSE 8001
 

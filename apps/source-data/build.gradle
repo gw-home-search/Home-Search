@@ -9,6 +9,7 @@ plugins {
 group = 'com.home'
 version = '0.0.1-SNAPSHOT'
 description = 'Home Search coordinate and source-data runtime'
+ext['postgresql.version'] = '42.7.12'
 
 spotless {
     java {

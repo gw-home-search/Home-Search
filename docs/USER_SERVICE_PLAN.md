@@ -128,7 +128,8 @@ public map/trade URL 또는 응답 변경, cross-database join, email 기반 ide
   validation을 수행한다. provider별 client registration은 Spring Boot가 제공하는 typed
   `spring.security.oauth2.client` configuration binding을 그대로 사용한다.
 - app runtime은 Flyway를 포함하지 않으며 `ddl-auto=validate`로 `users` JPA mapping만 검증한다.
-- `redgate/flyway:12.4.0` Docker CLI만 `db/migration/user`의 migration versions 1 through 5를 실행하며
+- pinned `redgate/flyway:13.0-alpine`에서 PostgreSQL 전용 CLI runtime을 구성하며
+  `db/migration/user`의 migration versions 1 through 6만 실행한다.
   `home_search_user` database guard와 read-only SQL mount를 사용한다.
 - `ops/user-flyway.sh`는 `info`, `validate`, 숫자 target이 필수인 `migrate`만
   제공한다. legacy identity importer, `repair`, `clean`, `baseline`, `latest`는

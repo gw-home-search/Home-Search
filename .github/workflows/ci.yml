@@ -232,7 +232,9 @@ jobs:
       - name: Build exact-lock ML image
         run: docker build --tag home-search-ml:ci apps/ml
       - name: Verify installed dependency graph
-        run: docker run --rm --entrypoint python home-search-ml:ci -m pip check
+        run: >-
+          docker run --rm --entrypoint uv home-search-ml:ci
+          pip check --python /app/.venv/bin/python
       - name: Verify runtime imports without loading a model
         run: >-
           docker run --rm --entrypoint python home-search-ml:ci -c
@@ -250,7 +252,7 @@ jobs:
           [[ "$user" == "10001:10001" ]]
           [[ "$(docker inspect --format '{{json .Config.Healthcheck.Test}}' home-search-ml:ci)" != "null" ]]
           docker run --rm --entrypoint python home-search-ml:ci -c \
-            "from pathlib import Path; assert not Path('/model/keras_model.keras').exists(); assert not any(Path('/app').rglob('*.keras')); assert not any(Path('/app').rglob('*.h5'))"
+            "from pathlib import Path; app = Path('/app/ml_service'); assert not Path('/model/keras_model.keras').exists(); assert not any(app.rglob('*.keras')); assert not any(app.rglob('*.h5'))"
       - name: Verify missing model fails before server startup
         shell: bash
         run: |

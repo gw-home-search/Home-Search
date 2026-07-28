@@ -1,4 +1,4 @@
-FROM eclipse-temurin:21-jdk@sha256:da9d3a4f7650db39b918fc5a2c3da76556fb8cc8e5f3767cdea0bb409286951a AS build
+FROM amazoncorretto:21-alpine@sha256:58c1d555f4ff3be0cfe90d3b4d1762bde080b57afbb71d48657b9d22748cad5b AS build
 
 WORKDIR /workspace
 COPY apps/chat-bff apps/chat-bff
@@ -11,19 +11,15 @@ RUN --mount=type=cache,id=home-search-gradle,target=/root/.gradle \
     && chmod +x gradlew \
     && ./gradlew bootJar --no-daemon
 
-FROM eclipse-temurin:21-jre@sha256:273396ed5998598ed1091e8d72711c2d36980a0e65103859c55a4e977a41ffd3
+FROM amazoncorretto:21-alpine@sha256:58c1d555f4ff3be0cfe90d3b4d1762bde080b57afbb71d48657b9d22748cad5b
 
-RUN apt-get update \
-    && apt-get install --yes --no-install-recommends curl \
-    && apt-get clean \
-    && groupadd --gid 10001 home-search \
-    && useradd --uid 10001 --gid 10001 --no-create-home \
-        --home-dir /nonexistent --shell /usr/sbin/nologin home-search
+RUN addgroup -S -g 10001 home-search \
+    && adduser -S -D -H -u 10001 -G home-search -s /sbin/nologin home-search
 WORKDIR /app
 COPY --from=build --chown=10001:10001 /workspace/apps/chat-bff/build/libs/chat-bff.jar /app/application.jar
 
 USER 10001:10001
 EXPOSE 8083
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-    CMD curl --fail --silent --show-error --max-time 3 http://127.0.0.1:8083/actuator/health/readiness >/dev/null || exit 1
+    CMD wget -q -O /dev/null -T 3 http://127.0.0.1:8083/actuator/health/readiness || exit 1
 ENTRYPOINT ["java", "-jar", "/app/application.jar"]

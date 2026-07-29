@@ -32,10 +32,11 @@ fi
 
 violations="$(jq -c '
   [
-    "aws_db_instance", "aws_db_cluster", "aws_rds_cluster", "aws_msk_cluster", "aws_msk_serverless_cluster",
-    "aws_nat_gateway", "aws_lb", "aws_lb_listener", "aws_lb_target_group", "aws_vpn_gateway",
+    "aws_db_instance", "aws_db_cluster", "aws_rds_cluster", "aws_rds_cluster_instance", "aws_msk_cluster", "aws_msk_serverless_cluster",
+    "aws_nat_gateway", "aws_vpc_endpoint", "aws_lb", "aws_lb_listener", "aws_lb_target_group", "aws_vpn_gateway",
+    "aws_ec2_client_vpn_endpoint",
     "aws_customer_gateway", "aws_elasticache_cluster", "aws_elasticache_replication_group",
-    "aws_prometheus_workspace", "grafana_workspace", "aws_ebs_fast_snapshot_restore"
+    "aws_prometheus_workspace", "aws_grafana_workspace", "aws_ebs_fast_snapshot_restore"
   ] as $forbidden_types |
   [.resource_changes[]
    | select(.mode == "managed")

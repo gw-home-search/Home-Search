@@ -162,10 +162,35 @@ publish_artifacts() {
   local kms_key_id="${HOME_BACKUP_KMS_KEY_ID:?Set HOME_BACKUP_KMS_KEY_ID when HOME_BACKUP_S3_URI is set}"
   command -v aws >/dev/null 2>&1 || { echo "ERROR: aws CLI is required for HOME_BACKUP_S3_URI." >&2; return 1; }
   destination="${destination%/}"
-  aws s3 cp "${dump_file}" "${destination}/$(basename "${dump_file}")" --only-show-errors \
-    --sse aws:kms --sse-kms-key-id "${kms_key_id}"
-  aws s3 cp "${manifest_file}" "${destination}/$(basename "${manifest_file}")" --only-show-errors \
-    --sse aws:kms --sse-kms-key-id "${kms_key_id}"
+  [[ "${destination}" =~ ^s3://[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]/[^/].*$ ]] \
+    || { echo 'ERROR: HOME_BACKUP_S3_URI must include an explicit bucket prefix.' >&2; return 1; }
+  local location="${destination#s3://}" bucket="${destination#s3://}" prefix
+  bucket="${bucket%%/*}"
+  prefix="${location#*/}"
+
+  local artifact checksum_hex checksum_base64 content_length key head_size head_checksum
+  for artifact in "${dump_file}" "${manifest_file}"; do
+    checksum_hex="$(sha256_file "${artifact}")"
+    checksum_base64="$(python3 - "${checksum_hex}" <<'PY'
+import base64
+import sys
+
+print(base64.b64encode(bytes.fromhex(sys.argv[1])).decode("ascii"))
+PY
+)"
+    content_length="$(wc -c <"${artifact}" | tr -d ' ')"
+    key="${prefix}/$(basename "${artifact}")"
+    aws s3 cp "${artifact}" "s3://${bucket}/${key}" --only-show-errors \
+      --checksum-algorithm SHA256 --sse aws:kms --sse-kms-key-id "${kms_key_id}"
+    IFS=$'\t' read -r head_size head_checksum < <(
+      aws s3api head-object --bucket "${bucket}" --key "${key}" --checksum-mode ENABLED \
+        --query '[ContentLength,ChecksumSHA256]' --output text
+    )
+    [[ "${head_size}" == "${content_length}" && "${head_checksum}" == "${checksum_base64}" ]] || {
+      echo "ERROR: uploaded backup checksum or size mismatch: $(basename "${artifact}")" >&2
+      return 1
+    }
+  done
 }
 
 logical_connection_value() {

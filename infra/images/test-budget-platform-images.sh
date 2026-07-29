@@ -23,7 +23,7 @@ done
 docker run --rm --entrypoint sh "${postgres_image}" -c \
   'postgres --version | grep -Eq "PostgreSQL[)]? 17[.]" && test -f /usr/local/share/postgresql/extension/postgis.control'
 docker run --rm --entrypoint sh "${valkey_image}" -c \
-  'valkey-server --version | grep -Eq "v=8[.]1[.]" && grep -Fxq "appendonly no" /etc/valkey/valkey.conf && grep -Fxq "save \"\"" /etc/valkey/valkey.conf'
+  'valkey-server --version | grep -Eq "v=8[.]1[.]" && grep -Fxq "appendonly no" /etc/valkey/valkey.conf && grep -Fxq "save \"\"" /etc/valkey/valkey.conf && grep -Fxq "maxmemory 256mb" /etc/valkey/valkey.conf'
 
 password_a='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 password_b='bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'

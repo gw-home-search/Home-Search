@@ -44,6 +44,8 @@ run "budget_roles_are_separated_and_state_isolated" {
     condition = (
       !contains(keys(local.budget_state_role_ids), "deploy")
       && contains(local.budget_deploy_actions, "ec2:ModifyInstanceCreditSpecification")
+      && contains(local.budget_deploy_actions, "ec2:CreateVolume")
+      && contains(local.budget_deploy_actions, "ec2:AttachVolume")
       && contains(local.budget_deploy_actions, "ssm:SendCommand")
     )
     error_message = "Deploy may use backup S3, but must not receive a Terraform state policy and must explicitly deny the budget state key."

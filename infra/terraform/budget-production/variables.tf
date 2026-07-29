@@ -73,6 +73,12 @@ variable "data_services_enabled" {
   description = "Starts PostgreSQL and Valkey only after the budget secret bootstrap and readiness checks pass."
 }
 
+variable "backup_schedules_enabled" {
+  type        = bool
+  default     = false
+  description = "Enables daily DLM and logical backup schedules only after the approved DNS cutover."
+}
+
 variable "alarm_email" {
   type        = string
   description = "Operator email subscribed to the budget-production SNS topic."

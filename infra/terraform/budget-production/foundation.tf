@@ -119,10 +119,10 @@ resource "aws_iam_role_policy" "host_operations" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid      = "ReadRuntimeParameters"
+        Sid      = "ReadCertificatePassphrase"
         Effect   = "Allow"
-        Action   = ["ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath"]
-        Resource = ["arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/home-search/budget-production/*"]
+        Action   = ["ssm:GetParameter"]
+        Resource = ["arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/home-search/budget-production/edge/certificate-passphrase"]
       },
       {
         Sid      = "ExportPublicCertificate"
@@ -131,25 +131,34 @@ resource "aws_iam_role_policy" "host_operations" {
         Resource = [aws_acm_certificate.public[0].arn]
       },
       {
-        Sid    = "ReadWriteOperationalObjects"
-        Effect = "Allow"
-        Action = ["s3:GetObject", "s3:PutObject"]
-        Resource = [
-          "${aws_s3_bucket.backup[0].arn}/*",
-          "${aws_s3_bucket.reference_raw[0].arn}/*",
-        ]
+        Sid      = "ReadBackupAge"
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket"]
+        Resource = [aws_s3_bucket.backup[0].arn]
+        Condition = {
+          StringLike = { "s3:prefix" = ["logical", "logical/*"] }
+        }
       },
       {
         Sid      = "DescribeAttachedVolume"
         Effect   = "Allow"
-        Action   = ["ec2:DescribeInstances", "ec2:DescribeTags", "ec2:DescribeVolumes"]
+        Action   = ["ec2:DescribeInstances", "ec2:DescribeTags", "ec2:DescribeVolumes", "ecs:DescribeServices"]
         Resource = "*"
       },
       {
         Sid      = "WriteHostMetrics"
         Effect   = "Allow"
-        Action   = ["cloudwatch:PutMetricData", "logs:CreateLogStream", "logs:DescribeLogStreams", "logs:PutLogEvents"]
+        Action   = ["cloudwatch:PutMetricData"]
         Resource = "*"
+        Condition = {
+          StringEquals = { "cloudwatch:namespace" = "HomeSearch/BudgetProduction" }
+        }
+      },
+      {
+        Sid      = "WriteHostNginxLog"
+        Effect   = "Allow"
+        Action   = ["logs:CreateLogStream", "logs:DescribeLogStreams", "logs:PutLogEvents"]
+        Resource = ["${aws_cloudwatch_log_group.host[0].arn}:*"]
       },
     ]
   })

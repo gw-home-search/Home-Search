@@ -89,6 +89,9 @@ locals {
       PROPERTY_MIGRATOR_DB_PASSWORD = "postgres/property-migrator-password"
       AI_MIGRATOR_DB_PASSWORD       = "postgres/ai-migrator-password"
     }
+    scheduled-backup = {
+      HOME_BACKUP_PGPASSWORD = "postgres/backup-password"
+    }
     data-import-reconcile = {
       HOME_MIGRATION_PROPERTY_TARGET_PASSWORD  = "postgres/property-importer-password"
       HOME_MIGRATION_REFERENCE_TARGET_PASSWORD = "postgres/ai-importer-password"
@@ -110,6 +113,7 @@ locals {
     admin-migration       = "admin-migration"
     ai-migration          = "ai"
     importer-grants       = "ops-bootstrap"
+    scheduled-backup      = "backup"
     data-import-reconcile = "backup"
     map-marker-projection = "property-batch"
     runtime-grants        = "ops-bootstrap"
@@ -266,5 +270,31 @@ resource "aws_iam_role_policy" "data_import" {
         ]
       }],
     )
+  })
+}
+
+resource "aws_iam_role_policy" "scheduled_backup" {
+  count = local.data_enabled ? 1 : 0
+  name  = "write-immutable-logical-backups"
+  role  = aws_iam_role.task_runtime["scheduled-backup"].id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "ReadBackupPrefix"
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket"]
+        Resource = [aws_s3_bucket.backup[0].arn]
+        Condition = {
+          StringLike = { "s3:prefix" = ["logical", "logical/*"] }
+        }
+      },
+      {
+        Sid      = "WriteAndVerifyBackupObjects"
+        Effect   = "Allow"
+        Action   = ["s3:GetObject", "s3:PutObject"]
+        Resource = ["${aws_s3_bucket.backup[0].arn}/logical/*"]
+      },
+    ]
   })
 }

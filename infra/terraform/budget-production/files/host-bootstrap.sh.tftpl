@@ -80,7 +80,7 @@ grep -q "UUID=$${filesystem_uuid}" /etc/fstab || \
 
 install -d -m 0700 -o 70 -g 70 "$${MOUNT_POINT}/postgres"
 install -d -m 0700 -o 999 -g 1000 "$${MOUNT_POINT}/valkey"
-install -d -m 0750 -o root -g root "$${MOUNT_POINT}/backup-staging"
+install -d -m 0700 -o 10001 -g 10001 "$${MOUNT_POINT}/backup-staging"
 install -d -m 0750 -o root -g root "$${MOUNT_POINT}/runtime"
 install -d -m 0700 -o 70 -g 70 "$${MOUNT_POINT}/runtime/postgres-tls"
 install -d -m 0750 -o 10001 -g 10001 "$${MOUNT_POINT}/runtime/ml-model"

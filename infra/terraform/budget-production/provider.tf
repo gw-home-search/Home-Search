@@ -56,6 +56,13 @@ check "private_phase_requires_ready_data_services" {
   }
 }
 
+check "backup_schedules_are_post_cutover_only" {
+  assert {
+    condition     = !var.backup_schedules_enabled || (local.public_enabled && var.public_dns_enabled)
+    error_message = "backup_schedules_enabled requires the public phase and explicit DNS cutover."
+  }
+}
+
 check "data_phase_requires_platform_release" {
   assert {
     condition     = !local.data_enabled || (length(var.platform_image_uris) == 2 && length(var.image_uris) == 17)

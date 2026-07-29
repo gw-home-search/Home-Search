@@ -62,12 +62,26 @@ locals {
         { name = "AI_DB_PORT", value = "15432" },
       ]
     }
+    scheduled-backup = {
+      image_key  = "backup"
+      command    = []
+      entrypoint = ["/usr/local/bin/run-budget-pg-backup"]
+      environment = [
+        { name = "HOME_BACKUP_PGHOST", value = local.host_gateway },
+        { name = "HOME_BACKUP_PGPORT", value = "15432" },
+        { name = "HOME_BACKUP_PGUSER", value = "home_search_backup" },
+        { name = "HOME_BACKUP_LOGICAL_DATABASES", value = "property,admin,user,ai" },
+        { name = "HOME_BACKUP_S3_URI", value = local.data_enabled ? "s3://${aws_s3_bucket.backup[0].id}/logical" : "" },
+        { name = "HOME_BACKUP_KMS_KEY_ID", value = "alias/aws/s3" },
+      ]
+    }
     data-import-reconcile = {
       image_key  = "backup"
       command    = []
       entrypoint = ["/usr/local/bin/run-s3-data-migration"]
       environment = [
         { name = "TMPDIR", value = "/work" },
+        { name = "PGSSLMODE", value = "require" },
         { name = "HOME_MIGRATION_ARTIFACT_S3_URI", value = var.migration_artifact_s3_uri },
         { name = "HOME_MIGRATION_MANIFEST_SHA256", value = var.migration_manifest_sha256 },
         { name = "HOME_MIGRATION_EVIDENCE_S3_URI", value = local.data_enabled ? "s3://${aws_s3_bucket.backup[0].id}/deployment-evidence/${var.deployment_release_tag}" : "" },
@@ -131,9 +145,9 @@ resource "aws_ecs_task_definition" "one_shot" {
   }
 
   dynamic "volume" {
-    for_each = each.key == "data-import-reconcile" ? [1] : []
+    for_each = contains(["data-import-reconcile", "scheduled-backup"], each.key) ? [1] : []
     content {
-      name      = "migration-work"
+      name      = "task-work"
       host_path = "/srv/home-search/backup-staging"
     }
   }
@@ -147,7 +161,11 @@ resource "aws_ecs_task_definition" "one_shot" {
       name      = name
       valueFrom = aws_ssm_parameter.runtime[parameter].arn
     }]
-    mountPoints            = each.key == "data-import-reconcile" ? [{ sourceVolume = "migration-work", containerPath = "/work", readOnly = false }] : []
+    mountPoints = contains(["data-import-reconcile", "scheduled-backup"], each.key) ? [{
+      sourceVolume  = "task-work"
+      containerPath = each.key == "data-import-reconcile" ? "/work" : "/backup-staging"
+      readOnly      = false
+    }] : []
     readonlyRootFilesystem = false
     privileged             = false
     linuxParameters = {

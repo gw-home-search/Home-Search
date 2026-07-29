@@ -7,7 +7,7 @@ private_key="${tls_directory}/server.key"
 mkdir -p "${tls_directory}"
 if [ ! -s "${certificate}" ] || [ ! -s "${private_key}" ]; then
   temporary_directory="$(mktemp -d "${tls_directory}/.tls.XXXXXX")"
-  trap 'rm -rf "${temporary_directory}"' EXIT HUP INT TERM
+  trap 'find "${temporary_directory}" -depth -delete 2>/dev/null || true' EXIT HUP INT TERM
   openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
     -subj '/CN=home-search-budget-postgres' \
     -keyout "${temporary_directory}/server.key" \

@@ -92,6 +92,23 @@ resource "aws_s3_bucket_object_lock_configuration" "backup" {
   }
 }
 
+resource "aws_s3_bucket_lifecycle_configuration" "backup" {
+  count  = local.foundation_enabled ? 1 : 0
+  bucket = aws_s3_bucket.backup[0].id
+  rule {
+    id     = "expire-logical-backups-after-governance-retention"
+    status = "Enabled"
+    filter { prefix = "logical/" }
+    expiration { days = 35 }
+    noncurrent_version_expiration { noncurrent_days = 35 }
+    abort_incomplete_multipart_upload { days_after_initiation = 1 }
+  }
+  depends_on = [
+    aws_s3_bucket_versioning.protected,
+    aws_s3_bucket_object_lock_configuration.backup,
+  ]
+}
+
 resource "aws_s3_bucket_lifecycle_configuration" "reference_raw" {
   count  = local.foundation_enabled ? 1 : 0
   bucket = aws_s3_bucket.reference_raw[0].id

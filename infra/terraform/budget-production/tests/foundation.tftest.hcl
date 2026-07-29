@@ -87,6 +87,12 @@ run "foundation_is_single_az_single_instance_and_data_safe" {
       && length(aws_ssm_document.configure_edge) == 1
       && strcontains(file("files/configure-edge.sh.tftpl"), "proxy_buffering off")
       && strcontains(file("files/configure-edge.sh.tftpl"), "acm export-certificate")
+      && aws_dlm_lifecycle_policy.data[0].state == "DISABLED"
+      && aws_dlm_lifecycle_policy.data[0].policy_details[0].schedule[0].retain_rule[0].count == 7
+      && aws_security_group.recovery[0].description == "Ephemeral recovery rehearsal; intentionally no ingress"
+      && length(aws_budgets_budget.monthly[0].notification) == 3
+      && length(aws_ce_anomaly_subscription.daily) == 1
+      && length(aws_ssm_document.configure_observability) == 1
     )
     error_message = "Only HTTP/HTTPS may enter the host and edge TLS automation must preserve SSE behavior."
   }
@@ -124,6 +130,7 @@ run "data_phase_keeps_platform_services_dark_before_secret_bootstrap" {
         "admin-migration",
         "ai-migration",
         "importer-grants",
+        "scheduled-backup",
         "data-import-reconcile",
         "map-marker-projection",
         "runtime-grants",
@@ -152,8 +159,33 @@ run "data_phase_starts_platform_services_only_after_secret_bootstrap" {
         local.generated_runtime_parameter_names,
         local.external_runtime_parameter_names,
       )) == 0
+      && aws_scheduler_schedule.logical_backup[0].state == "DISABLED"
+      && strcontains(file("one_shot.tf"), "/usr/local/bin/run-budget-pg-backup")
     )
     error_message = "The explicit post-bootstrap gate must start exactly one PostgreSQL and one Valkey task."
+  }
+}
+
+run "post_cutover_enables_backup_and_public_alarms" {
+  command = plan
+  variables {
+    deployment_phase         = "public"
+    data_services_enabled    = true
+    public_dns_enabled       = true
+    backup_schedules_enabled = true
+  }
+
+  assert {
+    condition = (
+      length(aws_route53_record.public) == 1
+      && aws_dlm_lifecycle_policy.data[0].state == "ENABLED"
+      && aws_scheduler_schedule.logical_backup[0].state == "ENABLED"
+      && length(aws_cloudwatch_metric_alarm.ecs_running) == 1
+      && length(aws_cloudwatch_metric_alarm.backup_age) == 1
+      && length(aws_cloudwatch_metric_alarm.map_p95) == 1
+      && length(aws_cloudwatch_metric_alarm.public_5xx) == 1
+    )
+    error_message = "Only explicit post-cutover input may enable backups, DNS, and public service alarms."
   }
 }
 

@@ -42,3 +42,13 @@ output "certificate_arn" {
   value       = try(aws_acm_certificate.public[0].arn, null)
   description = "Exportable single-FQDN ACM certificate ARN."
 }
+
+output "recovery_security_group_id" {
+  value       = try(aws_security_group.recovery[0].id, null)
+  description = "Ingress-free security group for ephemeral restore rehearsals."
+}
+
+output "recovery_instance_profile_name" {
+  value       = try(aws_iam_instance_profile.recovery[0].name, null)
+  description = "Least-privilege instance profile for ephemeral restore rehearsals."
+}

@@ -1,0 +1,29 @@
+{
+  "format_version": 1,
+  "as_of": "2026-07-29",
+  "region": "ap-northeast-2",
+  "hours_per_month": 730,
+  "currency": "USD",
+  "sources": [
+    "https://aws.amazon.com/ec2/pricing/on-demand/",
+    "https://aws.amazon.com/ebs/pricing/",
+    "https://aws.amazon.com/vpc/pricing/",
+    "https://aws.amazon.com/certificate-manager/pricing/",
+    "https://aws.amazon.com/cloudwatch/pricing/"
+  ],
+  "items": [
+    {"name": "ec2_t3a_large", "monthly_usd": 68.33, "assumption": "1 x t3a.large x 730h"},
+    {"name": "gp3_110_gib", "monthly_usd": 10.03, "assumption": "30 GiB root + 80 GiB data"},
+    {"name": "public_ipv4", "monthly_usd": 3.65, "assumption": "1 Elastic IP x 730h"},
+    {"name": "acm_exportable_reserve", "monthly_usd": 2.00, "assumption": "single FQDN issuance/renewal reserve"},
+    {"name": "ecr", "monthly_usd": 1.00, "assumption": "budget platform images and retained release layers"},
+    {"name": "s3", "monthly_usd": 2.50, "assumption": "logical dump, reference raw, and evidence"},
+    {"name": "ebs_snapshots", "monthly_usd": 1.75, "assumption": "daily data snapshots, retain 7"},
+    {"name": "cloudwatch_sns", "monthly_usd": 2.00, "assumption": "14-day logs, host metrics, alarms, email"},
+    {"name": "monthly_recovery", "monthly_usd": 0.70, "assumption": "ephemeral t3a.large rehearsal up to 4h"},
+    {"name": "transfer_requests_buffer", "monthly_usd": 3.00, "assumption": "request and transfer contingency"}
+  ],
+  "incremental_gate_usd": 95.00,
+  "account_baseline_max_usd": 3.50,
+  "account_total_gate_usd": 99.00
+}

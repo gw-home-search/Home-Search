@@ -38,6 +38,16 @@ if "${script}" "${tmp_dir}/forbidden.json" foundation registry >/dev/null 2>&1; 
   exit 1
 fi
 
+for forbidden_type in aws_rds_cluster_instance aws_vpc_endpoint aws_grafana_workspace aws_ebs_fast_snapshot_restore; do
+  jq -n --arg type "${forbidden_type}" '{resource_changes:[
+    {mode:"managed",address:("forbidden." + $type),type:$type,change:{actions:["create"],after:{}}}
+  ]}' >"${tmp_dir}/forbidden-extra.json"
+  if "${script}" "${tmp_dir}/forbidden-extra.json" foundation registry >/dev/null 2>&1; then
+    echo "상태: Fail - 금지 resource를 허용했습니다: ${forbidden_type}" >&2
+    exit 1
+  fi
+done
+
 jq -n '{resource_changes:[
   {mode:"managed",address:"aws_ecr_repository.platform[\"budget-postgres\"]",type:"aws_ecr_repository",change:{actions:["create"],after:{name:"home-search/budget-postgres"}}},
   {mode:"managed",address:"aws_vpc.this[0]",type:"aws_vpc",change:{actions:["create"],after:{}}}

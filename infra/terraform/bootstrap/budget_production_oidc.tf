@@ -58,11 +58,11 @@ locals {
     "ec2:DeleteVolume", "ec2:DetachVolume", "s3:DeleteBucket", "s3:DeleteObject", "ssm:DeleteParameter",
   ]
   budget_deploy_actions = [
-    "cloudwatch:DescribeAlarms", "ec2:CreateTags", "ec2:DescribeInstances", "ec2:DescribeInstanceCreditSpecifications",
-    "ec2:ModifyInstanceCreditSpecification", "ec2:RunInstances", "ec2:TerminateInstances",
+    "cloudwatch:DescribeAlarms", "ec2:AttachVolume", "ec2:CreateTags", "ec2:CreateVolume", "ec2:DescribeImages", "ec2:DescribeInstances", "ec2:DescribeInstanceCreditSpecifications", "ec2:DescribeInstanceStatus",
+    "ec2:DescribeSnapshots", "ec2:DescribeSubnets", "ec2:DescribeTags", "ec2:DescribeVolumes", "ec2:ModifyInstanceCreditSpecification", "ec2:RunInstances", "ec2:TerminateInstances",
     "ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer", "ecs:DescribeServices", "ecs:DescribeTaskDefinition",
     "ecs:ListTasks", "ecs:RegisterTaskDefinition", "ecs:RunTask", "ecs:StopTask", "ecs:UpdateService",
-    "iam:PassRole", "s3:GetObject", "s3:PutObject", "ssm:GetCommandInvocation",
+    "iam:PassRole", "s3:GetObject", "s3:PutObject", "ssm:DescribeInstanceInformation", "ssm:GetCommandInvocation",
     "ssm:ListCommandInvocations", "ssm:SendCommand",
   ]
 }
@@ -228,6 +228,15 @@ resource "aws_iam_role_policy" "github_budget_deploy" {
       {
         Sid       = "OperateBudgetRuntime", Effect = "Allow", Action = local.budget_deploy_actions, Resource = "*"
         Condition = { StringEqualsIfExists = { "aws:RequestedRegion" = var.aws_region } }
+      },
+      {
+        Sid      = "DeleteTaggedRecoveryClone"
+        Effect   = "Allow"
+        Action   = ["ec2:DeleteVolume"]
+        Resource = ["arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:volume/*"]
+        Condition = {
+          StringEquals = { "ec2:ResourceTag/Purpose" = "budget-production-recovery-clone" }
+        }
       },
       {
         Sid      = "DenyTerraformState", Effect = "Deny", Action = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]

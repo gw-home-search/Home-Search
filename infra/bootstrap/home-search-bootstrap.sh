@@ -622,7 +622,8 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public, reference_projection GRANT SELECT ON 
 SQL
         ;;
     esac
-    PGPASSFILE="${pgpass}" psql -X -q -v ON_ERROR_STOP=1 -h "${host}" -p "${port}" -U "${migrator}" -d "${database}" -f "${sql}" >/dev/null
+    PGSSLMODE=require PGPASSFILE="${pgpass}" psql -X -q -v ON_ERROR_STOP=1 \
+      -h "${host}" -p "${port}" -U "${migrator}" -d "${database}" -f "${sql}" >/dev/null
   done
   echo '상태: Pass - runtime 및 backup 최소 권한을 migration 이후 적용했습니다.'
 }

@@ -5,9 +5,9 @@ mock_provider "aws" {
 run "budget_roles_are_separated_and_state_isolated" {
   command = plan
   variables {
-    state_bucket_name                       = "home-search-state-fixture"
-    github_repository                       = "example/home-search"
-    budget_production_hosted_zone_id        = "Z0123456789ABCDEFG"
+    state_bucket_name                = "home-search-state-fixture"
+    github_repository                = "example/home-search"
+    budget_production_hosted_zone_id = "Z0123456789ABCDEFG"
   }
 
   assert {
@@ -70,11 +70,11 @@ run "budget_roles_are_separated_and_state_isolated" {
       for policy in [
         aws_iam_role_policy.github_budget_plan.policy,
         aws_iam_role_policy.github_budget_apply.policy,
-      ] : anytrue([
-        for statement in jsondecode(policy).Statement :
-        statement.Sid == "ReadBudgetSecretContainersForProviderRefresh"
-        && statement.Action == ["ssm:GetParameter"]
-        && statement.Resource == ["arn:aws:ssm:ap-northeast-2:123456789012:parameter/home-search/budget-production/*"]
+        ] : anytrue([
+          for statement in jsondecode(policy).Statement :
+          statement.Sid == "ReadBudgetSecretContainersForProviderRefresh"
+          && statement.Action == ["ssm:GetParameter"]
+          && statement.Resource == ["arn:aws:ssm:ap-northeast-2:123456789012:parameter/home-search/budget-production/*"]
       ])
     ])
     error_message = "Plan/apply must scope the provider-required SecureString refresh to the budget-production parameter prefix."

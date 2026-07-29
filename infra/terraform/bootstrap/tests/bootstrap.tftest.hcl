@@ -11,10 +11,10 @@ mock_provider "aws" {
 run "secure_remote_state_and_exact_oidc_trust" {
   command = plan
   variables {
-    state_bucket_name    = "home-search-terraform-state-test"
-    github_repository    = "home-search-org/home-search"
-    github_environment   = "staging"
-    github_workflow_name = "Deploy staging"
+    state_bucket_name                = "home-search-terraform-state-test"
+    github_repository                = "home-search-org/home-search"
+    github_environment               = "staging"
+    github_workflow_name             = "Deploy staging"
     budget_production_hosted_zone_id = "Z0123456789ABCDEFG"
   }
   assert {

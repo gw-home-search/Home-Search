@@ -266,6 +266,13 @@ resource "aws_iam_role_policy" "github_budget_apply" {
         }
       },
       {
+        Sid      = "CreateCloudWatchEventsServiceLinkedRole", Effect = "Allow", Action = ["iam:CreateServiceLinkedRole"]
+        Resource = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-service-role/events.amazonaws.com/AWSServiceRoleForCloudWatchEvents*"]
+        Condition = {
+          StringLike = { "iam:AWSServiceName" = "events.amazonaws.com" }
+        }
+      },
+      {
         Sid      = "CreateBudgetCostAnomalySubscription", Effect = "Allow"
         Action   = ["ce:CreateAnomalySubscription", "ce:TagResource"]
         Resource = "*"
@@ -359,6 +366,7 @@ resource "aws_iam_role_policy" "github_budget_apply" {
         Action = ["cloudwatch:DeleteAlarms", "cloudwatch:PutMetricAlarm", "logs:CreateLogGroup", "logs:DeleteLogGroup", "logs:DeleteMetricFilter", "logs:PutMetricFilter", "logs:PutRetentionPolicy", "logs:TagResource", "logs:UntagResource", "events:DeleteRule", "events:PutRule", "events:PutTargets", "events:RemoveTargets", "events:TagResource", "events:UntagResource", "sns:CreateTopic", "sns:DeleteTopic", "sns:SetTopicAttributes", "sns:Subscribe", "sns:TagResource", "sns:Unsubscribe", "sns:UntagResource", "ssm:AddTagsToResource", "ssm:CreateAssociation", "ssm:CreateDocument", "ssm:DeleteAssociation", "ssm:DeleteDocument", "ssm:DeleteParameter", "ssm:PutParameter", "ssm:RemoveTagsFromResource", "ssm:UpdateAssociation", "ssm:UpdateDocument"]
         NotResource = [
           "arn:aws:cloudwatch:${var.aws_region}:${data.aws_caller_identity.current.account_id}:alarm:home-search-budget-production-*",
+          "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*",
           "arn:aws:events:${var.aws_region}:${data.aws_caller_identity.current.account_id}:rule/home-search-budget-production-*",
           "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/home-search/budget-production/*",
           "arn:aws:sns:${var.aws_region}:${data.aws_caller_identity.current.account_id}:home-search-budget-production-*",
@@ -366,6 +374,15 @@ resource "aws_iam_role_policy" "github_budget_apply" {
           "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:document/home-search-budget-production-*",
           "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/home-search/budget-production/*",
         ]
+      },
+      {
+        Sid      = "DenyNonBudgetSsmAssociationTarget"
+        Effect   = "Deny"
+        Action   = ["ssm:CreateAssociation", "ssm:UpdateAssociation"]
+        Resource = ["arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*"]
+        Condition = {
+          StringNotEqualsIfExists = { "aws:ResourceTag/Environment" = "budget-production" }
+        }
       },
       {
         Sid    = "DenyNonBudgetEc2CreateTags"

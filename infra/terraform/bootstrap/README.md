@@ -11,12 +11,13 @@ create a DynamoDB lock table; all backends use S3 native `use_lockfile`.
 The staging foundation apply role keeps foundation/IAM controls in an inline
 policy and attaches a separate customer-managed policy for backup buckets,
 secret containers, and tag-scoped KMS data operations. The budget-production
-apply role similarly keeps global controls and explicit denies inline while its
-region-gated resource mutations live in a customer-managed policy. Terraform
-tests enforce the AWS 10,240-character aggregate inline limit and 6,144-character
-managed policy limit. Each attachment is created before the corresponding
-inline policy is reduced so an update does not introduce a temporary permission
-gap.
+apply role keeps global controls and explicit denies inline, except for exact
+service-linked role creation permissions, and attaches separate managed policies
+for those permissions and region-gated resource mutations. Terraform tests
+enforce safe headroom below the AWS 10,240-character aggregate inline limit and
+the 6,144-character managed policy limit. Each attachment is created before the
+corresponding inline policy is reduced so an update does not introduce a
+temporary permission gap.
 
 Initial creation intentionally starts with local state:
 

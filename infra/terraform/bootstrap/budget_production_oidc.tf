@@ -229,15 +229,51 @@ resource "aws_iam_policy" "github_budget_apply_regional" {
   }
 }
 
+resource "aws_iam_policy" "github_budget_apply_service_linked_roles" {
+  name = "home-search-budget-production-service-linked-roles"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "CreateBudgetsServiceLinkedRole", Effect = "Allow", Action = ["iam:CreateServiceLinkedRole"]
+        Resource = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-service-role/budgets.amazonaws.com/AWSServiceRoleForBudgets"]
+        Condition = {
+          StringEquals = { "iam:AWSServiceName" = "budgets.amazonaws.com" }
+        }
+      },
+      {
+        Sid      = "CreateCloudWatchEventsServiceLinkedRole", Effect = "Allow", Action = ["iam:CreateServiceLinkedRole"]
+        Resource = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-service-role/events.amazonaws.com/AWSServiceRoleForCloudWatchEvents*"]
+        Condition = {
+          StringLike = { "iam:AWSServiceName" = "events.amazonaws.com" }
+        }
+      },
+    ]
+  })
+  tags = {
+    Project     = "home-search"
+    Environment = "budget-production"
+    ManagedBy   = "terraform"
+  }
+}
+
 resource "aws_iam_role_policy_attachment" "github_budget_apply_regional" {
   role       = aws_iam_role.github_budget_production_apply.name
   policy_arn = aws_iam_policy.github_budget_apply_regional.arn
 }
 
+resource "aws_iam_role_policy_attachment" "github_budget_apply_service_linked_roles" {
+  role       = aws_iam_role.github_budget_production_apply.name
+  policy_arn = aws_iam_policy.github_budget_apply_service_linked_roles.arn
+}
+
 resource "aws_iam_role_policy" "github_budget_apply" {
-  name       = "budget-production-reviewed-apply"
-  role       = aws_iam_role.github_budget_production_apply.id
-  depends_on = [aws_iam_role_policy_attachment.github_budget_apply_regional]
+  name = "budget-production-reviewed-apply"
+  role = aws_iam_role.github_budget_production_apply.id
+  depends_on = [
+    aws_iam_role_policy_attachment.github_budget_apply_regional,
+    aws_iam_role_policy_attachment.github_budget_apply_service_linked_roles,
+  ]
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -257,20 +293,6 @@ resource "aws_iam_role_policy" "github_budget_apply" {
         Sid      = "ManageBudgetCostControls", Effect = "Allow"
         Action   = ["budgets:ModifyBudget", "budgets:TagResource", "budgets:UntagResource"]
         Resource = ["arn:aws:budgets::${data.aws_caller_identity.current.account_id}:budget/home-search-budget-production-monthly"]
-      },
-      {
-        Sid      = "CreateBudgetsServiceLinkedRole", Effect = "Allow", Action = ["iam:CreateServiceLinkedRole"]
-        Resource = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-service-role/budgets.amazonaws.com/AWSServiceRoleForBudgets"]
-        Condition = {
-          StringEquals = { "iam:AWSServiceName" = "budgets.amazonaws.com" }
-        }
-      },
-      {
-        Sid      = "CreateCloudWatchEventsServiceLinkedRole", Effect = "Allow", Action = ["iam:CreateServiceLinkedRole"]
-        Resource = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-service-role/events.amazonaws.com/AWSServiceRoleForCloudWatchEvents*"]
-        Condition = {
-          StringLike = { "iam:AWSServiceName" = "events.amazonaws.com" }
-        }
       },
       {
         Sid      = "CreateBudgetCostAnomalySubscription", Effect = "Allow"

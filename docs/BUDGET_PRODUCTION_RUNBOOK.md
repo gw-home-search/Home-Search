@@ -30,24 +30,34 @@ secret, user ID, JWT, prompt/query/answer, private key는 evidence에 넣지 않
    확인하고 protected apply를 승인한다. 이 단계는 budget Postgres/Valkey ECR만 만든다.
 3. same-origin frontend가 포함된 새 tag를 발행한다. `v1.0.4`는 사용하지 않는다.
    release evidence가 17 application + 2 platform digest/SBOM/Grype를 포함하는지 확인한다.
-4. SSM의 외부 credential parameter를 채운다. Terraform에는 값을 전달하지 않는다.
+4. release/import 입력 없이 workflow를 `operation=foundation`으로 실행한다. plan의
+   zero-destroy와 `$95/$99` cost gate를 확인하고 protected apply를 승인한다. 이때
+   선택한 exact AMI와 stable AZ를 state output에 고정한다. 이후 deploy는 최신 권장
+   AMI/AZ를 다시 선택하지 않고 이 값을 재사용해야 한다. 이 단계부터 EC2/EBS/EIP 등
+   월간 비용이 발생하며 public DNS와 data/application service는 아직 비활성이다.
+5. foundation output의 backup/reference bucket, SSM parameter, instance/EBS/EIP를
+   기록한다. SSM의 외부 credential parameter를 채우되 Terraform에는 값을 전달하지 않는다.
    Kakao console에는 `homesearch.world`와 staging origin, callback을 등록한다. 현재
-   API contract 때문에 Google/Kakao/Naver credential을 모두 준비한다.
-5. current 24h SLO, SNS test alarm 수신, Kakao/OAuth console, network/ACL probe를
+   초기 enablement set은 Kakao만 사용하며 비활성 Google/Naver credential은 readiness에서
+   요구하지 않는다. redirect URI와 secret을 준비한 provider만 이후 set에 추가한다.
+6. 승인된 backup image로 Property+Reference data-only artifact를 만들고 foundation의
+   backup bucket에 업로드한다. manifest SHA-256과 raw-before-normalized, catalog allowlist를
+   확인한다. current 24h SLO, SNS test alarm 수신, Kakao/OAuth console, network/ACL probe를
    acceptance prefix에 업로드한다.
-6. workflow를 `operation=deploy`와 exact tag/SHA, migration S3 prefix/SHA로 실행한다.
-7. foundation plan의 AMI/AZ, zero-destroy, `$95/$99` cost gate를 확인해 apply를 승인한다.
-8. workflow가 secret bootstrap/readiness, Postgres/Valkey, Flyway, data-only import,
+7. workflow를 `operation=deploy`와 exact tag/SHA, migration S3 prefix/SHA로 실행한다.
+8. foundation plan이 state에 고정된 동일 AMI/AZ를 사용하고 zero-destroy인지 다시
+   확인해 apply를 승인한다.
+9. workflow가 secret bootstrap/readiness, Postgres/Valkey, Flyway, data-only import,
    reconcile, marker projection, logical backup을 순서대로 실행한다.
-9. import 동안만 Unlimited를 사용한다. 실패 여부와 무관하게 다음 step에서
+10. import 동안만 Unlimited를 사용한다. 실패 여부와 무관하게 다음 step에서
    `standard`를 재설정하는지 확인한다. rollout job timeout까지 대비한 별도
    `budget-production-credit-cleanup` protected job도 host를 다시 찾아 Standard를
    확인하며, 이 job이 성공하지 않으면 DNS plan은 시작하지 않는다.
-10. ingress 없는 recovery instance의 logical restore와 EBS clone restore가 모두
+11. ingress 없는 recovery instance의 logical restore와 EBS clone restore가 모두
     4시간 이내인지 확인한다.
-11. private service, public gateway, `curl --resolve`와 CPU credit 216 gate가
+12. private service, public gateway, `curl --resolve`와 CPU credit 216 gate가
     통과하면 별도 DNS plan을 검토한다.
-12. `public_dns_enable_approved=true`일 때만 마지막 protected job을 승인한다.
+13. `public_dns_enable_approved=true`일 때만 마지막 protected job을 승인한다.
     A record와 backup schedule 적용 뒤 `BUDGET_PRODUCTION_READY.json`이 생성된다.
 
 중단 조건은 plan의 destroy/금지 resource, 비용 초과, `UNSET`, digest/SBOM 누락,

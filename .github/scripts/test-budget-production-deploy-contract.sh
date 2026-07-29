@@ -5,12 +5,13 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 workflow="${root}/.github/workflows/deploy-budget-production.yml"
 bootstrap_policy="${root}/infra/terraform/bootstrap/budget_production_oidc.tf"
 budget_backend="${root}/infra/terraform/budget-production/backend.tf"
+budget_outputs="${root}/infra/terraform/budget-production/outputs.tf"
 for required in \
   'name: Deploy budget production' \
   'environment: budget-production-plan' \
   'environment: budget-production' \
   'home-search/budget-production/terraform.tfstate' \
-  'options: [deploy, registry]' \
+  'options: [deploy, foundation, registry]' \
   'release_sha:' \
   'migration_artifact_uri:' \
   'migration_manifest_sha256:' \
@@ -25,6 +26,13 @@ for required in \
   'BUDGET_PRODUCTION_READY.json'; do
   grep -Fq -- "${required}" "${workflow}"
 done
+[[ "$(grep -Fc "if: inputs.operation == 'deploy' || inputs.operation == 'foundation'" "${workflow}")" -eq 2 ]]
+grep -Fq 'with: { ref: "${{ inputs.operation == '\''deploy'\'' && inputs.release_sha || github.sha }}" }' "${workflow}"
+[[ "$(grep -Fc "if: inputs.operation == 'deploy'" "${workflow}")" -ge 4 ]]
+grep -Fq 'terraform -chdir=infra/terraform/budget-production output -raw ami_id' "${workflow}"
+grep -Fq 'terraform -chdir=infra/terraform/budget-production output -raw availability_zone' "${workflow}"
+grep -Fq 'output "ami_id" {' "${budget_outputs}"
+grep -Fq 'output "availability_zone" {' "${budget_outputs}"
 [[ "$(grep -Ec '^[[:space:]]+environment: budget-production-plan$' "${workflow}")" -eq 2 ]]
 [[ "$(grep -Ec '^[[:space:]]+environment: budget-production$' "${workflow}")" -eq 5 ]]
 ! grep -Fq 'infra/terraform/production' "${workflow}"

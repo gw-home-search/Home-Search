@@ -60,6 +60,8 @@ run "foundation_is_single_az_single_instance_and_data_safe" {
       && aws_instance.host[0].metadata_options[0].http_tokens == "required"
       && aws_instance.host[0].disable_api_termination
       && aws_instance.host[0].instance_initiated_shutdown_behavior == "stop"
+      && output.ami_id == "ami-0123456789abcdef0"
+      && output.availability_zone == "ap-northeast-2a"
     )
     error_message = "Foundation must use one protected t3a.large with IMDSv2 in the pinned AZ."
   }

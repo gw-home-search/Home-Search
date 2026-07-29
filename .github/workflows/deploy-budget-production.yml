@@ -123,7 +123,7 @@ jobs:
           terraform -chdir=infra/terraform/budget-production fmt -check
           terraform -chdir=infra/terraform/budget-production validate
           terraform -chdir=infra/terraform/budget-production test
-          current_phase="$(terraform -chdir=infra/terraform/budget-production output -raw deployment_phase 2>/dev/null || printf registry)"
+          current_phase="$(infra/deploy/read-budget-production-phase.sh infra/terraform/budget-production)"
           [[ "${current_phase}" == 'registry' || "${current_phase}" == 'foundation' ]]
           code=0
           terraform -chdir=infra/terraform/budget-production plan -out=foundation.tfplan \
@@ -170,7 +170,7 @@ jobs:
           terraform -chdir=infra/terraform/budget-production fmt -check
           terraform -chdir=infra/terraform/budget-production validate
           terraform -chdir=infra/terraform/budget-production test
-          current_phase="$(terraform -chdir=infra/terraform/budget-production output -raw deployment_phase 2>/dev/null || printf registry)"
+          current_phase="$(infra/deploy/read-budget-production-phase.sh infra/terraform/budget-production)"
           [[ "${current_phase}" == registry ]]
           code=0
           terraform -chdir=infra/terraform/budget-production plan -out=registry.tfplan \
@@ -542,7 +542,7 @@ jobs:
             -var=public_dns_enabled=true -var=backup_schedules_enabled=true -detailed-exitcode || code=$?
           [[ "${code}" == 2 ]]
           terraform -chdir=infra/terraform/budget-production show -json dns.tfplan >deployment-evidence/dns-plan.json
-          infra/deploy/verify-budget-production-plan.sh deployment-evidence/dns-plan.json public public
+          infra/deploy/verify-budget-production-plan.sh deployment-evidence/dns-plan.json public 'public'
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: budget-production-reviewed-dns-${{ inputs.release_tag }}

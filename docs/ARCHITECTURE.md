@@ -205,6 +205,14 @@ as the default and rollback path.
 The implementation order is user-service first, evidence-grounded chatbot
 capabilities second, then image/ECR CI and AWS deployment preparation.
 
+## Budget production deployment view
+
+논리 service/database ownership은 그대로 유지하면서 물리 runtime만 하나의
+`t3a.large`와 PostgreSQL process에 배치할 수 있다. 이 예외 profile은
+`BUDGET_PRODUCTION_ARCHITECTURE.md`가 정의한다. DB/role과 execution role은
+service별로 분리하며 cross-database join/FK, public DB/cache/admin route는 계속
+금지한다. 기존 HA Production topology와 state는 변경하지 않는다.
+
 ## Market Insight And Digest Expansion
 
 Property-data keeps insight calculation and news integration inside its

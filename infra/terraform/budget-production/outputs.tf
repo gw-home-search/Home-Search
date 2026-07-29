@@ -52,3 +52,38 @@ output "recovery_instance_profile_name" {
   value       = try(aws_iam_instance_profile.recovery[0].name, null)
   description = "Least-privilege instance profile for ephemeral restore rehearsals."
 }
+
+output "public_subnet_id" {
+  value       = try(aws_subnet.public[0].id, null)
+  description = "Pinned single-AZ public subnet used by the ingress-free recovery runner."
+}
+
+output "one_shot_task_definition_arns" {
+  value       = { for name, task in aws_ecs_task_definition.one_shot : name => task.arn }
+  description = "Reviewed EC2 bridge one-shot task definitions keyed by operation."
+}
+
+output "application_service_names" {
+  value       = sort(keys(aws_ecs_service.application))
+  description = "Application ECS services present in the selected phase."
+}
+
+output "platform_service_names" {
+  value       = sort(keys(aws_ecs_service.platform))
+  description = "Platform ECS services present in the selected phase."
+}
+
+output "data_services_enabled" {
+  value       = var.data_services_enabled
+  description = "Explicit PostgreSQL and Valkey activation gate."
+}
+
+output "public_dns_enabled" {
+  value       = var.public_dns_enabled
+  description = "Explicit final Route53 cutover gate."
+}
+
+output "backup_schedules_enabled" {
+  value       = var.backup_schedules_enabled
+  description = "Post-cutover DLM and logical backup schedule gate."
+}

@@ -134,6 +134,11 @@ chatbot overlay에서만 연결된다. 두 서비스는
 30. [ADR 0007](adr/0007-kafka-first-asynchronous-state-and-http-exceptions.md)
 31. [ADR 0008](adr/0008-production-database-ownership-and-ai-read-retirement.md)
 32. [ADR 0009](adr/0009-immutable-digest-promotion-and-terraform-environment-isolation.md)
+33. [BUDGET_PRODUCTION_ARCHITECTURE.md](BUDGET_PRODUCTION_ARCHITECTURE.md)
+34. [BUDGET_PRODUCTION_RUNBOOK.md](BUDGET_PRODUCTION_RUNBOOK.md)
+35. [BUDGET_PRODUCTION_THREAT_MODEL.md](BUDGET_PRODUCTION_THREAT_MODEL.md)
+36. [Budget Production 비용 보고서](reports/BUDGET_PRODUCTION_COST.md)
+37. [ADR 0011](adr/0011-budget-production-single-node-profile.md)
 
 ## Non-Negotiable Decisions
 

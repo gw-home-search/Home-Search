@@ -9,8 +9,11 @@ bash -n "${runner}"
 for required in \
   'shutdown -h +240' \
   '--instance-type t3a.large' \
+  "--credit-specification 'CpuCredits=unlimited'" \
+  'CpuCredits=standard' \
   'HttpPutResponseHopLimit=1' \
   'Purpose,Value=budget-production-recovery' \
+  'Environment,Value=budget-production' \
   'RunId,Value=${run_id}' \
   '--timeout-seconds 14400' \
   '--network none' \

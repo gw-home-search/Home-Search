@@ -50,7 +50,7 @@ locals {
     "ecs:CreateCluster", "ecs:CreateService", "ecs:DeleteCluster", "ecs:DeleteService", "ecs:DeregisterTaskDefinition", "ecs:RegisterTaskDefinition", "ecs:TagResource", "ecs:UntagResource", "ecs:UpdateCluster", "ecs:UpdateService",
     "events:DeleteRule", "events:PutRule", "events:PutTargets", "events:RemoveTargets", "events:TagResource", "events:UntagResource",
     "logs:CreateLogGroup", "logs:DeleteLogGroup", "logs:PutRetentionPolicy", "logs:TagResource", "logs:UntagResource",
-    "route53:ChangeResourceRecordSets", "s3:CreateBucket", "s3:DeleteBucket", "s3:DeleteBucketPolicy", "s3:PutBucketLifecycleConfiguration", "s3:PutBucketOwnershipControls", "s3:PutBucketPolicy", "s3:PutBucketPublicAccessBlock", "s3:PutBucketVersioning", "s3:PutEncryptionConfiguration", "s3:PutObject", "s3:DeleteObject", "s3:PutObjectRetention",
+    "route53:ChangeResourceRecordSets",
     "sns:CreateTopic", "sns:DeleteTopic", "sns:SetTopicAttributes", "sns:Subscribe", "sns:TagResource", "sns:Unsubscribe", "sns:UntagResource",
     "ssm:AddTagsToResource", "ssm:CreateAssociation", "ssm:CreateDocument", "ssm:DeleteAssociation", "ssm:DeleteDocument", "ssm:DeleteParameter", "ssm:PutParameter", "ssm:RemoveTagsFromResource", "ssm:UpdateAssociation", "ssm:UpdateDocument",
   ]
@@ -58,12 +58,12 @@ locals {
     "ec2:DeleteVolume", "ec2:DetachVolume", "s3:DeleteBucket", "s3:DeleteObject", "ssm:DeleteParameter",
   ]
   budget_deploy_actions = [
-    "cloudwatch:DescribeAlarms", "ec2:AttachVolume", "ec2:CreateTags", "ec2:CreateVolume", "ec2:DescribeImages", "ec2:DescribeInstances", "ec2:DescribeInstanceCreditSpecifications", "ec2:DescribeInstanceStatus",
-    "ec2:DescribeSnapshots", "ec2:DescribeSubnets", "ec2:DescribeTags", "ec2:DescribeVolumes", "ec2:ModifyInstanceCreditSpecification", "ec2:RunInstances", "ec2:TerminateInstances",
-    "ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer", "ecs:DescribeServices", "ecs:DescribeTaskDefinition",
-    "ecs:ListTasks", "ecs:RegisterTaskDefinition", "ecs:RunTask", "ecs:StopTask", "ecs:UpdateService",
-    "iam:PassRole", "s3:GetObject", "s3:PutObject", "ssm:DescribeInstanceInformation", "ssm:GetCommandInvocation",
-    "ssm:ListCommandInvocations", "ssm:SendCommand",
+    "cloudwatch:DescribeAlarms", "cloudwatch:GetMetricData", "cloudwatch:GetMetricStatistics", "ec2:DescribeImages", "ec2:DescribeInstances", "ec2:DescribeInstanceCreditSpecifications", "ec2:DescribeInstanceStatus",
+    "ec2:DescribeSnapshots", "ec2:DescribeSubnets", "ec2:DescribeTags", "ec2:DescribeVolumes",
+    "ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer", "ecs:DescribeServices", "ecs:DescribeTaskDefinition", "ecs:DescribeTasks",
+    "ecs:ListContainerInstances", "ecs:ListTasks",
+    "ssm:DescribeInstanceInformation", "ssm:GetCommandInvocation",
+    "ssm:ListCommandInvocations",
   ]
 }
 
@@ -214,6 +214,82 @@ resource "aws_iam_role_policy" "github_budget_apply" {
           "arn:aws:iam::${data.aws_caller_identity.current.account_id}:instance-profile/home-search-budget-production-*",
         ]
       },
+      {
+        Sid    = "ManageBudgetBucketsOnly"
+        Effect = "Allow"
+        Action = [
+          "s3:CreateBucket", "s3:DeleteBucket", "s3:DeleteBucketPolicy",
+          "s3:PutBucketLifecycleConfiguration", "s3:PutBucketOwnershipControls", "s3:PutBucketPolicy",
+          "s3:PutBucketPublicAccessBlock", "s3:PutBucketVersioning", "s3:PutEncryptionConfiguration",
+        ]
+        Resource = [
+          "arn:aws:s3:::home-search-budget-production-backup-${data.aws_caller_identity.current.account_id}",
+          "arn:aws:s3:::home-search-budget-production-reference-raw-${data.aws_caller_identity.current.account_id}",
+        ]
+      },
+      {
+        Sid    = "ManageBudgetBucketObjectsOnly"
+        Effect = "Allow"
+        Action = ["s3:DeleteObject", "s3:PutObject", "s3:PutObjectRetention"]
+        Resource = [
+          "arn:aws:s3:::home-search-budget-production-backup-${data.aws_caller_identity.current.account_id}/*",
+          "arn:aws:s3:::home-search-budget-production-reference-raw-${data.aws_caller_identity.current.account_id}/*",
+        ]
+      },
+      {
+        Sid    = "DenyCrossEnvironmentEc2Mutation"
+        Effect = "Deny"
+        Action = [
+          "ec2:AssociateAddress", "ec2:AttachVolume", "ec2:DeleteInternetGateway", "ec2:DeleteRouteTable",
+          "ec2:DeleteSecurityGroup", "ec2:DeleteSubnet", "ec2:DeleteVpc", "ec2:DetachVolume",
+          "ec2:DisassociateAddress", "ec2:ModifyInstanceAttribute", "ec2:ModifyVolume",
+          "ec2:ModifyVpcAttribute", "ec2:ReleaseAddress", "ec2:StartInstances", "ec2:StopInstances",
+          "ec2:TerminateInstances",
+        ]
+        Resource = "*"
+        Condition = {
+          StringNotEqualsIfExists = { "aws:ResourceTag/Environment" = "budget-production" }
+        }
+      },
+      {
+        Sid    = "DenyCrossEnvironmentEcsMutation"
+        Effect = "Deny"
+        Action = ["ecs:CreateCluster", "ecs:CreateService", "ecs:DeleteCluster", "ecs:DeleteService", "ecs:DeregisterTaskDefinition", "ecs:TagResource", "ecs:UntagResource", "ecs:UpdateCluster", "ecs:UpdateService"]
+        NotResource = [
+          "arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:cluster/home-search-budget-production",
+          "arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:service/home-search-budget-production/*",
+          "arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:task-definition/home-search-budget-production-*",
+        ]
+      },
+      {
+        Sid         = "DenyCrossEnvironmentEcrMutation"
+        Effect      = "Deny"
+        Action      = ["ecr:CreateRepository", "ecr:DeleteLifecyclePolicy", "ecr:DeleteRepository", "ecr:PutImageScanningConfiguration", "ecr:PutImageTagMutability", "ecr:PutLifecyclePolicy", "ecr:SetRepositoryPolicy", "ecr:TagResource", "ecr:UntagResource"]
+        NotResource = ["arn:aws:ecr:${var.aws_region}:${data.aws_caller_identity.current.account_id}:repository/home-search/budget-*"]
+      },
+      {
+        Sid    = "DenyCrossEnvironmentControlPlaneMutation"
+        Effect = "Deny"
+        Action = ["cloudwatch:DeleteAlarms", "cloudwatch:PutMetricAlarm", "logs:CreateLogGroup", "logs:DeleteLogGroup", "logs:PutRetentionPolicy", "logs:TagResource", "logs:UntagResource", "events:DeleteRule", "events:PutRule", "events:PutTargets", "events:RemoveTargets", "events:TagResource", "events:UntagResource", "sns:CreateTopic", "sns:DeleteTopic", "sns:SetTopicAttributes", "sns:Subscribe", "sns:TagResource", "sns:Unsubscribe", "sns:UntagResource", "ssm:AddTagsToResource", "ssm:CreateAssociation", "ssm:CreateDocument", "ssm:DeleteAssociation", "ssm:DeleteDocument", "ssm:DeleteParameter", "ssm:PutParameter", "ssm:RemoveTagsFromResource", "ssm:UpdateAssociation", "ssm:UpdateDocument"]
+        NotResource = [
+          "arn:aws:cloudwatch:${var.aws_region}:${data.aws_caller_identity.current.account_id}:alarm:home-search-budget-production-*",
+          "arn:aws:events:${var.aws_region}:${data.aws_caller_identity.current.account_id}:rule/home-search-budget-production-*",
+          "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/home-search/budget-production/*",
+          "arn:aws:sns:${var.aws_region}:${data.aws_caller_identity.current.account_id}:home-search-budget-production-*",
+          "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:association/*",
+          "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:document/home-search-budget-production-*",
+          "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/home-search/budget-production/*",
+        ]
+      },
+      {
+        Sid      = "DenyNonBudgetHostType"
+        Effect   = "Deny"
+        Action   = ["ec2:RunInstances"]
+        Resource = "*"
+        Condition = {
+          StringNotEquals = { "ec2:InstanceType" = "t3a.large" }
+        }
+      },
       { Sid = "DenyBudgetDataDeletion", Effect = "Deny", Action = local.budget_apply_explicit_deny_actions, Resource = "*" },
     ]
   })
@@ -230,6 +306,148 @@ resource "aws_iam_role_policy" "github_budget_deploy" {
         Condition = { StringEqualsIfExists = { "aws:RequestedRegion" = var.aws_region } }
       },
       {
+        Sid    = "LaunchRecoveryDependencies"
+        Effect = "Allow"
+        Action = ["ec2:RunInstances"]
+        Resource = [
+          "arn:aws:ec2:${var.aws_region}::image/*",
+          "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:network-interface/*",
+          "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:security-group/*",
+          "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:subnet/*",
+          "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:volume/*",
+        ]
+        Condition = { StringEquals = { "ec2:InstanceType" = "t3a.large" } }
+      },
+      {
+        Sid      = "LaunchTaggedRecoveryInstance"
+        Effect   = "Allow"
+        Action   = ["ec2:RunInstances"]
+        Resource = ["arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*"]
+        Condition = {
+          StringEquals = {
+            "ec2:InstanceType"           = "t3a.large"
+            "aws:RequestTag/Environment" = "budget-production"
+            "aws:RequestTag/Purpose"     = "budget-production-recovery"
+          }
+        }
+      },
+      {
+        Sid      = "CreateTaggedRecoveryClone"
+        Effect   = "Allow"
+        Action   = ["ec2:CreateVolume"]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:RequestTag/Environment" = "budget-production"
+            "aws:RequestTag/Purpose"     = "budget-production-recovery-clone"
+          }
+        }
+      },
+      {
+        Sid    = "TagRecoveryResourcesOnCreate"
+        Effect = "Allow"
+        Action = ["ec2:CreateTags"]
+        Resource = [
+          "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*",
+          "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:snapshot/*",
+          "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:volume/*",
+        ]
+        Condition = { StringEquals = { "ec2:CreateAction" = ["CreateSnapshot", "CreateVolume", "RunInstances"] } }
+      },
+      {
+        Sid      = "SnapshotBudgetDataVolume"
+        Effect   = "Allow"
+        Action   = ["ec2:CreateSnapshot"]
+        Resource = ["arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:volume/*"]
+        Condition = {
+          StringEquals = { "ec2:ResourceTag/Environment" = "budget-production" }
+        }
+      },
+      {
+        Sid    = "AttachBudgetRecoveryVolume"
+        Effect = "Allow"
+        Action = ["ec2:AttachVolume"]
+        Resource = [
+          "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*",
+          "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:volume/*",
+        ]
+        Condition = {
+          StringEquals = { "ec2:ResourceTag/Environment" = "budget-production" }
+        }
+      },
+      {
+        Sid      = "ManageBudgetCreditMode"
+        Effect   = "Allow"
+        Action   = ["ec2:ModifyInstanceCreditSpecification"]
+        Resource = ["arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*"]
+        Condition = {
+          StringEquals = { "ec2:ResourceTag/Environment" = "budget-production" }
+        }
+      },
+      {
+        Sid      = "TerminateTaggedRecoveryInstance"
+        Effect   = "Allow"
+        Action   = ["ec2:TerminateInstances"]
+        Resource = ["arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*"]
+        Condition = {
+          StringEquals = {
+            "ec2:ResourceTag/Environment" = "budget-production"
+            "ec2:ResourceTag/Purpose"     = "budget-production-recovery"
+          }
+        }
+      },
+      {
+        Sid      = "PassBudgetRuntimeRolesOnly"
+        Effect   = "Allow"
+        Action   = ["iam:PassRole"]
+        Resource = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/home-search-budget-production-*"]
+        Condition = {
+          StringEquals = { "iam:PassedToService" = ["ec2.amazonaws.com", "ecs-tasks.amazonaws.com"] }
+        }
+      },
+      {
+        Sid      = "RunBudgetOneShotTasks"
+        Effect   = "Allow"
+        Action   = ["ecs:RunTask"]
+        Resource = ["arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:task-definition/home-search-budget-production-*"]
+        Condition = {
+          ArnEquals = { "ecs:cluster" = "arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:cluster/home-search-budget-production" }
+        }
+      },
+      {
+        Sid      = "StopBudgetOneShotTasks"
+        Effect   = "Allow"
+        Action   = ["ecs:StopTask"]
+        Resource = ["arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:task/home-search-budget-production/*"]
+        Condition = {
+          ArnEquals = { "ecs:cluster" = "arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:cluster/home-search-budget-production" }
+        }
+      },
+      {
+        Sid      = "UseRecoveryCommandDocument"
+        Effect   = "Allow"
+        Action   = ["ssm:SendCommand"]
+        Resource = ["arn:aws:ssm:${var.aws_region}::document/AWS-RunShellScript"]
+      },
+      {
+        Sid      = "SendCommandToTaggedRecoveryOnly"
+        Effect   = "Allow"
+        Action   = ["ssm:SendCommand"]
+        Resource = ["arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*"]
+        Condition = {
+          StringEquals = {
+            "ssm:resourceTag/Environment" = "budget-production"
+            "ssm:resourceTag/Purpose"     = "budget-production-recovery"
+          }
+        }
+      },
+      {
+        Sid      = "ReadBudgetBackupEvidence"
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = ["arn:aws:s3:::home-search-budget-production-backup-${data.aws_caller_identity.current.account_id}/*"]
+      },
+      {
         Sid      = "DeleteTaggedRecoveryClone"
         Effect   = "Allow"
         Action   = ["ec2:DeleteVolume"]
@@ -239,8 +457,13 @@ resource "aws_iam_role_policy" "github_budget_deploy" {
         }
       },
       {
-        Sid      = "DenyTerraformState", Effect = "Deny", Action = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
-        Resource = ["${aws_s3_bucket.terraform_state.arn}/${var.budget_production_state_key}*"]
+        Sid = "DenyTerraformState", Effect = "Deny", Action = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
+        Resource = flatten([
+          for key in concat([var.budget_production_state_key], local.budget_forbidden_state_keys) : [
+            "arn:aws:s3:::${var.state_bucket_name}/${key}",
+            "arn:aws:s3:::${var.state_bucket_name}/${key}.tflock",
+          ]
+        ])
       },
     ]
   })

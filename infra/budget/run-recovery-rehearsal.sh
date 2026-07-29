@@ -49,6 +49,14 @@ cleanup() {
       --filters "Name=resource-id,Values=${instance_id}" 'Name=key,Values=RunId' \
       --query 'Tags[0].Value' --output text 2>/dev/null || true)"
     if [[ "${purpose}" == 'budget-production-recovery' && "${actual_run_id}" == "${run_id}" ]]; then
+      aws ec2 modify-instance-credit-specification --region "${region}" \
+        --instance-credit-specification "InstanceId=${instance_id},CpuCredits=standard" >/dev/null
+      credit_mode="$(aws ec2 describe-instance-credit-specifications --region "${region}" \
+        --instance-ids "${instance_id}" --query 'InstanceCreditSpecifications[0].CpuCredits' --output text)"
+      [[ "${credit_mode}" == 'standard' ]] || {
+        echo '상태: Fail - recovery instance credit을 Standard로 복원하지 못해 종료를 거부합니다.' >&2
+        return 1
+      }
       aws ec2 terminate-instances --region "${region}" --instance-ids "${instance_id}" >/dev/null
       aws ec2 wait instance-terminated --region "${region}" --instance-ids "${instance_id}"
     else
@@ -97,7 +105,7 @@ if [[ "${mode}" == 'ebs' ]]; then
   }
   volume_id="$(aws ec2 create-volume --region "${region}" --availability-zone "${availability_zone}" \
     --snapshot-id "${snapshot_id}" --volume-type gp3 --iops 3000 --throughput 125 \
-    --tag-specifications "ResourceType=volume,Tags=[{Key=Name,Value=home-search-budget-production-recovery-${run_id}},{Key=Purpose,Value=budget-production-recovery-clone},{Key=RunId,Value=${run_id}},{Key=MaxLifetime,Value=4h}]" \
+    --tag-specifications "ResourceType=volume,Tags=[{Key=Name,Value=home-search-budget-production-recovery-${run_id}},{Key=Environment,Value=budget-production},{Key=Purpose,Value=budget-production-recovery-clone},{Key=RunId,Value=${run_id}},{Key=MaxLifetime,Value=4h}]" \
     --query VolumeId --output text)"
   [[ "${volume_id}" =~ ^vol-[0-9a-f]{8,17}$ ]]
   aws ec2 wait volume-available --region "${region}" --volume-ids "${volume_id}"
@@ -117,9 +125,10 @@ instance_id="$(aws ec2 run-instances --region "${region}" \
   --network-interfaces "DeviceIndex=0,SubnetId=${subnet_id},Groups=${security_group_id},AssociatePublicIpAddress=true,DeleteOnTermination=true" \
   --block-device-mappings 'DeviceName=/dev/xvda,Ebs={VolumeSize=80,VolumeType=gp3,Encrypted=true,DeleteOnTermination=true}' \
   --metadata-options 'HttpEndpoint=enabled,HttpTokens=required,HttpPutResponseHopLimit=1,InstanceMetadataTags=disabled' \
+  --credit-specification 'CpuCredits=unlimited' \
   --instance-initiated-shutdown-behavior terminate \
   --user-data "file://${tmp_dir}/user-data.sh" \
-  --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=home-search-budget-production-recovery-${run_id}},{Key=Purpose,Value=budget-production-recovery},{Key=RunId,Value=${run_id}},{Key=MaxLifetime,Value=4h}]" \
+  --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=home-search-budget-production-recovery-${run_id}},{Key=Environment,Value=budget-production},{Key=Purpose,Value=budget-production-recovery},{Key=RunId,Value=${run_id}},{Key=MaxLifetime,Value=4h}]" \
   --query 'Instances[0].InstanceId' --output text)"
 [[ "${instance_id}" =~ ^i-[0-9a-f]{8,17}$ ]]
 aws ec2 wait instance-status-ok --region "${region}" --instance-ids "${instance_id}"

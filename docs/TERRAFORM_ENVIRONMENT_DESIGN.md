@@ -167,3 +167,17 @@ production apply 전에 월비용 보고서를 승인한다.
 Production backup은 `ap-northeast-1`에 daily encrypted copy, daily 35일,
 monthly 12개월 보존을 사용한다. Restore verification은 월 1회, Tokyo game
 day는 분기 1회 수행한다.
+
+## 병렬 budget-production profile
+
+`infra/terraform/budget-production`은 위 HA Production의 축소형 module 구성이
+아닌 독립 single-node profile이다. state key는
+`home-search/budget-production/terraform.tfstate`이고 기존 staging/production
+state와 resource를 소유하지 않는다. phase는
+`registry -> foundation -> data -> private -> public` 순서로만 전진한다.
+
+단일 AZ/EIP/EC2, host Nginx, ECS bridge, host data EBS를 사용하고 NAT, ALB,
+RDS, ElastiCache, MSK, VPN, AMP/Grafana, FSR을 plan verifier가 금지한다. DNS와
+backup schedule은 public dark smoke와 restore evidence 뒤의 별도 plan에서만
+활성화한다. 상세 ownership과 예외는
+`BUDGET_PRODUCTION_ARCHITECTURE.md`와 ADR 0011을 따른다.

@@ -88,6 +88,19 @@ variable "alarm_email" {
   }
 }
 
+variable "cost_anomaly_monitor_arn" {
+  type        = string
+  default     = ""
+  description = "Existing account-wide SERVICE dimensional anomaly monitor ARN referenced without taking ownership."
+  validation {
+    condition = (
+      var.cost_anomaly_monitor_arn == ""
+      || can(regex("^arn:aws:ce::[0-9]{12}:anomalymonitor/[0-9a-f-]{36}$", var.cost_anomaly_monitor_arn))
+    )
+    error_message = "cost_anomaly_monitor_arn must be empty before foundation or one exact account anomaly monitor ARN."
+  }
+}
+
 variable "instance_type" {
   type        = string
   default     = "t3a.large"

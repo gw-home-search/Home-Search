@@ -54,6 +54,8 @@ elif [[ "${args}" == *' ssm list-tags-for-resource '* ]]; then
   fi
 elif [[ "${args}" == *' sts get-caller-identity '* ]]; then
   printf '%s\n' '123456789012'
+elif [[ "${args}" == *' budgets describe-budget '* ]]; then
+  printf '%s\n' '{"Budget":{"BudgetName":"home-search-budget-production-monthly","BudgetLimit":{"Amount":"100.0","Unit":"USD"},"CostFilters":{},"CostTypes":{},"TimeUnit":"MONTHLY","BudgetType":"COST"}}'
 elif [[ "${args}" == *' ec2 describe-vpcs '* ]]; then
   printf '%s\n' '{"Vpcs":[{"VpcId":"vpc-0123456789abcdef0","State":"available","IsDefault":false,"CidrBlock":"10.44.0.0/24","Tags":[{"Key":"Project","Value":"home-search"},{"Key":"Environment","Value":"budget-production"},{"Key":"ManagedBy","Value":"terraform"},{"Key":"Name","Value":"home-search-budget-production-vpc"}]}]}'
 elif [[ "${args}" == *' ec2 describe-internet-gateways '* ]]; then
@@ -142,6 +144,12 @@ foundation_state='{
       "type":"aws_security_group",
       "name":"recovery",
       "instances":[{"index_key":0,"status":"tainted","attributes":{"id":"sg-0fedcba9876543210","name":"home-search-budget-production-recovery","description":"Ephemeral recovery rehearsal; intentionally no ingress","vpc_id":"vpc-0123456789abcdef0"}}]
+    },
+    {
+      "mode":"managed",
+      "type":"aws_budgets_budget",
+      "name":"monthly",
+      "instances":[{"index_key":0,"status":"tainted","attributes":{"id":"123456789012:home-search-budget-production-monthly","name":"home-search-budget-production-monthly","budget_type":"COST","limit_amount":"100","limit_unit":"USD","time_unit":"MONTHLY"}}]
     }
   ]
 }'
@@ -167,10 +175,11 @@ grep -Fxq 'aws_internet_gateway.this[0]' "${temp_dir}/calls"
 grep -Fxq 'aws_s3_bucket.reference_raw[0]' "${temp_dir}/calls"
 grep -Fxq 'aws_security_group.host[0]' "${temp_dir}/calls"
 grep -Fxq 'aws_security_group.recovery[0]' "${temp_dir}/calls"
+grep -Fxq 'aws_budgets_budget.monthly[0]' "${temp_dir}/calls"
 grep -Fxq 'aws_ssm_parameter.runtime["postgres/superuser-password"]' "${temp_dir}/calls"
 grep -Fxq 'aws_ssm_parameter.runtime["user/oauth/kakao-client-secret"]' "${temp_dir}/calls"
-[[ "$(wc -l <"${temp_dir}/calls" | tr -d ' ')" -eq 6 ]]
-grep -Fq 'verified taint 6개' "${temp_dir}/foundation-success.out"
+[[ "$(wc -l <"${temp_dir}/calls" | tr -d ' ')" -eq 7 ]]
+grep -Fq 'verified taint 7개' "${temp_dir}/foundation-success.out"
 
 if run_recovery bad-igw-tags "${combined_state}" >"${temp_dir}/igw.out" 2>"${temp_dir}/igw.err"; then
   echo '상태: Fail - 소유 태그가 다른 internet gateway를 허용했습니다.' >&2

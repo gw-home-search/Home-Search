@@ -150,9 +150,17 @@ jobs:
             --location-type availability-zone --filters Name=instance-type,Values=t3a.large \
             "Name=location,Values=${pinned_az}" --query 'length(InstanceTypeOfferings)' --output text)"
           [[ "${offering_count}" == 1 ]]
+          account_id="$(aws sts get-caller-identity --query Account --output text)"
+          service_monitors="$(aws ce get-anomaly-monitors --region us-east-1 \
+            --query "AnomalyMonitors[?MonitorType=='DIMENSIONAL' && MonitorDimension=='SERVICE'].MonitorArn" \
+            --output json)"
+          [[ "$(jq 'length' <<<"${service_monitors}")" == 1 ]]
+          cost_anomaly_monitor_arn="$(jq -er '.[0]' <<<"${service_monitors}")"
+          [[ "${cost_anomaly_monitor_arn}" =~ ^arn:aws:ce::${account_id}:anomalymonitor/[0-9a-f-]{36}$ ]]
           jq -n --arg ami "${pinned_ami}" --arg az "${pinned_az}" \
             --arg zone "${HOSTED_ZONE_ID}" --arg email "${ALARM_EMAIL}" \
-            '{ami_id:$ami,availability_zone:$az,hosted_zone_id:$zone,alarm_email:$email}' \
+            --arg cost_monitor "${cost_anomaly_monitor_arn}" \
+            '{ami_id:$ami,availability_zone:$az,hosted_zone_id:$zone,alarm_email:$email,cost_anomaly_monitor_arn:$cost_monitor}' \
             >infra/terraform/budget-production/foundation.auto.tfvars.json
           code=0
           terraform -chdir=infra/terraform/budget-production plan -out=foundation.tfplan \
@@ -170,8 +178,8 @@ jobs:
             --fixture infra/cost/budget-production-price-fixture.json \
             --account-forecast-usd "${account_forecast}" >deployment-evidence/cost-estimate.json
           jq -n --arg ami "${pinned_ami}" --arg az "${pinned_az}" --arg pin_source "${pin_source}" \
-            --arg account_forecast "${account_forecast}" \
-            '{status:"pass",ami_id:$ami,availability_zone:$az,pin_source:$pin_source,account_forecast_usd:$account_forecast}' \
+            --arg account_forecast "${account_forecast}" --arg cost_monitor "${cost_anomaly_monitor_arn}" \
+            '{status:"pass",ami_id:$ami,availability_zone:$az,pin_source:$pin_source,account_forecast_usd:$account_forecast,cost_anomaly_monitor_arn:$cost_monitor}' \
             >deployment-evidence/foundation-preflight.json
       - name: Create the registry-only bootstrap plan
         if: inputs.operation == 'registry'

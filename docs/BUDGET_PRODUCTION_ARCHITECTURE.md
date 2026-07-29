@@ -20,10 +20,10 @@ SSM -> host maintenance     S3/DLM <- logical dump/EBS snapshot
 | 소유자 | 관리 대상 |
 |---|---|
 | bootstrap state | state S3/KMS, budget plan/apply/deploy OIDC role |
-| budget state | VPC/subnet/EIP/EC2/EBS/ECS, platform ECR, S3, SSM, ACM, DNS, alarm/cost |
+| budget state | VPC/subnet/EIP/EC2/EBS/ECS, platform ECR, S3, SSM, ACM, DNS, alarm, AWS Budget, anomaly subscription |
 | staging state | 기존 application ECR 17개 |
 | 기존 production state | 변경 없음 |
-| 외부 입력 | hosted zone ID, external credential 값, 승인된 acceptance evidence |
+| 외부 입력 | hosted zone ID, account-wide SERVICE anomaly monitor ARN, external credential 값, 승인된 acceptance evidence |
 
 State는 `home-search/budget-production/terraform.tfstate`와 해당 `.tflock`만
 사용한다. workspace는 `default`만 허용한다. Terraform state에는 실제 secret
@@ -32,6 +32,11 @@ AWS provider의 refresh 동작 때문에 plan/apply role은 budget-production pa
 prefix의 `ssm:GetParameter`만 허용한다. provider는 복호화한 값을 state에서 즉시
 제거하며 plan, artifact, log에는 출력하지 않는다. runtime task role은 이 권한을
 상속하지 않는다.
+
+Cost Anomaly Detection의 AWS managed SERVICE monitor는 계정당 하나만 허용된다.
+workflow preflight는 live account에서 exact monitor 한 개를 fail-closed로 선택하고,
+budget state는 해당 monitor를 소유하거나 수정하지 않은 채 일 `$10` threshold의
+별도 subscription만 관리한다.
 
 ## Network와 port
 

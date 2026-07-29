@@ -31,19 +31,11 @@ resource "aws_budgets_budget" "monthly" {
   tags = { Service = "cost-control" }
 }
 
-resource "aws_ce_anomaly_monitor" "services" {
-  count             = local.foundation_enabled ? 1 : 0
-  name              = "${local.name}-services"
-  monitor_type      = "DIMENSIONAL"
-  monitor_dimension = "SERVICE"
-  tags              = { Service = "cost-control" }
-}
-
 resource "aws_ce_anomaly_subscription" "daily" {
   count            = local.foundation_enabled ? 1 : 0
   name             = "${local.name}-daily"
   frequency        = "DAILY"
-  monitor_arn_list = [aws_ce_anomaly_monitor.services[0].arn]
+  monitor_arn_list = [var.cost_anomaly_monitor_arn]
 
   subscriber {
     address = var.alarm_email
@@ -59,4 +51,11 @@ resource "aws_ce_anomaly_subscription" "daily" {
   }
 
   tags = { Service = "cost-control" }
+
+  lifecycle {
+    precondition {
+      condition     = var.cost_anomaly_monitor_arn != ""
+      error_message = "Foundation requires one exact existing account-wide SERVICE anomaly monitor ARN."
+    }
+  }
 }

@@ -29,6 +29,8 @@ for required in \
   'timeout --signal=TERM --kill-after=5m 8h' \
   'CPUCreditBalance' \
   'run-recovery-rehearsal.sh' \
+  'get-anomaly-monitors' \
+  'cost_anomaly_monitor_arn' \
   'deployment-evidence/dns-plan.json' \
   'BUDGET_PRODUCTION_READY.json'; do
   grep -Fq -- "${required}" "${workflow}"

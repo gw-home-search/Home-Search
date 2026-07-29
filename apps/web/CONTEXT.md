@@ -40,9 +40,10 @@ This file defines frontend-specific Home Search terms. Canonical decisions remai
 **Auth UI** is the header login/account control and social-login dialog. It is
 independent from the public map/search/detail/trade request path.
 
-**User API adapter** calls the separate user-service base configured by
-`VITE_USER_API_SERVER_IP`. Access JWTs stay in adapter memory; refresh tokens
-remain in the user-service HttpOnly cookie.
+**User API adapter** uses browser same-origin in approved production releases.
+`VITE_USER_API_SERVER_IP` remains an optional local/test or explicit deployment
+override. Access JWTs stay in adapter memory; refresh tokens remain in the
+user-service HttpOnly cookie.
 
 **OAuth callback** means `/auth/success` or `/auth/failure`. The frontend
 restores or reports the session and then replaces the browser URL with `/`.

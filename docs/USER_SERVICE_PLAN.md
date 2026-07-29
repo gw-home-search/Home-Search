@@ -157,10 +157,12 @@ favorite 200/201 동시 저장을 검증한다. coverage gate는 `core`와 `app`
 ## Frontend 인증 흐름
 
 `apps/web`은 property-data의 `VITE_API_SERVER_IP`와 별도로
-`VITE_USER_API_SERVER_IP`를 사용한다. production build에는 user-service origin을
-명시하며 local/test만 `http://localhost:8082` fallback을 허용한다. OAuth 개발
-origin은 user-service의 exact Origin 검사와 맞는 `http://localhost:5173`이고
-`127.0.0.1:5173`은 사용하지 않는다.
+optional `VITE_USER_API_SERVER_IP` override를 지원한다. 승인된 production
+release는 이 값을 build artifact에 넣지 않고 browser
+`window.location.origin`을 사용해 public gateway와 same-origin으로 통신한다.
+local/test는 explicit override 또는 `http://localhost:8082` fallback을 허용한다.
+OAuth 개발 origin은 user-service의 exact Origin 검사와 맞는
+`http://localhost:5173`이고 `127.0.0.1:5173`은 사용하지 않는다.
 
 브라우저는 mount 또는 `/auth/success`에서 `POST /auth/access`
 (`credentials: include`) 후 memory-only access JWT로

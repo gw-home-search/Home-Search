@@ -189,8 +189,15 @@ run "budget_roles_are_separated_and_state_isolated" {
         && statement.Resource == ["arn:aws:iam::123456789012:role/aws-service-role/budgets.amazonaws.com/AWSServiceRoleForBudgets"]
         && statement.Condition.StringEquals["iam:AWSServiceName"] == "budgets.amazonaws.com"
       ])
+      && anytrue([
+        for statement in jsondecode(aws_iam_role_policy.github_budget_apply.policy).Statement :
+        statement.Sid == "CreateCloudWatchEventsServiceLinkedRole"
+        && statement.Action == ["iam:CreateServiceLinkedRole"]
+        && statement.Resource == ["arn:aws:iam::123456789012:role/aws-service-role/events.amazonaws.com/AWSServiceRoleForCloudWatchEvents*"]
+        && statement.Condition.StringLike["iam:AWSServiceName"] == "events.amazonaws.com"
+      ])
     )
-    error_message = "Budgets, its exact service-linked role, Cost Explorer, and Route53 must use explicit global-service statements without a regional condition."
+    error_message = "Budgets, Cost Explorer, Route53, and the exact CloudWatch Events service-linked role must use explicit global-service statements without a regional condition."
   }
 
   assert {
@@ -239,6 +246,24 @@ run "budget_roles_are_separated_and_state_isolated" {
       ])
     ])
     error_message = "Every added EC2 connection and egress mutation must retain the cross-environment explicit deny boundary."
+  }
+
+  assert {
+    condition = (
+      anytrue([
+        for statement in jsondecode(aws_iam_role_policy.github_budget_apply.policy).Statement :
+        statement.Sid == "DenyCrossEnvironmentControlPlaneMutation"
+        && contains(statement.NotResource, "arn:aws:ec2:ap-northeast-2:123456789012:instance/*")
+      ])
+      && anytrue([
+        for statement in jsondecode(aws_iam_role_policy.github_budget_apply.policy).Statement :
+        statement.Sid == "DenyNonBudgetSsmAssociationTarget"
+        && toset(statement.Action) == toset(["ssm:CreateAssociation", "ssm:UpdateAssociation"])
+        && statement.Resource == ["arn:aws:ec2:ap-northeast-2:123456789012:instance/*"]
+        && statement.Condition.StringNotEqualsIfExists["aws:ResourceTag/Environment"] == "budget-production"
+      ])
+    )
+    error_message = "SSM association authorization must admit the tagged budget host instance resource while explicitly denying foreign or untagged instance targets."
   }
 
   assert {

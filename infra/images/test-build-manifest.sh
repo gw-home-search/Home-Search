@@ -94,6 +94,32 @@ for dockerfile in apps/ml/Dockerfile infra/backup/Dockerfile infra/bootstrap/Doc
   }
 done
 
+grep -Fq 'postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193' \
+  infra/budget/postgres/Dockerfile || {
+  echo '상태: Fail - budget PostgreSQL base가 검증된 Alpine digest로 고정되지 않았습니다.' >&2
+  exit 1
+}
+for source_sha in \
+  af5b731c145c1d13c4e3b4eeb7d167e94e845e440f71e3496b4ed8dae0291960 \
+  af9ab591854d52a0d1115f90b797ef1cd60d01b85a11ff813073689e332272ff; do
+  grep -Fq "${source_sha}" infra/budget/postgres/Dockerfile || {
+    echo "상태: Fail - budget PostgreSQL source checksum ${source_sha}이 고정되지 않았습니다." >&2
+    exit 1
+  }
+done
+grep -Fq 'unlink /usr/local/bin/gosu' infra/budget/postgres/Dockerfile || {
+  echo '상태: Fail - budget PostgreSQL image에서 사용하지 않는 gosu가 제거되지 않았습니다.' >&2
+  exit 1
+}
+grep -Fq -- '-DENABLE_TIFF=OFF' infra/budget/postgres/Dockerfile || {
+  echo '상태: Fail - budget PostgreSQL의 PROJ build에서 TIFF가 비활성화되지 않았습니다.' >&2
+  exit 1
+}
+grep -Fq -- '--without-raster' infra/budget/postgres/Dockerfile || {
+  echo '상태: Fail - budget PostgreSQL의 PostGIS raster surface가 비활성화되지 않았습니다.' >&2
+  exit 1
+}
+
 for dockerfile in apps/property-data/db/Dockerfile apps/user/service/Dockerfile; do
   grep -Fq 'redgate/flyway:13.0-alpine@sha256:6a67d90135c8ef73299a7486da54b88f285426eea4ea1947372ffbc7b52a327b' \
     "${dockerfile}" || {

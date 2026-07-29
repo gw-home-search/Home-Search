@@ -19,12 +19,15 @@ case "${TEST_TERRAFORM_MODE:?}" in
   foundation)
     printf '%s\n' '{"version":4,"outputs":{"deployment_phase":{"value":"foundation","type":"string"}}}'
     ;;
+  empty-state)
+    printf '%s\n' '{"version":4,"outputs":{},"resources":[]}'
+    ;;
   denied)
     echo 'AccessDenied: budget state read rejected' >&2
     exit 1
     ;;
   missing-phase)
-    printf '%s\n' '{"version":4,"outputs":{}}'
+    printf '%s\n' '{"version":4,"outputs":{},"resources":[{"mode":"managed","type":"aws_ecr_repository","name":"platform"}]}'
     ;;
   *)
     exit 64
@@ -38,6 +41,9 @@ phase="$(TEST_TERRAFORM_MODE=no-state PATH="${temp_dir}/bin:${PATH}" "${script}"
 
 phase="$(TEST_TERRAFORM_MODE=foundation PATH="${temp_dir}/bin:${PATH}" "${script}" "${root}/infra/terraform/budget-production")"
 [[ "${phase}" == foundation ]]
+
+phase="$(TEST_TERRAFORM_MODE=empty-state PATH="${temp_dir}/bin:${PATH}" "${script}" "${root}/infra/terraform/budget-production")"
+[[ "${phase}" == registry ]]
 
 if TEST_TERRAFORM_MODE=denied PATH="${temp_dir}/bin:${PATH}" "${script}" \
   "${root}/infra/terraform/budget-production" >"${temp_dir}/denied.out" 2>"${temp_dir}/denied.err"; then

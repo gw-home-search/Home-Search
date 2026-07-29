@@ -20,6 +20,12 @@ if (( state_status != 0 )); then
   exit "${state_status}"
 fi
 
+if printf '%s' "${state_json}" |
+  jq -e '((.outputs // {}) | length) == 0 and ((.resources // []) | length) == 0' >/dev/null 2>&1; then
+  printf '%s\n' registry
+  exit 0
+fi
+
 phase="$(
   printf '%s' "${state_json}" |
     jq -er '.outputs.deployment_phase.value | select(type == "string")' 2>/dev/null

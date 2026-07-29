@@ -41,3 +41,31 @@ check "dns_is_last_and_explicit" {
     error_message = "public_dns_enabled requires deployment_phase=public."
   }
 }
+
+check "data_services_require_data_phase" {
+  assert {
+    condition     = !var.data_services_enabled || local.data_enabled
+    error_message = "data_services_enabled requires deployment_phase=data or later."
+  }
+}
+
+check "private_phase_requires_ready_data_services" {
+  assert {
+    condition     = !local.private_enabled || var.data_services_enabled
+    error_message = "private/public phases require the explicit post-secret-bootstrap data service gate."
+  }
+}
+
+check "data_phase_requires_platform_release" {
+  assert {
+    condition     = !local.data_enabled || (length(var.platform_image_uris) == 2 && length(var.image_uris) == 17)
+    error_message = "data phase requires both platform images and the exact 17-image release for reviewed one-shot tasks."
+  }
+}
+
+check "private_phase_requires_application_release" {
+  assert {
+    condition     = !local.private_enabled || length(var.image_uris) == 17
+    error_message = "private/public phases require the exact 17-image application release."
+  }
+}

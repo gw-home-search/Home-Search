@@ -504,10 +504,14 @@ production_db_bootstrap() {
 }
 
 runtime_grants() {
-  local name
-  for name in PROPERTY_MIGRATOR_DB_SECRET_ARN ADMIN_MIGRATOR_DB_SECRET_ARN USER_MIGRATOR_DB_SECRET_ARN; do
-    required "${name}"
-  done
+  local name direct_passwords=false
+  if [[ -n "${PROPERTY_MIGRATOR_DB_PASSWORD:-}" && -n "${ADMIN_MIGRATOR_DB_PASSWORD:-}" && -n "${USER_MIGRATOR_DB_PASSWORD:-}" ]]; then
+    direct_passwords=true
+  else
+    for name in PROPERTY_MIGRATOR_DB_SECRET_ARN ADMIN_MIGRATOR_DB_SECRET_ARN USER_MIGRATOR_DB_SECRET_ARN; do
+      required "${name}"
+    done
+  fi
   if [[ -n "${PROPERTY_DB_HOST:-}${ADMIN_DB_HOST:-}${USER_DB_HOST:-}" ]]; then
     for name in PROPERTY_DB_HOST PROPERTY_DB_PORT ADMIN_DB_HOST ADMIN_DB_PORT USER_DB_HOST USER_DB_PORT; do
       required "${name}"
@@ -517,32 +521,48 @@ runtime_grants() {
       required "${name}"
     done
   fi
-  read_secret "${PROPERTY_MIGRATOR_DB_SECRET_ARN}" "${tmp_dir}/property-migrator.json"
-  read_secret "${ADMIN_MIGRATOR_DB_SECRET_ARN}" "${tmp_dir}/admin-migrator.json"
-  read_secret "${USER_MIGRATOR_DB_SECRET_ARN}" "${tmp_dir}/user-migrator.json"
+  if [[ -n "${AI_MIGRATOR_DB_PASSWORD:-}" ]]; then
+    for name in AI_DB_HOST AI_DB_PORT; do required "${name}"; done
+  fi
+  if [[ "${direct_passwords}" == 'false' ]]; then
+    read_secret "${PROPERTY_MIGRATOR_DB_SECRET_ARN}" "${tmp_dir}/property-migrator.json"
+    read_secret "${ADMIN_MIGRATOR_DB_SECRET_ARN}" "${tmp_dir}/admin-migrator.json"
+    read_secret "${USER_MIGRATOR_DB_SECRET_ARN}" "${tmp_dir}/user-migrator.json"
+  fi
   local host port logical database migrator password pgpass sql
-  for logical in property admin user; do
+  local -a logical_databases=(property admin user)
+  if [[ -n "${AI_MIGRATOR_DB_PASSWORD:-}" ]]; then
+    logical_databases+=(ai)
+  fi
+  for logical in "${logical_databases[@]}"; do
     case "${logical}" in
       property)
         host="${PROPERTY_DB_HOST:-${PRIMARY_DB_HOST}}"
         port="${PROPERTY_DB_PORT:-${PRIMARY_DB_PORT}}"
         database=home_search
         migrator=home_search_property_migrator
-        password="$(jq -er '.password' "${tmp_dir}/property-migrator.json")"
+        if [[ "${direct_passwords}" == 'true' ]]; then password="${PROPERTY_MIGRATOR_DB_PASSWORD}"; else password="$(jq -er '.password' "${tmp_dir}/property-migrator.json")"; fi
         ;;
       admin)
         host="${ADMIN_DB_HOST:-${PRIMARY_DB_HOST}}"
         port="${ADMIN_DB_PORT:-${PRIMARY_DB_PORT}}"
         database=home_search_admin
         migrator=home_search_admin_migrator
-        password="$(jq -er '.password' "${tmp_dir}/admin-migrator.json")"
+        if [[ "${direct_passwords}" == 'true' ]]; then password="${ADMIN_MIGRATOR_DB_PASSWORD}"; else password="$(jq -er '.password' "${tmp_dir}/admin-migrator.json")"; fi
         ;;
       user)
         host="${USER_DB_HOST:-${PRIMARY_DB_HOST}}"
         port="${USER_DB_PORT:-${PRIMARY_DB_PORT}}"
         database=home_search_user
         migrator=home_search_user_migrator
-        password="$(jq -er '.password' "${tmp_dir}/user-migrator.json")"
+        if [[ "${direct_passwords}" == 'true' ]]; then password="${USER_MIGRATOR_DB_PASSWORD}"; else password="$(jq -er '.password' "${tmp_dir}/user-migrator.json")"; fi
+        ;;
+      ai)
+        host="${AI_DB_HOST:-${PRIMARY_DB_HOST}}"
+        port="${AI_DB_PORT:-${PRIMARY_DB_PORT}}"
+        database=home_search_ai
+        migrator=home_search_ai_migrator
+        password="${AI_MIGRATOR_DB_PASSWORD}"
         ;;
     esac
     pgpass="${tmp_dir}/${logical}.pgpass"
@@ -550,9 +570,9 @@ runtime_grants() {
     sql="${tmp_dir}/${logical}-grants.sql"
     case "${logical}" in
       property) cat >"${sql}" <<'SQL'
-GRANT USAGE ON SCHEMA public, reference, batch TO home_search_property_runtime, home_search_backup;
-GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public, reference, batch TO home_search_property_runtime;
-REVOKE DELETE ON ALL TABLES IN SCHEMA public, reference, batch FROM home_search_property_runtime;
+GRANT USAGE ON SCHEMA public, batch TO home_search_property_runtime, home_search_backup;
+GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public, batch TO home_search_property_runtime;
+REVOKE DELETE ON ALL TABLES IN SCHEMA public, batch FROM home_search_property_runtime;
 GRANT DELETE ON TABLE market_news_collection_execution,
                       market_news_collection_work_unit,
                       market_news_raw_item,
@@ -565,15 +585,15 @@ GRANT DELETE ON TABLE market_news_collection_execution,
                       market_news_quality_review_set,
                       market_news_quality_label
 TO home_search_property_runtime;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public, reference, batch TO home_search_property_runtime;
-GRANT SELECT ON ALL TABLES IN SCHEMA public, reference, batch TO home_search_backup;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public, reference, batch GRANT SELECT, INSERT, UPDATE ON TABLES TO home_search_property_runtime;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public, reference, batch REVOKE DELETE ON TABLES FROM home_search_property_runtime;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public, reference, batch GRANT USAGE, SELECT ON SEQUENCES TO home_search_property_runtime;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public, reference, batch GRANT SELECT ON TABLES TO home_search_backup;
-REVOKE ALL ON ALL TABLES IN SCHEMA public, reference, batch FROM home_search_ai_reader;
-REVOKE ALL ON ALL SEQUENCES IN SCHEMA public, reference, batch FROM home_search_ai_reader;
-REVOKE ALL ON SCHEMA public, reference, batch FROM home_search_ai_reader;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public, batch TO home_search_property_runtime;
+GRANT SELECT ON ALL TABLES IN SCHEMA public, batch TO home_search_backup;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public, batch GRANT SELECT, INSERT, UPDATE ON TABLES TO home_search_property_runtime;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public, batch REVOKE DELETE ON TABLES FROM home_search_property_runtime;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public, batch GRANT USAGE, SELECT ON SEQUENCES TO home_search_property_runtime;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public, batch GRANT SELECT ON TABLES TO home_search_backup;
+REVOKE ALL ON ALL TABLES IN SCHEMA public, batch FROM home_search_ai_reader;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA public, batch FROM home_search_ai_reader;
+REVOKE ALL ON SCHEMA public, batch FROM home_search_ai_reader;
 REVOKE ALL ON ALL TABLES IN SCHEMA ai_read FROM PUBLIC, home_search_ai_reader;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA ai_read FROM PUBLIC, home_search_ai_reader;
 GRANT USAGE ON SCHEMA ai_read TO home_search_ai_reader;
@@ -590,6 +610,15 @@ SQL
 GRANT USAGE ON SCHEMA users TO home_search_backup;
 GRANT SELECT ON ALL TABLES IN SCHEMA users TO home_search_backup;
 ALTER DEFAULT PRIVILEGES IN SCHEMA users GRANT SELECT ON TABLES TO home_search_backup;
+SQL
+        ;;
+      ai) cat >"${sql}" <<'SQL'
+GRANT USAGE ON SCHEMA reference_read TO home_search_ai_runtime, home_search_backup;
+GRANT SELECT ON ALL TABLES IN SCHEMA reference_read TO home_search_ai_runtime, home_search_backup;
+GRANT USAGE ON SCHEMA public, reference_projection TO home_search_backup;
+GRANT SELECT ON ALL TABLES IN SCHEMA public, reference_projection TO home_search_backup;
+ALTER DEFAULT PRIVILEGES IN SCHEMA reference_read GRANT SELECT ON TABLES TO home_search_ai_runtime, home_search_backup;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public, reference_projection GRANT SELECT ON TABLES TO home_search_backup;
 SQL
         ;;
     esac
@@ -615,6 +644,243 @@ materialize_keys() {
   fi
 }
 
+budget_parameter_name() {
+  required BUDGET_PARAMETER_PREFIX
+  printf '%s/%s' "${BUDGET_PARAMETER_PREFIX%/}" "$1"
+}
+
+budget_read_parameter() {
+  local suffix="$1" destination="$2" parameter_name response
+  parameter_name="$(budget_parameter_name "${suffix}")"
+  response="${tmp_dir}/budget-parameter-response.json"
+  aws ssm get-parameter \
+    --name "${parameter_name}" \
+    --with-decryption \
+    --output json >"${response}"
+  jq -er '.Parameter.Value | select(type == "string" and length > 0)' \
+    "${response}" >"${destination}"
+}
+
+budget_put_if_unset() {
+  local suffix="$1" value_file="$2" current parameter_name request
+  current="${tmp_dir}/budget-current"
+  budget_read_parameter "${suffix}" "${current}"
+  if ! grep -qx 'UNSET' "${current}"; then
+    return 0
+  fi
+  parameter_name="$(budget_parameter_name "${suffix}")"
+  request="${tmp_dir}/budget-put-parameter.json"
+  jq -n --arg name "${parameter_name}" --rawfile value "${value_file}" \
+    '{Name:$name,Type:"SecureString",Value:$value,Overwrite:true}' >"${request}"
+  aws ssm put-parameter --cli-input-json "file://${request}" >/dev/null
+}
+
+budget_write_random_parameter() {
+  local suffix="$1" candidate="${tmp_dir}/budget-random"
+  random_hex >"${candidate}"
+  budget_put_if_unset "${suffix}" "${candidate}"
+}
+
+budget_reconcile_key_pair() {
+  local namespace="$1" private_suffix="$2" public_suffix="$3"
+  local private_current="${tmp_dir}/${namespace}-private-current"
+  local public_current="${tmp_dir}/${namespace}-public-current"
+  budget_read_parameter "${private_suffix}" "${private_current}"
+  budget_read_parameter "${public_suffix}" "${public_current}"
+  if grep -qx 'UNSET' "${private_current}" && ! grep -qx 'UNSET' "${public_current}"; then
+    echo "상태: Fail - ${namespace} public key만 설정되어 private key를 안전하게 복구할 수 없습니다." >&2
+    exit 1
+  fi
+  if ! grep -qx 'UNSET' "${private_current}" && grep -qx 'UNSET' "${public_current}"; then
+    echo "상태: Fail - ${namespace} private key만 설정되어 public key drift를 자동 수정하지 않습니다." >&2
+    exit 1
+  fi
+  if grep -qx 'UNSET' "${private_current}"; then
+    openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 \
+      -out "${tmp_dir}/${namespace}-private-candidate.pem" 2>/dev/null
+    openssl pkey -in "${tmp_dir}/${namespace}-private-candidate.pem" -pubout \
+      -out "${tmp_dir}/${namespace}-public-candidate.pem" 2>/dev/null
+    budget_put_if_unset "${private_suffix}" "${tmp_dir}/${namespace}-private-candidate.pem"
+    budget_put_if_unset "${public_suffix}" "${tmp_dir}/${namespace}-public-candidate.pem"
+  fi
+}
+
+budget_secret_bootstrap() {
+  local suffix property_password ai_password ai_migrator_password
+  required BUDGET_PARAMETER_PREFIX
+  for suffix in \
+    postgres/superuser-password \
+    postgres/property-runtime-password \
+    postgres/property-migrator-password \
+    postgres/property-importer-password \
+    postgres/property-ai-reader-password \
+    postgres/user-runtime-password \
+    postgres/user-migrator-password \
+    postgres/admin-runtime-password \
+    postgres/admin-migrator-password \
+    postgres/ai-runtime-password \
+    postgres/ai-migrator-password \
+    postgres/ai-importer-password \
+    postgres/backup-password \
+    valkey/admin-password \
+    valkey/property-password \
+    valkey/bff-password \
+    edge/certificate-passphrase; do
+    budget_write_random_parameter "${suffix}"
+  done
+
+  budget_reconcile_key_pair user user/jwt-private-key-pem user/jwt-public-key-pem
+  budget_reconcile_key_pair admin admin/jwt-private-key-pem admin/jwt-public-key-pem
+
+  budget_read_parameter postgres/property-ai-reader-password "${tmp_dir}/property-reader-password"
+  budget_read_parameter postgres/ai-runtime-password "${tmp_dir}/ai-runtime-password"
+  budget_read_parameter postgres/ai-migrator-password "${tmp_dir}/ai-migrator-password"
+  property_password="$(<"${tmp_dir}/property-reader-password")"
+  ai_password="$(<"${tmp_dir}/ai-runtime-password")"
+  ai_migrator_password="$(<"${tmp_dir}/ai-migrator-password")"
+  printf 'postgresql://home_search_ai_reader:%s@%s:%s/home_search?sslmode=require' \
+    "${property_password}" "${BUDGET_DB_HOST:-172.31.255.1}" "${BUDGET_DB_PORT:-15432}" \
+    >"${tmp_dir}/property-dsn"
+  printf 'postgresql://home_search_ai_runtime:%s@%s:%s/home_search_ai?sslmode=require' \
+    "${ai_password}" "${BUDGET_DB_HOST:-172.31.255.1}" "${BUDGET_DB_PORT:-15432}" \
+    >"${tmp_dir}/reference-dsn"
+  printf 'postgresql://home_search_ai_migrator:%s@%s:%s/home_search_ai?sslmode=require' \
+    "${ai_migrator_password}" "${BUDGET_DB_HOST:-172.31.255.1}" "${BUDGET_DB_PORT:-15432}" \
+    >"${tmp_dir}/migrator-dsn"
+  budget_put_if_unset ai/property-dsn "${tmp_dir}/property-dsn"
+  budget_put_if_unset ai/reference-dsn "${tmp_dir}/reference-dsn"
+  budget_put_if_unset ai/migrator-dsn "${tmp_dir}/migrator-dsn"
+
+  echo '상태: Pass - budget-production 생성형 SSM parameter를 최초 1회 멱등 설정했습니다.'
+}
+
+budget_secret_readiness() {
+  local suffix value_file="${tmp_dir}/budget-readiness-value" missing=()
+  required BUDGET_PARAMETER_PREFIX
+  for suffix in \
+    postgres/superuser-password \
+    postgres/property-runtime-password \
+    postgres/property-migrator-password \
+    postgres/property-importer-password \
+    postgres/property-ai-reader-password \
+    postgres/user-runtime-password \
+    postgres/user-migrator-password \
+    postgres/admin-runtime-password \
+    postgres/admin-migrator-password \
+    postgres/ai-runtime-password \
+    postgres/ai-migrator-password \
+    postgres/ai-importer-password \
+    postgres/backup-password \
+    valkey/admin-password \
+    valkey/property-password \
+    valkey/bff-password \
+    edge/certificate-passphrase \
+    user/jwt-private-key-pem \
+    user/jwt-public-key-pem \
+    admin/jwt-private-key-pem \
+    admin/jwt-public-key-pem \
+    ai/property-dsn \
+    ai/reference-dsn \
+    ai/migrator-dsn \
+    property/kakao-rest-api-key \
+    user/oauth/google-client-id \
+    user/oauth/google-client-secret \
+    user/oauth/kakao-client-id \
+    user/oauth/kakao-client-secret \
+    user/oauth/naver-client-id \
+    user/oauth/naver-client-secret \
+    ai/openai-api-key \
+    ai/openai-primary-model \
+    ai/openai-secondary-model; do
+    budget_read_parameter "${suffix}" "${value_file}"
+    if grep -qx 'UNSET' "${value_file}"; then
+      missing+=("${suffix}")
+    fi
+  done
+  if (( ${#missing[@]} > 0 )); then
+    printf '상태: Fail - readiness에 필요한 SSM parameter가 UNSET입니다: %s\n' "${missing[*]}" >&2
+    exit 1
+  fi
+  echo '상태: Pass - budget-production runtime parameter readiness를 확인했습니다.'
+}
+
+budget_importer_grants() {
+  local name logical database migrator importer host port password sql pgpass schema table relation
+  local allowlist="${BUDGET_DATA_ONLY_ALLOWLIST:-/opt/home-search/infra/migration/data-only-allowlist.json}"
+  for name in PROPERTY_DB_HOST PROPERTY_DB_PORT PROPERTY_MIGRATOR_DB_PASSWORD \
+    AI_DB_HOST AI_DB_PORT AI_MIGRATOR_DB_PASSWORD; do
+    required "${name}"
+  done
+  [[ -f "${allowlist}" && ! -L "${allowlist}" ]] || {
+    echo '상태: Fail - reviewed data-only allowlist 파일이 필요합니다.' >&2
+    exit 1
+  }
+  jq -e '
+    .formatVersion == 1
+    and ([.datasets[].logicalDatabase] | unique) == ["property", "reference"]
+    and ([.datasets[] | select(.logicalDatabase == "property")] | length) == 46
+    and ([.datasets[] | select(.logicalDatabase == "reference")] | length) == 21
+    and all(.datasets[]; (.table | startswith("building_register") | not))
+  ' \
+    "${allowlist}" >/dev/null
+
+  for logical in property reference; do
+    case "${logical}" in
+      property)
+        database=home_search
+        migrator=home_search_property_migrator
+        importer=home_search_property_importer
+        host="${PROPERTY_DB_HOST}"
+        port="${PROPERTY_DB_PORT}"
+        password="${PROPERTY_MIGRATOR_DB_PASSWORD}"
+        ;;
+      reference)
+        database=home_search_ai
+        migrator=home_search_ai_migrator
+        importer=home_search_ai_importer
+        host="${AI_DB_HOST}"
+        port="${AI_DB_PORT}"
+        password="${AI_MIGRATOR_DB_PASSWORD}"
+        ;;
+    esac
+
+    sql="${tmp_dir}/budget-${logical}-importer-grants.sql"
+    pgpass="${tmp_dir}/budget-${logical}-importer.pgpass"
+    printf '%s:%s:%s:%s:%s\n' \
+      "$(pgpass_field "${host}")" "${port}" "${database}" "${migrator}" \
+      "$(pgpass_field "${password}")" >"${pgpass}"
+    chmod 0600 "${pgpass}"
+    {
+      printf 'GRANT TEMPORARY ON DATABASE %s TO %s;\n' "${database}" "${importer}"
+      printf 'CREATE SCHEMA IF NOT EXISTS home_migration;\n'
+      printf 'REVOKE ALL ON SCHEMA home_migration FROM PUBLIC;\n'
+      printf 'GRANT USAGE, CREATE ON SCHEMA home_migration TO %s;\n' "${importer}"
+      while IFS= read -r schema; do
+        [[ "${schema}" =~ ^[a-z_][a-z0-9_]*$ ]] || {
+          echo '상태: Fail - allowlist schema identifier가 안전하지 않습니다.' >&2
+          exit 1
+        }
+        printf 'GRANT USAGE ON SCHEMA "%s" TO %s;\n' "${schema}" "${importer}"
+      done < <(jq -r --arg logical "${logical}" \
+        '[.datasets[] | select(.logicalDatabase == $logical) | .schema] | unique[]' "${allowlist}")
+      while IFS=$'\t' read -r schema table; do
+        [[ "${schema}" =~ ^[a-z_][a-z0-9_]*$ && "${table}" =~ ^[a-z_][a-z0-9_]*$ ]] || {
+          echo '상태: Fail - allowlist table identifier가 안전하지 않습니다.' >&2
+          exit 1
+        }
+        relation="\"${schema}\".\"${table}\""
+        printf 'GRANT SELECT, INSERT, UPDATE ON TABLE %s TO %s;\n' "${relation}" "${importer}"
+        printf "SELECT format('GRANT USAGE, SELECT, UPDATE ON SEQUENCE %%s TO %s', pg_get_serial_sequence('%s', 'id')) WHERE pg_get_serial_sequence('%s', 'id') IS NOT NULL \\gexec\n" \
+          "${importer}" "${relation}" "${relation}"
+      done < <(jq -r --arg logical "${logical}" \
+        '.datasets[] | select(.logicalDatabase == $logical) | [.schema,.table] | @tsv' "${allowlist}")
+    } >"${sql}"
+    PGSSLMODE=require PGPASSFILE="${pgpass}" psql -X -q -v ON_ERROR_STOP=1 \
+      -h "${host}" -p "${port}" -U "${migrator}" -d "${database}" -f "${sql}" >/dev/null
+  done
+  echo '상태: Pass - reviewed data-only allowlist table에만 importer 권한을 적용했습니다.'
+}
+
 case "${1:-}" in
   secret-bootstrap) secret_bootstrap ;;
   production-secret-bootstrap) production_secret_bootstrap ;;
@@ -623,5 +889,8 @@ case "${1:-}" in
   production-db-bootstrap) production_db_bootstrap ;;
   runtime-grants) runtime_grants ;;
   materialize-keys) materialize_keys ;;
-  *) echo '사용법: home-search-bootstrap secret-bootstrap|production-secret-bootstrap|production-secret-readiness|db-bootstrap|production-db-bootstrap|runtime-grants|materialize-keys' >&2; exit 64 ;;
+  budget-secret-bootstrap) budget_secret_bootstrap ;;
+  budget-secret-readiness) budget_secret_readiness ;;
+  budget-importer-grants) budget_importer_grants ;;
+  *) echo '사용법: home-search-bootstrap secret-bootstrap|production-secret-bootstrap|production-secret-readiness|db-bootstrap|production-db-bootstrap|runtime-grants|materialize-keys|budget-secret-bootstrap|budget-secret-readiness|budget-importer-grants' >&2; exit 64 ;;
 esac

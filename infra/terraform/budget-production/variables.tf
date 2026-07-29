@@ -67,6 +67,12 @@ variable "public_dns_enabled" {
   description = "Creates the final A record only after a separate approved public-phase plan."
 }
 
+variable "data_services_enabled" {
+  type        = bool
+  default     = false
+  description = "Starts PostgreSQL and Valkey only after the budget secret bootstrap and readiness checks pass."
+}
+
 variable "alarm_email" {
   type        = string
   description = "Operator email subscribed to the budget-production SNS topic."
@@ -125,5 +131,61 @@ variable "monthly_budget_usd" {
   validation {
     condition     = var.monthly_budget_usd == 100
     error_message = "The budget-production AWS budget is fixed to USD 100."
+  }
+}
+
+variable "image_uris" {
+  type        = map(string)
+  default     = {}
+  description = "The existing 17 application images from one approved immutable release manifest."
+  validation {
+    condition = length(var.image_uris) == 0 || (
+      length(var.image_uris) == 17
+      && alltrue([for uri in values(var.image_uris) : can(regex("^[0-9]{12}[.]dkr[.]ecr[.]ap-northeast-2[.]amazonaws[.]com/home-search/[a-z0-9-]+@sha256:[0-9a-f]{64}$", uri))])
+    )
+    error_message = "image_uris must be empty before release selection or contain all 17 immutable Seoul ECR image URIs."
+  }
+}
+
+variable "platform_image_uris" {
+  type        = map(string)
+  default     = {}
+  description = "The two budget platform images from the same approved release manifest."
+  validation {
+    condition = length(var.platform_image_uris) == 0 || (
+      toset(keys(var.platform_image_uris)) == toset(["budget-postgres", "budget-valkey"])
+      && alltrue([for uri in values(var.platform_image_uris) : can(regex("^[0-9]{12}[.]dkr[.]ecr[.]ap-northeast-2[.]amazonaws[.]com/home-search/budget-(postgres|valkey)@sha256:[0-9a-f]{64}$", uri))])
+    )
+    error_message = "platform_image_uris must be empty before release selection or contain both immutable budget platform URIs."
+  }
+}
+
+variable "deployment_release_tag" {
+  type        = string
+  default     = ""
+  description = "Approved release tag recorded on task definitions and evidence."
+  validation {
+    condition     = var.deployment_release_tag == "" || can(regex("^v[0-9]+[.][0-9]+[.][0-9]+$", var.deployment_release_tag))
+    error_message = "deployment_release_tag must be empty or a canonical vMAJOR.MINOR.PATCH tag."
+  }
+}
+
+variable "migration_artifact_s3_uri" {
+  type        = string
+  default     = ""
+  description = "Reviewed Property+Reference data-only artifact prefix used only by the one-shot import task."
+  validation {
+    condition     = var.migration_artifact_s3_uri == "" || can(regex("^s3://[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]/[A-Za-z0-9][A-Za-z0-9._/-]*$", var.migration_artifact_s3_uri))
+    error_message = "migration_artifact_s3_uri must be empty or an explicit non-root S3 prefix."
+  }
+}
+
+variable "migration_manifest_sha256" {
+  type        = string
+  default     = ""
+  description = "Reviewed SHA-256 for the selected data-only manifest."
+  validation {
+    condition     = var.migration_manifest_sha256 == "" || can(regex("^[0-9a-f]{64}$", var.migration_manifest_sha256))
+    error_message = "migration_manifest_sha256 must be empty or one lowercase SHA-256."
   }
 }

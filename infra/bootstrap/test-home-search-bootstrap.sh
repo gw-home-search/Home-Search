@@ -21,6 +21,35 @@ set -Eeuo pipefail
 printf '%q ' "$@" >>"${FAKE_AWS_ARGV_LOG}"
 printf '\n' >>"${FAKE_AWS_ARGV_LOG}"
 
+if [[ "${1:-} ${2:-}" == 'ssm get-parameter' ]]; then
+  parameter_name=''
+  for ((index = 1; index <= $#; index++)); do
+    if [[ "${!index}" == '--name' ]]; then
+      next=$((index + 1))
+      parameter_name="${!next}"
+    fi
+  done
+  state_file="${FAKE_AWS_STATE}/ssm${parameter_name//\//_}"
+  value='UNSET'
+  [[ ! -f "${state_file}" ]] || value="$(<"${state_file}")"
+  jq -n --arg value "${value}" '{Parameter:{Value:$value}}'
+  exit 0
+fi
+
+if [[ "${1:-} ${2:-}" == 'ssm put-parameter' ]]; then
+  input=''
+  for ((index = 1; index <= $#; index++)); do
+    if [[ "${!index}" == '--cli-input-json' ]]; then
+      next=$((index + 1))
+      input="${!next}"
+    fi
+  done
+  [[ "${input}" == file://* ]]
+  parameter_name="$(jq -er '.Name' "${input#file://}")"
+  jq -er '.Value' "${input#file://}" >"${FAKE_AWS_STATE}/ssm${parameter_name//\//_}"
+  exit 0
+fi
+
 secret_id=''
 for ((index = 1; index <= $#; index++)); do
   if [[ "${!index}" == '--secret-id' ]]; then
@@ -403,11 +432,27 @@ grep -Fq -- '-d home_search_admin' "${FAKE_DB_ARGV_LOG}"
 grep -Fq -- '-h user.production.internal' "${FAKE_DB_ARGV_LOG}"
 grep -Fq -- '-d home_search_user' "${FAKE_DB_ARGV_LOG}"
 ! grep -Eq 'SENTINEL|password' "${FAKE_AWS_ARGV_LOG}" "${FAKE_DB_ARGV_LOG}" "${tmp_dir}/split-grants.out" "${tmp_dir}/split-grants.err"
-grep -Fq 'GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public, reference, batch TO home_search_property_runtime;' "${script}"
-grep -Fq 'REVOKE DELETE ON ALL TABLES IN SCHEMA public, reference, batch FROM home_search_property_runtime;' "${script}"
+grep -Fq 'GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public, batch TO home_search_property_runtime;' "${script}"
+grep -Fq 'REVOKE DELETE ON ALL TABLES IN SCHEMA public, batch FROM home_search_property_runtime;' "${script}"
 grep -Fq 'GRANT DELETE ON TABLE market_news_collection_execution,' "${script}"
 grep -Fq 'market_news_quality_review_snapshot,' "${script}"
-! grep -Fq 'ALTER DEFAULT PRIVILEGES IN SCHEMA public, reference, batch GRANT SELECT, INSERT, UPDATE, DELETE' "${script}"
+! grep -Fq 'ALTER DEFAULT PRIVILEGES IN SCHEMA public, batch GRANT SELECT, INSERT, UPDATE, DELETE' "${script}"
+! grep -Fq 'GRANT USAGE ON SCHEMA reference, reference_read' "${script}"
+
+BUDGET_DATA_ONLY_ALLOWLIST="${root_dir}/infra/migration/data-only-allowlist.json" \
+PROPERTY_DB_HOST=172.31.255.1 PROPERTY_DB_PORT=15432 \
+AI_DB_HOST=172.31.255.1 AI_DB_PORT=15432 \
+PROPERTY_MIGRATOR_DB_PASSWORD=BOOTSTRAP_SENTINEL_PROPERTY \
+AI_MIGRATOR_DB_PASSWORD=BOOTSTRAP_SENTINEL_AI_MIGRATOR \
+  "${script}" budget-importer-grants >"${tmp_dir}/budget-importer-grants.out" \
+  2>"${tmp_dir}/budget-importer-grants.err"
+grep -Fq 'GRANT SELECT, INSERT, UPDATE ON TABLE "public"."trade" TO home_search_property_importer;' "${FAKE_DB_SQL_LOG}"
+grep -Fq 'GRANT SELECT, INSERT, UPDATE ON TABLE "reference_projection"."facility_point" TO home_search_ai_importer;' "${FAKE_DB_SQL_LOG}"
+grep -Fq 'GRANT TEMPORARY ON DATABASE home_search TO home_search_property_importer;' "${FAKE_DB_SQL_LOG}"
+grep -Fq 'GRANT TEMPORARY ON DATABASE home_search_ai TO home_search_ai_importer;' "${FAKE_DB_SQL_LOG}"
+grep -Fq 'GRANT USAGE, CREATE ON SCHEMA home_migration TO home_search_property_importer;' "${FAKE_DB_SQL_LOG}"
+! grep -Fq 'building_register_raw_page' "${FAKE_DB_SQL_LOG}"
+! grep -Fq 'GRANT SELECT, INSERT, UPDATE ON ALL TABLES' "${FAKE_DB_SQL_LOG}"
 
 PRIVATE_KEY_PEM='PRIVATE_SENTINEL' PUBLIC_KEY_PEM='PUBLIC_SENTINEL' \
 KEY_OUTPUT_DIRECTORY="${tmp_dir}/keys" "${script}" materialize-keys
@@ -415,4 +460,29 @@ KEY_OUTPUT_DIRECTORY="${tmp_dir}/keys" "${script}" materialize-keys
 [[ "$(cat "${tmp_dir}/keys/private.pem")" == 'PRIVATE_SENTINEL' ]]
 [[ "$(cat "${tmp_dir}/keys/public.pem")" == 'PUBLIC_SENTINEL' ]]
 
-echo '상태: Pass - secret idempotency, argv/stdout 비노출, DB bootstrap 및 key materialization을 확인했습니다.'
+budget_puts_before="$(grep -c 'ssm put-parameter' "${FAKE_AWS_ARGV_LOG}" || true)"
+BUDGET_PARAMETER_PREFIX=/home-search/budget-production \
+  "${script}" budget-secret-bootstrap >"${tmp_dir}/budget-bootstrap.out" 2>"${tmp_dir}/budget-bootstrap.err"
+budget_puts_after="$(grep -c 'ssm put-parameter' "${FAKE_AWS_ARGV_LOG}" || true)"
+[[ "$((budget_puts_after - budget_puts_before))" == '24' ]]
+[[ -s "${FAKE_AWS_STATE}/ssm_home-search_budget-production_ai_migrator-dsn" ]]
+BUDGET_PARAMETER_PREFIX=/home-search/budget-production \
+  "${script}" budget-secret-bootstrap >>"${tmp_dir}/budget-bootstrap.out" 2>>"${tmp_dir}/budget-bootstrap.err"
+[[ "$(grep -c 'ssm put-parameter' "${FAKE_AWS_ARGV_LOG}")" == "${budget_puts_after}" ]]
+! grep -Eq 'PRIVATE KEY|[[:xdigit:]]{64}' \
+  "${FAKE_AWS_ARGV_LOG}" "${tmp_dir}/budget-bootstrap.out" "${tmp_dir}/budget-bootstrap.err"
+
+for suffix in \
+  property/kakao-rest-api-key \
+  user/oauth/google-client-id user/oauth/google-client-secret \
+  user/oauth/kakao-client-id user/oauth/kakao-client-secret \
+  user/oauth/naver-client-id user/oauth/naver-client-secret \
+  ai/openai-api-key ai/openai-primary-model ai/openai-secondary-model; do
+  printf 'EXTERNAL_SENTINEL' >"${FAKE_AWS_STATE}/ssm_home-search_budget-production_${suffix//\//_}"
+done
+BUDGET_PARAMETER_PREFIX=/home-search/budget-production \
+  "${script}" budget-secret-readiness >"${tmp_dir}/budget-readiness.out" 2>"${tmp_dir}/budget-readiness.err"
+grep -Fq '상태: Pass' "${tmp_dir}/budget-readiness.out"
+! grep -Fq 'EXTERNAL_SENTINEL' "${tmp_dir}/budget-readiness.out" "${tmp_dir}/budget-readiness.err"
+
+echo '상태: Pass - secret idempotency, argv/stdout 비노출, DB/bootstrap/importer grant 및 key materialization을 확인했습니다.'

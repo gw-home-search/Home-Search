@@ -25,7 +25,10 @@ secret, user ID, JWT, prompt/query/answer, private key는 evidence에 넣지 않
 
 ## 최초 배포
 
-1. bootstrap state를 apply해 budget OIDC role을 만든다.
+1. exact `BUDGET_PRODUCTION_HOSTED_ZONE_ID`를
+   `budget_production_hosted_zone_id`로 전달해 bootstrap state를 apply하고 budget
+   OIDC role을 만든다. plan/apply의 budget SSM prefix read는 provider refresh에만
+   사용하며 state/plan/log에 복호화 값을 남기지 않는다.
 2. `Deploy budget production` workflow를 `operation=registry`로 실행한다. plan을
    확인하고 protected apply를 승인한다. 이 단계는 budget Postgres/Valkey ECR만 만든다.
 3. same-origin frontend가 포함된 새 tag를 발행한다. `v1.0.4`는 사용하지 않는다.
@@ -63,6 +66,11 @@ secret, user ID, JWT, prompt/query/answer, private key는 evidence에 넣지 않
 중단 조건은 plan의 destroy/금지 resource, 비용 초과, `UNSET`, digest/SBOM 누락,
 staging origin, disk headroom 부족, ACL/IMDS/public port 실패, reconcile/restore
 mismatch, 미확인 SNS/Kakao/OAuth evidence, credit `standard` 미복원이다.
+
+Foundation apply가 중간 실패하면 기존 plan을 다시 apply하지 않는다. 새 plan은
+동일 tag의 host, state output, 부분 생성된 data EBS/subnet 순으로 AMI/AZ pin을
+재사용하며 tag 일치 resource가 여러 개거나 AZ가 다르면 fail closed한다. 새 plan의
+destroy가 0이고 기존 data EBS/EIP/VPC를 유지하는지 확인한 뒤에만 재승인한다.
 
 ## SSM과 Admin
 

@@ -15,7 +15,7 @@ resource "aws_iam_role" "dlm" {
 resource "aws_iam_role_policy_attachment" "dlm" {
   count      = local.foundation_enabled ? 1 : 0
   role       = aws_iam_role.dlm[0].name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSDataLifecycleManagerServiceRoleForEC2Management"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSDataLifecycleManagerServiceRole"
 }
 
 resource "aws_dlm_lifecycle_policy" "data" {

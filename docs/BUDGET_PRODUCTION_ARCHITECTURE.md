@@ -27,7 +27,11 @@ SSM -> host maintenance     S3/DLM <- logical dump/EBS snapshot
 
 State는 `home-search/budget-production/terraform.tfstate`와 해당 `.tflock`만
 사용한다. workspace는 `default`만 허용한다. Terraform state에는 실제 secret
-값을 넣지 않고 `UNSET` parameter container와 `ignore_changes`만 관리한다.
+값을 넣지 않고 `value_wo`로 `UNSET` parameter container만 최초 생성한다.
+AWS provider의 refresh 동작 때문에 plan/apply role은 budget-production parameter
+prefix의 `ssm:GetParameter`만 허용한다. provider는 복호화한 값을 state에서 즉시
+제거하며 plan, artifact, log에는 출력하지 않는다. runtime task role은 이 권한을
+상속하지 않는다.
 
 ## Network와 port
 

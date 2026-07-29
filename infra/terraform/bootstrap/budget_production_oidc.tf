@@ -27,7 +27,7 @@ locals {
     "home-search/production/terraform.tfstate",
   ]
   budget_read_actions = [
-    "acm:Describe*", "acm:List*", "budgets:Describe*", "budgets:ViewBudget", "ce:Get*", "ce:List*",
+    "acm:Describe*", "acm:List*", "budgets:Describe*", "budgets:ListTagsForResource", "budgets:ViewBudget", "ce:Get*", "ce:List*",
     "cloudwatch:Describe*", "cloudwatch:Get*", "cloudwatch:List*", "dlm:Get*", "dlm:List*",
     "ec2:Describe*", "ecr:Describe*", "ecr:GetLifecyclePolicy", "ecr:GetRepositoryPolicy",
     "ecr:ListTagsForResource", "ecs:Describe*", "ecs:List*", "events:Describe*", "events:List*",

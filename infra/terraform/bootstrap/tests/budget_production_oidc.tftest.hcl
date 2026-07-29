@@ -72,6 +72,7 @@ run "budget_roles_are_separated_and_state_isolated" {
     condition = (
       !contains(local.budget_read_actions, "ssm:GetParameter")
       && contains(local.budget_read_actions, "budgets:ViewBudget")
+      && contains(local.budget_read_actions, "budgets:ListTagsForResource")
       && anytrue([
         for statement in jsondecode(aws_iam_role_policy.github_budget_plan.policy).Statement :
         statement.Sid == "ReadPublicEcsOptimizedAmi"

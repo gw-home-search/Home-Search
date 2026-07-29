@@ -23,7 +23,6 @@ cleanup() {
 trap cleanup EXIT
 
 docker build --tag "${public_image}" --file apps/web/Dockerfile \
-  --build-arg VITE_USER_API_SERVER_IP=http://localhost:8080 \
   --build-arg VITE_KAKAO_MAP_APP_KEY=test-public-key .
 docker build --tag "${admin_image}" --file apps/admin/web/Dockerfile .
 
@@ -34,7 +33,9 @@ for image in "${public_image}" "${admin_image}"; do
 done
 
 docker run --rm --entrypoint sh "${public_image}" -c \
-  'test -f /usr/share/nginx/html/index.html && ! grep -Rqi "home-search-admin-web" /usr/share/nginx/html'
+  'test -f /usr/share/nginx/html/index.html
+   ! grep -Rqi "home-search-admin-web" /usr/share/nginx/html
+   ! grep -RqiE "staging[.]homesearch[.]world|staging[.]example[.]test" /usr/share/nginx/html'
 docker run --rm --entrypoint sh "${admin_image}" -c \
   'test -f /usr/share/nginx/html/index.html && test ! -e /usr/share/nginx/html/home-search-logo.png'
 

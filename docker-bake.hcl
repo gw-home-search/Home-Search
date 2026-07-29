@@ -18,10 +18,6 @@ variable "SOURCE_URL" {
   default = "https://github.com/example/home-search"
 }
 
-variable "PUBLIC_ORIGIN" {
-  default = "http://localhost:8080"
-}
-
 variable "KAKAO_MAP_APP_KEY" {
   default = "build-placeholder"
 }
@@ -49,6 +45,8 @@ group "default" {
     "ml",
     "ai",
     "chat-bff",
+    "budget-postgres",
+    "budget-valkey",
   ]
 }
 
@@ -154,12 +152,27 @@ target "public-gateway" {
   context = "."
   dockerfile = "apps/web/Dockerfile"
   args = {
-    VITE_USER_API_SERVER_IP = "${PUBLIC_ORIGIN}"
     VITE_KAKAO_MAP_APP_KEY = "${KAKAO_MAP_APP_KEY}"
     VITE_MARKET_NEWS_ENABLED = "${MARKET_NEWS_ENABLED}"
   }
   labels = { "org.opencontainers.image.title" = "home-search-public-gateway" }
   tags = ["${REGISTRY}/${IMAGE_PREFIX}/public-gateway:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}/public-gateway:${VERSION}"]
+}
+
+target "budget-postgres" {
+  inherits = ["_common"]
+  context = "."
+  dockerfile = "infra/budget/postgres/Dockerfile"
+  labels = { "org.opencontainers.image.title" = "home-search-budget-postgres" }
+  tags = ["${REGISTRY}/${IMAGE_PREFIX}/budget-postgres:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}/budget-postgres:${VERSION}"]
+}
+
+target "budget-valkey" {
+  inherits = ["_common"]
+  context = "."
+  dockerfile = "infra/budget/valkey/Dockerfile"
+  labels = { "org.opencontainers.image.title" = "home-search-budget-valkey" }
+  tags = ["${REGISTRY}/${IMAGE_PREFIX}/budget-valkey:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}/budget-valkey:${VERSION}"]
 }
 
 target "admin-gateway" {

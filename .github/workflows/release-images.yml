@@ -76,14 +76,13 @@ jobs:
           GIT_SHA: ${{ github.sha }}
           VERSION: ${{ github.ref_name }}
           SOURCE_URL: https://github.com/${{ github.repository }}
-          PUBLIC_ORIGIN: ${{ vars.STAGING_PUBLIC_ORIGIN }}
           KAKAO_MAP_APP_KEY: ${{ vars.KAKAO_MAP_APP_KEY }}
           MARKET_NEWS_ENABLED: ${{ vars.MARKET_NEWS_ENABLED || 'false' }}
         run: |
           set -Eeuo pipefail
           VERSION="${VERSION#v}"
           export VERSION
-          [[ -n "${PUBLIC_ORIGIN}" && -n "${KAKAO_MAP_APP_KEY}" ]]
+          [[ -n "${KAKAO_MAP_APP_KEY}" ]]
           docker buildx bake --push \
             --set '*.attest=type=sbom' \
             --set '*.attest=type=provenance,mode=max'
@@ -126,7 +125,7 @@ jobs:
               >"release-evidence/vulnerability/${name}.json"; then
               scan_failed=1
             fi
-          done < <(jq -r '.images | to_entries[] | [.key,.value.uri] | @tsv' release-evidence/release-manifest.json)
+          done < <(jq -r '(.images + .platform_images) | to_entries[] | [.key,.value.uri] | @tsv' release-evidence/release-manifest.json)
           if ! infra/release/verify-vulnerability-policy.sh \
             release-evidence/vulnerability \
             infra/release/vulnerability-exceptions.json; then

@@ -10,6 +10,11 @@ describe('resolveUserApiUrl 사용자 API 주소', () => {
   it('local/test에서만 localhost fallback을 허용한다', () => {
     expect(resolveUserApiUrl(undefined, 'test')).toBe('http://localhost:8082');
     expect(resolveUserApiUrl('', 'development')).toBe('http://localhost:8082');
-    expect(() => resolveUserApiUrl(undefined, 'production')).toThrow('VITE_USER_API_SERVER_IP');
+  });
+
+  it('production build에서 설정이 없으면 browser same-origin을 사용한다', () => {
+    expect(resolveUserApiUrl(undefined, 'production', 'https://homesearch.world')).toBe(
+      'https://homesearch.world',
+    );
   });
 });

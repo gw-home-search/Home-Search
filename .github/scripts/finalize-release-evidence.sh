@@ -9,14 +9,14 @@ vulnerability_dir="${3:?vulnerability directory is required}"
 [[ -f "$vulnerability_dir/summary.json" ]]
 
 if ! diff -u \
-  <(jq -r '.images | keys[]' "$manifest" | LC_ALL=C sort) \
+  <(jq -r '(.images + (.platform_images // {})) | keys[]' "$manifest" | LC_ALL=C sort) \
   <(find "$sbom_dir" -maxdepth 1 -type f -name '*.spdx.json' -print \
       | sed -E 's#^.*/##; s#[.]spdx[.]json$##' | LC_ALL=C sort) >/dev/null; then
   echo "상태: Fail - image별 SBOM evidence가 완전하지 않습니다." >&2
   exit 1
 fi
 if ! diff -u \
-  <(jq -r '.images | keys[]' "$manifest" | LC_ALL=C sort) \
+  <(jq -r '(.images + (.platform_images // {})) | keys[]' "$manifest" | LC_ALL=C sort) \
   <(find "$vulnerability_dir" -maxdepth 1 -type f -name '*.json' ! -name 'summary.json' -print \
       | sed -E 's#^.*/##; s#[.]json$##' | LC_ALL=C sort) >/dev/null; then
   echo "상태: Fail - image별 vulnerability evidence가 완전하지 않습니다." >&2

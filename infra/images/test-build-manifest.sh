@@ -15,7 +15,6 @@ IMAGE_PREFIX=home-search \
 GIT_SHA=0123456789abcdef \
 VERSION=1.2.3 \
 SOURCE_URL=https://github.com/acme/home-search \
-PUBLIC_ORIGIN=https://staging.example.test \
 KAKAO_MAP_APP_KEY=public-test-key \
 MARKET_NEWS_ENABLED=true \
   docker buildx bake --print >"${tmp_dir}/bake.json"
@@ -25,7 +24,8 @@ jq -e '
     "property-api", "property-batch", "property-flyway",
     "admin-api", "admin-migration", "admin-ops",
     "user-api", "user-insight-worker", "user-flyway", "source-data-migration",
-    "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml", "ai", "chat-bff"
+    "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml", "ai", "chat-bff",
+    "budget-postgres", "budget-valkey"
   ] | sort) and
   ([.target[] | .labels["org.opencontainers.image.revision"]] | all(. == "0123456789abcdef")) and
   ([.target[] | .labels["org.opencontainers.image.version"]] | all(. == "1.2.3")) and
@@ -37,7 +37,9 @@ jq -e '
   (.target.ml.context == "apps/ml") and
   (.target.ai.context == "apps/ai") and
   (.target["chat-bff"].dockerfile == "apps/chat-bff/Dockerfile") and
-  (.target["public-gateway"].args.VITE_USER_API_SERVER_IP == "https://staging.example.test") and
+  (.target["budget-postgres"].dockerfile == "infra/budget/postgres/Dockerfile") and
+  (.target["budget-valkey"].dockerfile == "infra/budget/valkey/Dockerfile") and
+  ((.target["public-gateway"].args | has("VITE_USER_API_SERVER_IP")) | not) and
   (.target["public-gateway"].args.VITE_MARKET_NEWS_ENABLED == "true")
 ' "${tmp_dir}/bake.json" >/dev/null
 
@@ -66,6 +68,11 @@ for dockerfile in \
     exit 1
   fi
 done
+
+if grep -Eq 'STAGING_PUBLIC_ORIGIN|PUBLIC_ORIGIN|VITE_USER_API_SERVER_IP' "${release_workflow}"; then
+  echo '상태: Fail - release public gateway에 environment origin build dependency가 남아 있습니다.' >&2
+  exit 1
+fi
 
 for dockerfile in apps/web/Dockerfile apps/admin/web/Dockerfile; do
   grep -Fq 'cgr.dev/chainguard/nginx:latest-dev@sha256:22ee56150b99f1d1955637a96f1b0b9a9a6c047bbc48fe5e5b9004155f0e9087' \

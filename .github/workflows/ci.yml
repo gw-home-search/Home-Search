@@ -317,6 +317,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Verify reproducible multi-image manifest
         run: infra/images/test-build-manifest.sh
+      - name: Verify budget platform image boundaries
+        run: infra/images/test-budget-platform-images.sh
 
   terraform-test:
     name: terraform-test

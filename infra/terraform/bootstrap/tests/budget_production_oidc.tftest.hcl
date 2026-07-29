@@ -35,6 +35,15 @@ run "budget_roles_are_separated_and_state_isolated" {
 
   assert {
     condition = (
+      contains(local.budget_state_lock_actions, "s3:DeleteObject")
+      && !contains(local.budget_apply_explicit_deny_actions, "s3:DeleteObject")
+      && !contains(local.budget_apply_actions, "s3:DeleteObject")
+    )
+    error_message = "Budget apply must be able to release its exact native state lock without granting broad state deletion."
+  }
+
+  assert {
+    condition = (
       one(local.github_budget_plan_oidc_string_equals["token.actions.githubusercontent.com:environment"]) == "budget-production-plan"
       && one(local.github_budget_apply_oidc_string_equals["token.actions.githubusercontent.com:environment"]) == "budget-production"
       && one(local.github_budget_plan_oidc_string_equals["token.actions.githubusercontent.com:workflow"]) == "Deploy budget production"

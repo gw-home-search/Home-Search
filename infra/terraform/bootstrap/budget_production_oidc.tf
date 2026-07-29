@@ -54,6 +54,10 @@ locals {
   budget_apply_explicit_deny_actions = [
     "ec2:DeleteVolume", "ec2:DetachVolume", "s3:DeleteBucket", "ssm:DeleteParameter",
   ]
+  budget_protected_bucket_arns = [
+    "arn:aws:s3:::home-search-budget-production-backup-${data.aws_caller_identity.current.account_id}",
+    "arn:aws:s3:::home-search-budget-production-reference-raw-${data.aws_caller_identity.current.account_id}",
+  ]
   budget_deploy_actions = [
     "cloudwatch:DescribeAlarms", "cloudwatch:GetMetricData", "cloudwatch:GetMetricStatistics", "ec2:DescribeImages", "ec2:DescribeInstances", "ec2:DescribeInstanceCreditSpecifications", "ec2:DescribeInstanceStatus",
     "ec2:DescribeSnapshots", "ec2:DescribeSubnets", "ec2:DescribeTags", "ec2:DescribeVolumes",
@@ -191,6 +195,10 @@ resource "aws_iam_role_policy" "github_budget_plan" {
     Statement = [
       { Sid = "ReadBudgetMetadata", Effect = "Allow", Action = local.budget_read_actions, Resource = "*" },
       {
+        Sid      = "ReadBudgetBucketProviderMetadata", Effect = "Allow", Action = ["s3:GetAccelerateConfiguration"]
+        Resource = local.budget_protected_bucket_arns
+      },
+      {
         Sid      = "ReadPublicEcsOptimizedAmi", Effect = "Allow", Action = ["ssm:GetParameter"]
         Resource = ["arn:aws:ssm:${var.aws_region}::parameter/aws/service/ecs/optimized-ami/amazon-linux-2023/recommended/image_id"]
       },
@@ -231,6 +239,10 @@ resource "aws_iam_role_policy" "github_budget_apply" {
     Version = "2012-10-17"
     Statement = [
       { Sid = "ReadBudgetMetadata", Effect = "Allow", Action = local.budget_read_actions, Resource = "*" },
+      {
+        Sid      = "ReadBudgetBucketProviderMetadata", Effect = "Allow", Action = ["s3:GetAccelerateConfiguration"]
+        Resource = local.budget_protected_bucket_arns
+      },
       {
         Sid      = "ReadBudgetSecretContainersForProviderRefresh", Effect = "Allow", Action = ["ssm:GetParameter"]
         Resource = ["arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/home-search/budget-production/*"]
@@ -286,10 +298,7 @@ resource "aws_iam_role_policy" "github_budget_apply" {
           "s3:PutBucketLifecycleConfiguration", "s3:PutBucketObjectLockConfiguration", "s3:PutBucketOwnershipControls", "s3:PutBucketPolicy", "s3:PutBucketTagging",
           "s3:PutBucketPublicAccessBlock", "s3:PutBucketVersioning", "s3:PutEncryptionConfiguration",
         ]
-        Resource = [
-          "arn:aws:s3:::home-search-budget-production-backup-${data.aws_caller_identity.current.account_id}",
-          "arn:aws:s3:::home-search-budget-production-reference-raw-${data.aws_caller_identity.current.account_id}",
-        ]
+        Resource = local.budget_protected_bucket_arns
       },
       {
         Sid    = "ManageBudgetBucketObjectsOnly"

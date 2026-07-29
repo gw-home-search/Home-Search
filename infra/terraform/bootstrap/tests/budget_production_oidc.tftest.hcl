@@ -78,7 +78,25 @@ run "budget_roles_are_separated_and_state_isolated" {
         && statement.Resource == ["arn:aws:ssm:ap-northeast-2::parameter/aws/service/ecs/optimized-ami/amazon-linux-2023/recommended/image_id"]
       ])
     )
-    error_message = "Budget plan must read only the exact public ECS-optimized AMI parameter."
+    error_message = "Budget plan must include provider refresh reads while keeping SSM GetParameter scoped to the exact public AMI parameter."
+  }
+
+  assert {
+    condition = alltrue([
+      for policy in [
+        aws_iam_role_policy.github_budget_plan.policy,
+        aws_iam_role_policy.github_budget_apply.policy,
+        ] : anytrue([
+          for statement in jsondecode(policy).Statement :
+          statement.Sid == "ReadBudgetBucketProviderMetadata"
+          && statement.Action == ["s3:GetAccelerateConfiguration"]
+          && statement.Resource == [
+            "arn:aws:s3:::home-search-budget-production-backup-123456789012",
+            "arn:aws:s3:::home-search-budget-production-reference-raw-123456789012",
+          ]
+      ])
+    ])
+    error_message = "Plan/apply must scope the provider-required accelerate metadata read to the two budget-production buckets."
   }
 
   assert {

@@ -48,7 +48,7 @@ RUN set -eux; \
       --without-raster \
       --without-sfcgal \
       --without-topology; \
-    make with_llvm=no -j"$(getconf _NPROCESSORS_ONLN)"; \
+    make with_llvm=no -j1; \
     make with_llvm=no DESTDIR=/opt/postgis install
 
 FROM ${POSTGRES_BASE}

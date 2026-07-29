@@ -119,6 +119,10 @@ grep -Fq -- '--without-raster' infra/budget/postgres/Dockerfile || {
   echo '상태: Fail - budget PostgreSQL의 PostGIS raster surface가 비활성화되지 않았습니다.' >&2
   exit 1
 }
+grep -Fq 'make with_llvm=no -j1' infra/budget/postgres/Dockerfile || {
+  echo '상태: Fail - budget PostgreSQL의 PostGIS build가 deterministic serial mode가 아닙니다.' >&2
+  exit 1
+}
 
 for dockerfile in apps/property-data/db/Dockerfile apps/user/service/Dockerfile; do
   grep -Fq 'redgate/flyway:13.0-alpine@sha256:6a67d90135c8ef73299a7486da54b88f285426eea4ea1947372ffbc7b52a327b' \

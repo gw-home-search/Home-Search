@@ -71,14 +71,18 @@ Foundation apply가 중간 실패하면 기존 plan을 다시 apply하지 않는
 동일 tag의 host, state output, 부분 생성된 data EBS/subnet 순으로 AMI/AZ pin을
 재사용하며 tag 일치 resource가 여러 개거나 AZ가 다르면 fail closed한다. 새 plan의
 destroy가 0이고 기존 data EBS/EIP/VPC를 유지하는지 확인한 뒤에만 재승인한다.
-실패한 provider create가 live SSM parameter를 남기고 state instance만 `tainted`로
-표시한 경우에만 `recover_tainted_ssm_state=true`로 foundation workflow를 다시
-실행한다. 이 입력은 protected apply role로 먼저 실행되며, state의 모든 taint가
-`aws_ssm_parameter.runtime`인지와 live parameter의 exact budget prefix,
-`SecureString`, `DataClass=secret`, `ParameterStatus=out-of-band`를 전부 확인한 뒤
-state taint 표시만 제거한다. 다른 taint나 live metadata 불일치가 하나라도 있으면
-아무 state도 바꾸지 않고 중단한다. parameter 값과 live resource는 읽거나 갱신하지
-않으며 정상 복구 후 다음 실행부터 입력은 다시 `false`로 둔다.
+실패한 provider create가 live resource를 남기고 state instance만 `tainted`로 표시한
+경우에만 `recover_tainted_ssm_state=true`로 foundation workflow를 다시 실행한다.
+이 입력은 protected apply role로 먼저 실행되며, 허용 대상은
+`aws_ssm_parameter.runtime`과 exact count index의 `aws_internet_gateway.this[0]`,
+`aws_s3_bucket.reference_raw[0]`, `aws_security_group.host[0]`,
+`aws_security_group.recovery[0]`뿐이다. parameter는 exact budget prefix,
+`SecureString`, `DataClass=secret`, `ParameterStatus=out-of-band`를 확인한다. foundation
+resource는 state ID와 live VPC CIDR/소유 태그, IGW 연결/태그, bucket account명/region,
+security group 이름/설명/무인바운드를 전부 확인한 뒤 state taint 표시만 제거한다.
+다른 taint나 live metadata 불일치가 하나라도 있으면 아무 state도 바꾸지 않고
+중단한다. parameter 값과 live resource는 읽거나 갱신하지 않으며 정상 복구 후 다음
+실행부터 입력은 다시 `false`로 둔다.
 
 ## SSM과 Admin
 

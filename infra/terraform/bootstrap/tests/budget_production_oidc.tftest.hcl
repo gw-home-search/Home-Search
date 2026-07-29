@@ -89,14 +89,17 @@ run "budget_roles_are_separated_and_state_isolated" {
         ] : anytrue([
           for statement in jsondecode(policy).Statement :
           statement.Sid == "ReadBudgetBucketProviderMetadata"
-          && statement.Action == ["s3:GetAccelerateConfiguration"]
+          && statement.Action == [
+            "s3:GetAccelerateConfiguration",
+            "s3:GetReplicationConfiguration",
+          ]
           && statement.Resource == [
             "arn:aws:s3:::home-search-budget-production-backup-123456789012",
             "arn:aws:s3:::home-search-budget-production-reference-raw-123456789012",
           ]
       ])
     ])
-    error_message = "Plan/apply must scope the provider-required accelerate metadata read to the two budget-production buckets."
+    error_message = "Plan/apply must scope the provider-required accelerate and replication metadata reads to the two budget-production buckets."
   }
 
   assert {

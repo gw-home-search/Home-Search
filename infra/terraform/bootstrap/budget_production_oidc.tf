@@ -195,7 +195,10 @@ resource "aws_iam_role_policy" "github_budget_plan" {
     Statement = [
       { Sid = "ReadBudgetMetadata", Effect = "Allow", Action = local.budget_read_actions, Resource = "*" },
       {
-        Sid      = "ReadBudgetBucketProviderMetadata", Effect = "Allow", Action = ["s3:GetAccelerateConfiguration"]
+        Sid = "ReadBudgetBucketProviderMetadata", Effect = "Allow", Action = [
+          "s3:GetAccelerateConfiguration",
+          "s3:GetReplicationConfiguration",
+        ]
         Resource = local.budget_protected_bucket_arns
       },
       {
@@ -240,7 +243,10 @@ resource "aws_iam_role_policy" "github_budget_apply" {
     Statement = [
       { Sid = "ReadBudgetMetadata", Effect = "Allow", Action = local.budget_read_actions, Resource = "*" },
       {
-        Sid      = "ReadBudgetBucketProviderMetadata", Effect = "Allow", Action = ["s3:GetAccelerateConfiguration"]
+        Sid = "ReadBudgetBucketProviderMetadata", Effect = "Allow", Action = [
+          "s3:GetAccelerateConfiguration",
+          "s3:GetReplicationConfiguration",
+        ]
         Resource = local.budget_protected_bucket_arns
       },
       {

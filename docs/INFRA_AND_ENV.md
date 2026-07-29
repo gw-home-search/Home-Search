@@ -487,10 +487,12 @@ transport wiring but does not claim live LLM provider readiness.
 
 - `apps/web` is the public map app on development port `5173`. It receives
   `VITE_API_SERVER_IP` for property-data and the separate
-  `VITE_USER_API_SERVER_IP` for optional OAuth/current-user calls.
-- Production must set `VITE_USER_API_SERVER_IP` explicitly. Local/test may use
-  `http://localhost:8082`; OAuth development uses the exact frontend origin
-  `http://localhost:5173`, not `127.0.0.1:5173`.
+  optional `VITE_USER_API_SERVER_IP` override for OAuth/current-user calls.
+- Approved production releases omit `VITE_USER_API_SERVER_IP` and use the
+  browser `window.location.origin`, so User/OAuth requests stay same-origin
+  behind the public gateway. Local/test may use the explicit override or the
+  `http://localhost:8082` fallback; OAuth development uses the exact frontend
+  origin `http://localhost:5173`, not `127.0.0.1:5173`.
 - `apps/admin/web` is an independent app on development port `5174`. It calls
   same-origin `/api/**`; `ADMIN_SERVICE_PROXY_TARGET` is development-proxy-only.
 - Neither app uses a surface-switch environment flag, shares a build artifact,

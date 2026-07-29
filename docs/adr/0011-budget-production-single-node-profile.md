@@ -38,6 +38,8 @@ Production과 staging의 state·resource를 재해석하거나 축소하면 roll
   `RPO 24h / RTO 4h`이며 live DB를 in-place overwrite하지 않는다.
 - AWS-managed `aws/ebs`, `aws/s3` key를 비용 예외로 사용한다. IAM, bucket
   policy, parameter ARN, exact state deny가 보완 통제다.
+- 계정당 하나인 AWS managed SERVICE anomaly monitor는 외부 account resource로
+  참조하고, budget state는 일 `$10` threshold subscription만 소유한다.
 - 최종 evidence 상태는 기존 `READY_TO_DEPLOY`와 다른
   `BUDGET_PRODUCTION_READY`다.
 

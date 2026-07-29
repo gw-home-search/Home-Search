@@ -27,7 +27,7 @@ locals {
     "home-search/production/terraform.tfstate",
   ]
   budget_read_actions = [
-    "acm:Describe*", "acm:List*", "budgets:Describe*", "ce:Get*", "ce:List*",
+    "acm:Describe*", "acm:List*", "budgets:Describe*", "budgets:ViewBudget", "ce:Get*", "ce:List*",
     "cloudwatch:Describe*", "cloudwatch:Get*", "cloudwatch:List*", "dlm:Get*", "dlm:List*",
     "ec2:Describe*", "ecr:Describe*", "ecr:GetLifecyclePolicy", "ecr:GetRepositoryPolicy",
     "ecr:ListTagsForResource", "ecs:Describe*", "ecs:List*", "events:Describe*", "events:List*",
@@ -266,20 +266,17 @@ resource "aws_iam_role_policy" "github_budget_apply" {
         }
       },
       {
-        Sid      = "CreateBudgetCostAnomalyControls", Effect = "Allow"
-        Action   = ["ce:CreateAnomalyMonitor", "ce:CreateAnomalySubscription", "ce:TagResource"]
+        Sid      = "CreateBudgetCostAnomalySubscription", Effect = "Allow"
+        Action   = ["ce:CreateAnomalySubscription", "ce:TagResource"]
         Resource = "*"
         Condition = {
           StringEquals = { "aws:RequestTag/Environment" = "budget-production" }
         }
       },
       {
-        Sid    = "ManageBudgetCostAnomalyControls", Effect = "Allow"
-        Action = ["ce:DeleteAnomalyMonitor", "ce:DeleteAnomalySubscription", "ce:TagResource", "ce:UntagResource", "ce:UpdateAnomalyMonitor", "ce:UpdateAnomalySubscription"]
-        Resource = [
-          "arn:aws:ce::${data.aws_caller_identity.current.account_id}:anomalymonitor/*",
-          "arn:aws:ce::${data.aws_caller_identity.current.account_id}:anomalysubscription/*",
-        ]
+        Sid      = "ManageBudgetCostAnomalySubscription", Effect = "Allow"
+        Action   = ["ce:DeleteAnomalySubscription", "ce:TagResource", "ce:UntagResource", "ce:UpdateAnomalySubscription"]
+        Resource = ["arn:aws:ce::${data.aws_caller_identity.current.account_id}:anomalysubscription/*"]
         Condition = {
           StringEquals = { "aws:ResourceTag/Environment" = "budget-production" }
         }
@@ -301,7 +298,7 @@ resource "aws_iam_role_policy" "github_budget_apply" {
         Effect = "Allow"
         Action = [
           "s3:CreateBucket", "s3:DeleteBucket", "s3:DeleteBucketPolicy",
-          "s3:PutBucketLifecycleConfiguration", "s3:PutBucketObjectLockConfiguration", "s3:PutBucketOwnershipControls", "s3:PutBucketPolicy", "s3:PutBucketTagging",
+          "s3:PutLifecycleConfiguration", "s3:PutBucketObjectLockConfiguration", "s3:PutBucketOwnershipControls", "s3:PutBucketPolicy", "s3:PutBucketTagging",
           "s3:PutBucketPublicAccessBlock", "s3:PutBucketVersioning", "s3:PutEncryptionConfiguration",
         ]
         Resource = local.budget_protected_bucket_arns
@@ -326,7 +323,16 @@ resource "aws_iam_role_policy" "github_budget_apply" {
           "ec2:ModifyVpcAttribute", "ec2:ReleaseAddress", "ec2:StartInstances", "ec2:StopInstances",
           "ec2:RevokeSecurityGroupEgress", "ec2:TerminateInstances",
         ]
-        Resource = "*"
+        Resource = [
+          "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:elastic-ip/*",
+          "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*",
+          "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:internet-gateway/*",
+          "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:route-table/*",
+          "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:security-group/*",
+          "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:subnet/*",
+          "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:volume/*",
+          "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:vpc/*",
+        ]
         Condition = {
           StringNotEqualsIfExists = { "aws:ResourceTag/Environment" = "budget-production" }
         }
@@ -362,10 +368,22 @@ resource "aws_iam_role_policy" "github_budget_apply" {
         ]
       },
       {
+        Sid    = "DenyNonBudgetEc2CreateTags"
+        Effect = "Deny"
+        Action = ["ec2:AuthorizeSecurityGroupEgress", "ec2:AuthorizeSecurityGroupIngress", "ec2:RunInstances"]
+        Resource = [
+          "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*",
+          "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:security-group-rule/*",
+        ]
+        Condition = {
+          StringNotEquals = { "aws:RequestTag/Environment" = "budget-production" }
+        }
+      },
+      {
         Sid      = "DenyNonBudgetHostType"
         Effect   = "Deny"
         Action   = ["ec2:RunInstances"]
-        Resource = "*"
+        Resource = ["arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*"]
         Condition = {
           StringNotEquals = { "ec2:InstanceType" = "t3a.large" }
         }

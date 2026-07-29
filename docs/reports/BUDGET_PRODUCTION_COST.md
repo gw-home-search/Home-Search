@@ -24,7 +24,8 @@
 계산 fixture는 `infra/cost/budget-production-price-fixture.json`, plan gate는
 `infra/cost/calculate-budget-production.py`다. 증분 `$95`, 실제 account forecast
 `$99`를 넘으면 plan이 실패한다. AWS Budget은 actual `$50`, forecast `$80/$100`,
-Cost Anomaly Detection은 일 `$10` 이상을 알린다.
+Cost Anomaly Detection은 기존 account-wide SERVICE monitor를 소유권 변경 없이
+참조하는 budget 전용 subscription으로 일 `$10` 이상을 알린다.
 
 단가 근거:
 

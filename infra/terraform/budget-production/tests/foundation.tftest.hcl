@@ -3,11 +3,12 @@ mock_provider "aws" {
 }
 
 variables {
-  ami_id                 = "ami-0123456789abcdef0"
-  availability_zone      = "ap-northeast-2a"
-  hosted_zone_id         = "Z0123456789ABCDEFG"
-  alarm_email            = "operator@example.com"
-  deployment_release_tag = "v1.2.3"
+  ami_id                   = "ami-0123456789abcdef0"
+  availability_zone        = "ap-northeast-2a"
+  hosted_zone_id           = "Z0123456789ABCDEFG"
+  alarm_email              = "operator@example.com"
+  cost_anomaly_monitor_arn = "arn:aws:ce::123456789012:anomalymonitor/11111111-1111-1111-1111-111111111111"
+  deployment_release_tag   = "v1.2.3"
   image_uris = {
     property-api          = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/property-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     property-batch        = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/property-batch@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -93,11 +94,19 @@ run "foundation_is_single_az_single_instance_and_data_safe" {
       && aws_dlm_lifecycle_policy.data[0].state == "DISABLED"
       && aws_dlm_lifecycle_policy.data[0].policy_details[0].schedule[0].retain_rule[0].count == 7
       && aws_security_group.recovery[0].description == "Ephemeral recovery rehearsal; intentionally no ingress"
-      && length(aws_budgets_budget.monthly[0].notification) == 3
-      && length(aws_ce_anomaly_subscription.daily) == 1
       && length(aws_ssm_document.configure_observability) == 1
     )
     error_message = "Only HTTP/HTTPS may enter the host and edge TLS automation must preserve SSE behavior."
+  }
+
+  assert {
+    condition = (
+      length(aws_budgets_budget.monthly[0].notification) == 3
+      && length(aws_ce_anomaly_subscription.daily) == 1
+      && one(aws_ce_anomaly_subscription.daily[0].monitor_arn_list) == var.cost_anomaly_monitor_arn
+      && length(regexall("resource \"aws_ce_anomaly_monitor\"", file("cost.tf"))) == 0
+    )
+    error_message = "Foundation must reuse the exact external account-wide anomaly monitor and own only its budget subscription."
   }
 
   assert {

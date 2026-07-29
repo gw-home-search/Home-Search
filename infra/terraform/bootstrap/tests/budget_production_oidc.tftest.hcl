@@ -71,6 +71,7 @@ run "budget_roles_are_separated_and_state_isolated" {
   assert {
     condition = (
       !contains(local.budget_read_actions, "ssm:GetParameter")
+      && contains(local.budget_read_actions, "budgets:ViewBudget")
       && anytrue([
         for statement in jsondecode(aws_iam_role_policy.github_budget_plan.policy).Statement :
         statement.Sid == "ReadPublicEcsOptimizedAmi"
@@ -160,10 +161,18 @@ run "budget_roles_are_separated_and_state_isolated" {
       ])
       && anytrue([
         for statement in jsondecode(aws_iam_role_policy.github_budget_apply.policy).Statement :
-        statement.Sid == "CreateBudgetCostAnomalyControls"
-        && contains(statement.Action, "ce:CreateAnomalyMonitor")
+        statement.Sid == "CreateBudgetCostAnomalySubscription"
+        && contains(statement.Action, "ce:CreateAnomalySubscription")
+        && !contains(statement.Action, "ce:CreateAnomalyMonitor")
         && statement.Resource == "*"
         && statement.Condition.StringEquals["aws:RequestTag/Environment"] == "budget-production"
+      ])
+      && anytrue([
+        for statement in jsondecode(aws_iam_role_policy.github_budget_apply.policy).Statement :
+        statement.Sid == "ManageBudgetCostAnomalySubscription"
+        && statement.Resource == ["arn:aws:ce::123456789012:anomalysubscription/*"]
+        && !contains(statement.Action, "ce:DeleteAnomalyMonitor")
+        && !contains(statement.Action, "ce:UpdateAnomalyMonitor")
       ])
       && anytrue([
         for statement in jsondecode(aws_iam_role_policy.github_budget_apply.policy).Statement :
@@ -196,6 +205,8 @@ run "budget_roles_are_separated_and_state_isolated" {
         statement.Sid == "ManageBudgetBucketsOnly"
         && contains(statement.Action, "s3:PutBucketObjectLockConfiguration")
         && contains(statement.Action, "s3:PutBucketTagging")
+        && contains(statement.Action, "s3:PutLifecycleConfiguration")
+        && !contains(statement.Action, "s3:PutBucketLifecycleConfiguration")
       ])
     )
     error_message = "Foundation apply must include the instance-profile and protected-bucket tag/Object Lock APIs used by the provider."
@@ -205,6 +216,16 @@ run "budget_roles_are_separated_and_state_isolated" {
     condition = anytrue([
       for statement in jsondecode(aws_iam_role_policy.github_budget_apply.policy).Statement :
       statement.Sid == "DenyCrossEnvironmentEc2Mutation"
+      && toset(statement.Resource) == toset([
+        "arn:aws:ec2:ap-northeast-2:123456789012:elastic-ip/*",
+        "arn:aws:ec2:ap-northeast-2:123456789012:instance/*",
+        "arn:aws:ec2:ap-northeast-2:123456789012:internet-gateway/*",
+        "arn:aws:ec2:ap-northeast-2:123456789012:route-table/*",
+        "arn:aws:ec2:ap-northeast-2:123456789012:security-group/*",
+        "arn:aws:ec2:ap-northeast-2:123456789012:subnet/*",
+        "arn:aws:ec2:ap-northeast-2:123456789012:volume/*",
+        "arn:aws:ec2:ap-northeast-2:123456789012:vpc/*",
+      ])
       && alltrue([
         for action in [
           "ec2:AssociateRouteTable",
@@ -217,6 +238,35 @@ run "budget_roles_are_separated_and_state_isolated" {
       ])
     ])
     error_message = "Every added EC2 connection and egress mutation must retain the cross-environment explicit deny boundary."
+  }
+
+  assert {
+    condition = anytrue([
+      for statement in jsondecode(aws_iam_role_policy.github_budget_apply.policy).Statement :
+      statement.Sid == "DenyNonBudgetHostType"
+      && statement.Action == ["ec2:RunInstances"]
+      && statement.Resource == ["arn:aws:ec2:ap-northeast-2:123456789012:instance/*"]
+      && statement.Condition.StringNotEquals["ec2:InstanceType"] == "t3a.large"
+    ])
+    error_message = "The instance-type deny must target only the instance resource so RunInstances dependency resources are not denied when ec2:InstanceType is absent."
+  }
+
+  assert {
+    condition = anytrue([
+      for statement in jsondecode(aws_iam_role_policy.github_budget_apply.policy).Statement :
+      statement.Sid == "DenyNonBudgetEc2CreateTags"
+      && toset(statement.Action) == toset([
+        "ec2:AuthorizeSecurityGroupEgress",
+        "ec2:AuthorizeSecurityGroupIngress",
+        "ec2:RunInstances",
+      ])
+      && toset(statement.Resource) == toset([
+        "arn:aws:ec2:ap-northeast-2:123456789012:instance/*",
+        "arn:aws:ec2:ap-northeast-2:123456789012:security-group-rule/*",
+      ])
+      && statement.Condition.StringNotEquals["aws:RequestTag/Environment"] == "budget-production"
+    ])
+    error_message = "New budget hosts and security-group rules must carry the budget-production request tag without applying resource-tag conditions before creation."
   }
 
   assert {

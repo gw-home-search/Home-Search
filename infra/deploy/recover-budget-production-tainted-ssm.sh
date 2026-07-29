@@ -25,7 +25,11 @@ tainted_json="$(
         vpc_id: .attributes.vpc_id,
         live_name: .attributes.name,
         description: .attributes.description,
-        bucket: .attributes.bucket
+        bucket: .attributes.bucket,
+        budget_type: .attributes.budget_type,
+        limit_amount: .attributes.limit_amount,
+        limit_unit: .attributes.limit_unit,
+        time_unit: .attributes.time_unit
       }
   ]' <<<"${state_json}"
 )"
@@ -49,6 +53,7 @@ if ! jq -e 'all(.[];
       (.index_key == 0)
       and (
         (.type == "aws_internet_gateway" and .name == "this")
+        or (.type == "aws_budgets_budget" and .name == "monthly")
         or (.type == "aws_s3_bucket" and .name == "reference_raw")
         or (.type == "aws_security_group" and (.name == "host" or .name == "recovery"))
       )
@@ -157,6 +162,33 @@ while IFS= read -r item; do
       fail 'live reference bucket region이 budget-production region과 일치하지 않습니다.'
     fi
     addresses+=("aws_s3_bucket.reference_raw[0]")
+  elif [[ "${resource_type}" == 'aws_budgets_budget' ]]; then
+    resource_id="$(jq -er '.id' <<<"${item}")"
+    live_name="$(jq -er '.live_name' <<<"${item}")"
+    budget_type="$(jq -er '.budget_type' <<<"${item}")"
+    limit_amount="$(jq -er '.limit_amount' <<<"${item}")"
+    limit_unit="$(jq -er '.limit_unit' <<<"${item}")"
+    time_unit="$(jq -er '.time_unit' <<<"${item}")"
+    account_id="$(aws sts get-caller-identity --query Account --output text)"
+    expected_name='home-search-budget-production-monthly'
+    [[ "${resource_id}" == "${account_id}:${expected_name}" && "${live_name}" == "${expected_name}" ]] ||
+      fail 'state budget identity가 exact budget-production monthly budget이 아닙니다.'
+    [[ "${budget_type}" == 'COST' && "${limit_unit}" == 'USD' && "${time_unit}" == 'MONTHLY' ]] &&
+      jq -e '.limit_amount | tonumber == 100' <<<"${item}" >/dev/null ||
+      fail 'state budget 설정이 승인된 USD 100 monthly cost budget과 일치하지 않습니다.'
+    metadata="$(
+      aws budgets describe-budget --account-id "${account_id}" --budget-name "${expected_name}" --output json
+    )"
+    if ! jq -e --arg name "${expected_name}" '
+      .Budget.BudgetName == $name
+      and .Budget.BudgetType == "COST"
+      and .Budget.TimeUnit == "MONTHLY"
+      and (.Budget.BudgetLimit.Amount | tonumber) == 100
+      and .Budget.BudgetLimit.Unit == "USD"
+    ' <<<"${metadata}" >/dev/null; then
+      fail 'live budget이 exact budget-production USD 100 monthly cost budget이 아닙니다.'
+    fi
+    addresses+=("aws_budgets_budget.monthly[0]")
   elif [[ "${resource_type}" == 'aws_security_group' ]]; then
     resource_id="$(jq -er '.id' <<<"${item}")"
     vpc_id="$(jq -er '.vpc_id' <<<"${item}")"

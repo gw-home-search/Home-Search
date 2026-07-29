@@ -44,6 +44,19 @@ run "budget_roles_are_separated_and_state_isolated" {
 
   assert {
     condition = (
+      !contains(local.budget_read_actions, "ssm:GetParameter")
+      && anytrue([
+        for statement in jsondecode(aws_iam_role_policy.github_budget_plan.policy).Statement :
+        statement.Sid == "ReadPublicEcsOptimizedAmi"
+        && statement.Action == ["ssm:GetParameter"]
+        && statement.Resource == ["arn:aws:ssm:ap-northeast-2::parameter/aws/service/ecs/optimized-ami/amazon-linux-2023/recommended/image_id"]
+      ])
+    )
+    error_message = "Budget plan must read only the exact public ECS-optimized AMI parameter."
+  }
+
+  assert {
+    condition = (
       !contains(keys(local.budget_state_role_ids), "deploy")
       && !contains(local.budget_deploy_actions, "ec2:ModifyInstanceCreditSpecification")
       && !contains(local.budget_deploy_actions, "ec2:CreateVolume")

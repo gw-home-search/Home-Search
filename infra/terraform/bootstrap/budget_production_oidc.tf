@@ -190,8 +190,14 @@ resource "aws_iam_role_policy" "github_budget_plan" {
   name = "budget-production-read-only-plan"
   role = aws_iam_role.github_budget_production_plan.id
   policy = jsonencode({
-    Version   = "2012-10-17"
-    Statement = [{ Sid = "ReadBudgetMetadata", Effect = "Allow", Action = local.budget_read_actions, Resource = "*" }]
+    Version = "2012-10-17"
+    Statement = [
+      { Sid = "ReadBudgetMetadata", Effect = "Allow", Action = local.budget_read_actions, Resource = "*" },
+      {
+        Sid      = "ReadPublicEcsOptimizedAmi", Effect = "Allow", Action = ["ssm:GetParameter"]
+        Resource = ["arn:aws:ssm:${var.aws_region}::parameter/aws/service/ecs/optimized-ami/amazon-linux-2023/recommended/image_id"]
+      },
+    ]
   })
 }
 

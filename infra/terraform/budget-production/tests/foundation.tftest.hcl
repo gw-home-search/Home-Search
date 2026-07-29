@@ -1,0 +1,215 @@
+mock_provider "aws" {
+  mock_data "aws_caller_identity" { defaults = { account_id = "123456789012" } }
+}
+
+variables {
+  ami_id                 = "ami-0123456789abcdef0"
+  availability_zone      = "ap-northeast-2a"
+  hosted_zone_id         = "Z0123456789ABCDEFG"
+  alarm_email            = "operator@example.com"
+  deployment_release_tag = "v1.2.3"
+  image_uris = {
+    property-api          = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/property-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    property-batch        = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/property-batch@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    property-flyway       = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/property-flyway@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    admin-api             = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/admin-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    admin-migration       = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/admin-migration@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    admin-ops             = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/admin-ops@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    user-api              = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/user-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    user-insight-worker   = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/user-insight-worker@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    user-flyway           = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/user-flyway@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    source-data-migration = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/source-data-migration@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    public-gateway        = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/public-gateway@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    admin-gateway         = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/admin-gateway@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    backup                = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/backup@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ops-bootstrap         = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/ops-bootstrap@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ml                    = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/ml@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ai                    = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/ai@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    chat-bff              = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/chat-bff@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  }
+  platform_image_uris = {
+    budget-postgres = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/budget-postgres@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    budget-valkey   = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/budget-valkey@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  }
+}
+
+run "registry_phase_owns_only_budget_platform_repositories" {
+  command = plan
+  variables { deployment_phase = "registry" }
+
+  assert {
+    condition = (
+      toset(keys(aws_ecr_repository.platform)) == toset(["budget-postgres", "budget-valkey"])
+      && length(aws_instance.host) == 0
+      && length(aws_ebs_volume.data) == 0
+      && length(aws_ecs_cluster.this) == 0
+    )
+    error_message = "Registry phase must create only the two budget platform ECR repositories."
+  }
+}
+
+run "foundation_is_single_az_single_instance_and_data_safe" {
+  command = plan
+  variables { deployment_phase = "foundation" }
+
+  assert {
+    condition = (
+      length(aws_instance.host) == 1
+      && aws_instance.host[0].instance_type == "t3a.large"
+      && aws_instance.host[0].availability_zone == "ap-northeast-2a"
+      && aws_instance.host[0].metadata_options[0].http_tokens == "required"
+      && aws_instance.host[0].disable_api_termination
+      && aws_instance.host[0].instance_initiated_shutdown_behavior == "stop"
+    )
+    error_message = "Foundation must use one protected t3a.large with IMDSv2 in the pinned AZ."
+  }
+
+  assert {
+    condition = (
+      aws_ebs_volume.data[0].size == 80
+      && aws_ebs_volume.data[0].type == "gp3"
+      && aws_ebs_volume.data[0].iops == 3000
+      && aws_ebs_volume.data[0].throughput == 125
+      && aws_ebs_volume.data[0].encrypted
+      && !aws_volume_attachment.data[0].force_detach
+      && strcontains(file("files/host-bootstrap.sh.tftpl"), "mkfs.xfs")
+      && !strcontains(file("files/host-bootstrap.sh.tftpl"), "mkfs.xfs -f")
+      && !strcontains(file("files/host-bootstrap.sh.tftpl"), "defaults,nofail")
+      && strcontains(file("files/host-bootstrap.sh.tftpl"), "ConditionPathIsMountPoint=/srv/home-search")
+    )
+    error_message = "Data EBS must be encrypted 80 GiB gp3 and never force-detached."
+  }
+
+  assert {
+    condition = (
+      toset([for rule in aws_vpc_security_group_ingress_rule.public : rule.from_port]) == toset([80, 443])
+      && alltrue([for rule in aws_vpc_security_group_ingress_rule.public : rule.to_port == rule.from_port])
+      && length(aws_ssm_document.configure_edge) == 1
+      && strcontains(file("files/configure-edge.sh.tftpl"), "proxy_buffering off")
+      && strcontains(file("files/configure-edge.sh.tftpl"), "acm export-certificate")
+      && aws_dlm_lifecycle_policy.data[0].state == "DISABLED"
+      && aws_dlm_lifecycle_policy.data[0].policy_details[0].schedule[0].retain_rule[0].count == 7
+      && aws_security_group.recovery[0].description == "Ephemeral recovery rehearsal; intentionally no ingress"
+      && length(aws_budgets_budget.monthly[0].notification) == 3
+      && length(aws_ce_anomaly_subscription.daily) == 1
+      && length(aws_ssm_document.configure_observability) == 1
+    )
+    error_message = "Only HTTP/HTTPS may enter the host and edge TLS automation must preserve SSE behavior."
+  }
+}
+
+run "public_dns_is_an_explicit_last_step" {
+  command = plan
+  variables {
+    deployment_phase      = "public"
+    data_services_enabled = true
+    public_dns_enabled    = false
+  }
+
+  assert {
+    condition = (
+      length(aws_route53_record.public) == 0
+      && aws_ecs_service.application["public-gateway"].desired_count == 1
+    )
+    error_message = "Public phase must keep DNS disabled until a separate approved apply."
+  }
+}
+
+run "data_phase_keeps_platform_services_dark_before_secret_bootstrap" {
+  command = plan
+  variables { deployment_phase = "data" }
+
+  assert {
+    condition = (
+      toset(keys(aws_ecs_task_definition.platform)) == toset(["budget-postgres", "budget-valkey"])
+      && toset(keys(aws_ecs_task_definition.one_shot)) == toset([
+        "secret-bootstrap",
+        "secret-readiness",
+        "property-flyway",
+        "user-flyway",
+        "admin-migration",
+        "ai-migration",
+        "importer-grants",
+        "scheduled-backup",
+        "data-import-reconcile",
+        "map-marker-projection",
+        "runtime-grants",
+      ])
+      && length(aws_ecs_task_definition.application) == 0
+      && aws_ecs_service.platform["budget-postgres"].desired_count == 0
+      && aws_ecs_service.platform["budget-valkey"].desired_count == 0
+    )
+    error_message = "Data phase must define digest-pinned platform tasks but keep them stopped before secret bootstrap."
+  }
+}
+
+run "data_phase_starts_platform_services_only_after_secret_bootstrap" {
+  command = plan
+  variables {
+    deployment_phase      = "data"
+    data_services_enabled = true
+  }
+
+  assert {
+    condition = (
+      aws_ecs_service.platform["budget-postgres"].desired_count == 1
+      && aws_ecs_service.platform["budget-valkey"].desired_count == 1
+      && length(aws_iam_role_policy.secret_bootstrap) == 1
+      && length(setintersection(
+        local.generated_runtime_parameter_names,
+        local.external_runtime_parameter_names,
+      )) == 0
+      && aws_scheduler_schedule.logical_backup[0].state == "DISABLED"
+      && strcontains(file("one_shot.tf"), "/usr/local/bin/run-budget-pg-backup")
+    )
+    error_message = "The explicit post-bootstrap gate must start exactly one PostgreSQL and one Valkey task."
+  }
+}
+
+run "post_cutover_enables_backup_and_public_alarms" {
+  command = plan
+  variables {
+    deployment_phase         = "public"
+    data_services_enabled    = true
+    public_dns_enabled       = true
+    backup_schedules_enabled = true
+  }
+
+  assert {
+    condition = (
+      length(aws_route53_record.public) == 1
+      && aws_dlm_lifecycle_policy.data[0].state == "ENABLED"
+      && aws_scheduler_schedule.logical_backup[0].state == "ENABLED"
+      && length(aws_cloudwatch_metric_alarm.ecs_running) == 1
+      && length(aws_cloudwatch_metric_alarm.backup_age) == 1
+      && length(aws_cloudwatch_metric_alarm.map_p95) == 1
+      && length(aws_cloudwatch_metric_alarm.public_5xx) == 1
+    )
+    error_message = "Only explicit post-cutover input may enable backups, DNS, and public service alarms."
+  }
+}
+
+run "private_phase_uses_fixed_bridge_ports_and_least_privilege_roles" {
+  command = plan
+  variables {
+    deployment_phase      = "private"
+    data_services_enabled = true
+  }
+
+  assert {
+    condition = (
+      aws_ecs_task_definition.application["public-gateway"].network_mode == "bridge"
+      && jsondecode(aws_ecs_task_definition.application["public-gateway"].container_definitions)[0].portMappings[0].containerPort == 8080
+      && jsondecode(aws_ecs_task_definition.application["public-gateway"].container_definitions)[0].portMappings[0].hostPort == 18000
+      && aws_ecs_service.application["public-gateway"].desired_count == 0
+      && aws_ecs_service.application["property-api"].desired_count == 1
+      && aws_ecs_service.application["user-api"].desired_count == 1
+      && aws_ecs_service.application["ai"].desired_count == 1
+      && aws_ecs_service.application["chat-bff"].desired_count == 1
+      && aws_ecs_service.application["property-api"].deployment_minimum_healthy_percent == 0
+      && aws_ecs_service.application["property-api"].deployment_maximum_percent == 100
+      && aws_iam_role.task_execution["property-api"].name != aws_iam_role.task_execution["user-api"].name
+    )
+    error_message = "Private phase must use fixed bridge ports, keep the gateway dark, and separate execution roles."
+  }
+}

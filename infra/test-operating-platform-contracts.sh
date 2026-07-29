@@ -13,6 +13,7 @@ bash infra/nginx/test-public-gateway-routing.sh
 bash infra/test-local-event-stack.sh
 bash infra/images/test-base-image-pinning.sh
 bash infra/images/test-base-image-pinning-contract.sh
+bash infra/images/test-budget-platform-images.sh
 bash infra/release/test-vulnerability-policy.sh
 bash infra/release/test-create-release-manifest.sh
 bash .github/scripts/test-classify-changes.sh

@@ -7,6 +7,7 @@ RUN apk add --no-cache \
     && adduser -S -D -H -u 10001 -G home-search -s /sbin/nologin home-search
 
 COPY --chown=10001:10001 --chmod=0555 infra/bootstrap/home-search-bootstrap.sh /usr/local/bin/home-search-bootstrap
+COPY --chown=10001:10001 infra/migration/data-only-allowlist.json /opt/home-search/infra/migration/data-only-allowlist.json
 
 USER 10001:10001
 ENTRYPOINT ["/usr/local/bin/home-search-bootstrap"]

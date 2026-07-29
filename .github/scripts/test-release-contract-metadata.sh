@@ -7,7 +7,7 @@ cleanup() { find "$tmp_dir" -depth -delete 2>/dev/null || true; }
 trap cleanup EXIT
 
 printf '%s\n' \
-  '{"format_version":1,"tag":"v1.2.3","commit_sha":"0123456789abcdef0123456789abcdef01234567","images":{"property-api":{"digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}}' \
+  '{"format_version":1,"tag":"v1.2.3","commit_sha":"0123456789abcdef0123456789abcdef01234567","images":{"property-api":{"digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}},"platform_images":{"budget-postgres":{"digest":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},"budget-valkey":{"digest":"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}}}' \
   >"$tmp_dir/manifest.json"
 
 "$repo_root/.github/scripts/augment-release-manifest.sh" \
@@ -15,7 +15,11 @@ printf '%s\n' \
 
 mkdir -p "$tmp_dir/sbom" "$tmp_dir/vulnerability"
 printf '%s\n' '{"spdxVersion":"SPDX-2.3"}' >"$tmp_dir/sbom/property-api.spdx.json"
+printf '%s\n' '{"spdxVersion":"SPDX-2.3"}' >"$tmp_dir/sbom/budget-postgres.spdx.json"
+printf '%s\n' '{"spdxVersion":"SPDX-2.3"}' >"$tmp_dir/sbom/budget-valkey.spdx.json"
 printf '%s\n' '{"matches":[]}' >"$tmp_dir/vulnerability/property-api.json"
+printf '%s\n' '{"matches":[]}' >"$tmp_dir/vulnerability/budget-postgres.json"
+printf '%s\n' '{"matches":[]}' >"$tmp_dir/vulnerability/budget-valkey.json"
 printf '%s\n' '{"scanner":"grype","critical_gate_passed":true,"policy_gate_passed":true}' \
   >"$tmp_dir/vulnerability/summary.json"
 
@@ -37,6 +41,8 @@ jq -e '
 ' "$tmp_dir/manifest.json" >/dev/null
 
 mkdir -p "$tmp_dir/incomplete-sbom" "$tmp_dir/incomplete-vulnerability"
+printf '%s\n' '{"spdxVersion":"SPDX-2.3"}' >"$tmp_dir/incomplete-sbom/property-api.spdx.json"
+printf '%s\n' '{"matches":[]}' >"$tmp_dir/incomplete-vulnerability/property-api.json"
 printf '%s\n' '{"scanner":"grype","critical_gate_passed":true,"policy_gate_passed":true}' \
   >"$tmp_dir/incomplete-vulnerability/summary.json"
 if "$repo_root/.github/scripts/finalize-release-evidence.sh" \

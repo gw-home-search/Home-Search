@@ -130,3 +130,17 @@ outbox/lag 5분 초과 또는 DLQ 신규 event가 있으면 traffic 확대를 �
 - plan이 foundation allowlist 밖 resource를 변경한다.
 - 이전 digest/rollback evidence 또는 첫 배포 internal smoke가 없다.
 - production 비용 승인과 protected environment 승인이 없다.
+
+## Budget production release
+
+`Deploy budget production`은 기존 `Deploy production`과 별개다. 먼저
+`operation=registry`로 budget platform ECR을 만든 뒤 새 environment-neutral
+release를 발행하고, `operation=deploy`로 exact tag/SHA와 data-only S3
+manifest SHA를 전달한다. release는 17개 application image와
+`budget-postgres`, `budget-valkey` digest를 모두 포함해야 한다.
+
+`budget-production-plan`은 승인 없는 read-only plan, `budget-production`은
+protected apply/deploy다. deploy role은 state를 읽지 않는다. public gateway까지
+DNS 없이 검증한 뒤 별도 DNS plan/apply가 실행되며, 비용·migration·restore·SLO·
+보안·SNS/OAuth evidence가 모두 pass일 때만 `BUDGET_PRODUCTION_READY`를 만든다.
+운영 순서와 rollback은 `BUDGET_PRODUCTION_RUNBOOK.md`를 따른다.

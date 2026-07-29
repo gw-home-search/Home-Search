@@ -115,6 +115,20 @@ class ChatbotEngine(Protocol):
     ) -> dict[str, object]: ...
 
 
+def _repository_pool_sizes() -> dict[str, int]:
+    try:
+        min_pool_size = int(os.getenv("HOME_AI_DB_POOL_MIN_SIZE", "1"))
+        max_pool_size = int(os.getenv("HOME_AI_DB_POOL_MAX_SIZE", "5"))
+    except ValueError as exception:
+        raise ChatbotProviderUnavailable() from exception
+    if not 1 <= min_pool_size <= max_pool_size <= 20:
+        raise ChatbotProviderUnavailable()
+    return {
+        "min_pool_size": min_pool_size,
+        "max_pool_size": max_pool_size,
+    }
+
+
 @lru_cache
 def get_property_fact_repository() -> object:
     dsn = os.getenv("HOME_AI_PROPERTY_DSN", "").strip()
@@ -123,7 +137,7 @@ def get_property_fact_repository() -> object:
     from .property_chat.postgres import PostgresPropertyFactRepository
 
     try:
-        return PostgresPropertyFactRepository(dsn)
+        return PostgresPropertyFactRepository(dsn, **_repository_pool_sizes())
     except Exception as exception:
         raise ChatbotProviderUnavailable() from exception
 
@@ -136,7 +150,7 @@ def get_school_fact_repository() -> object:
     from .property_chat.school_postgres import PostgresSchoolFactRepository
 
     try:
-        return PostgresSchoolFactRepository(dsn)
+        return PostgresSchoolFactRepository(dsn, **_repository_pool_sizes())
     except Exception as exception:
         raise ChatbotProviderUnavailable() from exception
 
@@ -149,7 +163,7 @@ def get_academy_registry_repository() -> object:
     from .property_chat.academy_registry import PostgresAcademyRegistryRepository
 
     try:
-        return PostgresAcademyRegistryRepository(dsn)
+        return PostgresAcademyRegistryRepository(dsn, **_repository_pool_sizes())
     except Exception as exception:
         raise ChatbotProviderUnavailable() from exception
 
@@ -162,7 +176,7 @@ def get_academy_location_repository() -> object:
     from .property_chat.academy_locations import PostgresAcademyLocationRepository
 
     try:
-        return PostgresAcademyLocationRepository(dsn)
+        return PostgresAcademyLocationRepository(dsn, **_repository_pool_sizes())
     except Exception as exception:
         raise ChatbotProviderUnavailable() from exception
 
@@ -175,7 +189,7 @@ def get_point_facility_repository() -> object:
     from .property_chat.reference_facilities import PostgresPointFacilityRepository
 
     try:
-        return PostgresPointFacilityRepository(dsn)
+        return PostgresPointFacilityRepository(dsn, **_repository_pool_sizes())
     except Exception as exception:
         raise ChatbotProviderUnavailable() from exception
 
@@ -188,7 +202,7 @@ def get_rail_station_repository() -> object:
     from .property_chat.rail_stations import PostgresRailStationRepository
 
     try:
-        return PostgresRailStationRepository(dsn)
+        return PostgresRailStationRepository(dsn, **_repository_pool_sizes())
     except Exception as exception:
         raise ChatbotProviderUnavailable() from exception
 
@@ -201,7 +215,7 @@ def get_childcare_repository() -> object:
     from .property_chat.childcare_centers import PostgresChildcareRepository
 
     try:
-        return PostgresChildcareRepository(dsn)
+        return PostgresChildcareRepository(dsn, **_repository_pool_sizes())
     except Exception as exception:
         raise ChatbotProviderUnavailable() from exception
 

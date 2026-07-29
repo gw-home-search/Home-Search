@@ -5,14 +5,11 @@ COPY apps/web/package.json apps/web/package-lock.json ./
 RUN --mount=type=cache,id=home-search-web-npm,target=/root/.npm npm ci
 COPY apps/web .
 
-ARG VITE_USER_API_SERVER_IP
 ARG VITE_KAKAO_MAP_APP_KEY
 ARG VITE_MARKET_NEWS_ENABLED=false
-ENV VITE_USER_API_SERVER_IP=${VITE_USER_API_SERVER_IP}
 ENV VITE_KAKAO_MAP_APP_KEY=${VITE_KAKAO_MAP_APP_KEY}
 ENV VITE_MARKET_NEWS_ENABLED=${VITE_MARKET_NEWS_ENABLED}
-RUN test -n "${VITE_USER_API_SERVER_IP}" \
-    && test "${VITE_MARKET_NEWS_ENABLED}" = "true" -o "${VITE_MARKET_NEWS_ENABLED}" = "false" \
+RUN test "${VITE_MARKET_NEWS_ENABLED}" = "true" -o "${VITE_MARKET_NEWS_ENABLED}" = "false" \
     && npm run build
 
 FROM cgr.dev/chainguard/nginx:latest-dev@sha256:22ee56150b99f1d1955637a96f1b0b9a9a6c047bbc48fe5e5b9004155f0e9087

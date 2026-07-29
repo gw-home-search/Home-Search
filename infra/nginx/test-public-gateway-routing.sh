@@ -143,7 +143,10 @@ for path in \
     /api/v1/chatbot/messages \
     /api/v1/chatbot/query/extra \
     /internal \
-    /internal/health; do
+    /internal/health \
+    /actuator/prometheus \
+    /metrics \
+    /metrics/process; do
     assert_route "$path" 404
 done
 

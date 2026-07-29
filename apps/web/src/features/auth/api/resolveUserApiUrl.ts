@@ -3,11 +3,13 @@ const LOCAL_USER_API_URL = 'http://localhost:8082';
 export function resolveUserApiUrl(
   configuredUrl = import.meta.env.VITE_USER_API_SERVER_IP,
   mode = import.meta.env.MODE,
+  browserOrigin = typeof window === 'undefined' ? undefined : window.location.origin,
 ): string {
-  const candidate = configuredUrl?.trim();
+  let candidate = configuredUrl?.trim();
   if (!candidate) {
     if (mode === 'development' || mode === 'test') return LOCAL_USER_API_URL;
-    throw new Error('VITE_USER_API_SERVER_IP is required outside local/test');
+    candidate = browserOrigin?.trim();
+    if (!candidate) throw new Error('browser origin is required outside local/test');
   }
 
   const url = new URL(candidate);

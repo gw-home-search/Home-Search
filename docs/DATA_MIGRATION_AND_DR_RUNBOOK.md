@@ -143,3 +143,16 @@ Target DB에 down migration을 실행하거나 source를 삭제하지 않는다.
 
 Backup age 26시간 초과, checksum mismatch, 목표 RPO/RTO 실패는 production
 승격 차단 evidence다.
+
+## Budget production DR profile
+
+Budget profile은 HA Production과 목표가 다르다. `RPO 24h / RTO 4h`이며 daily
+data EBS snapshot 7개와 4개 logical DB custom dump 35일을 사용한다. 최초 DNS
+전 logical restore와 EBS clone restore를 모두 실행하고, 이후 logical은 매월,
+EBS clone은 분기마다 ingress 없는 임시 `t3a.large`에서 검증한다.
+
+Recovery runner는 live host에서 임시 cluster를 실행하지 않는다. clone volume과
+instance는 exact `Purpose`/`RunId` tag를 재확인한 후에만 삭제/종료하며 원본
+data EBS를 overwrite하지 않는다. raw-first, normalized duplicate 0,
+failed-match queryability, migration/row count, active marker pointer/parity를
+검증한다. 상세 명령과 host replacement는 `BUDGET_PRODUCTION_RUNBOOK.md`를 따른다.

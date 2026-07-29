@@ -1,0 +1,10 @@
+terraform {
+  backend "s3" {
+    bucket       = "replace-with-shared-state-bucket"
+    key          = "home-search/budget-production/terraform.tfstate"
+    region       = "ap-northeast-2"
+    encrypt      = true
+    kms_key_id   = "replace-with-shared-state-kms-arn"
+    use_lockfile = true
+  }
+}

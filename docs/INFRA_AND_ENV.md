@@ -923,3 +923,17 @@ curl -fsS http://localhost:${HOME_SEARCH_GRAFANA_PORT:-3000}/api/health
 Use `docker compose stop` or `docker compose down` without `-v` when shutting
 down the local stack. Do not use `docker compose down -v` unless a current task
 explicitly approves volume deletion.
+
+## Budget production environment
+
+`budget-production`은 서울 리전의 단일 `t3a.large`/단일 AZ/EIP profile이다.
+public ingress는 80/443, 운영 접속은 SSM뿐이다. PostgreSQL과 Valkey는
+`/srv/home-search` data EBS를 사용하는 ECS EC2 bridge task이며 외부 port를
+Security Group에서 허용하지 않는다. Host Nginx가 ACM exportable certificate를
+0400으로 설치하고 loopback public gateway만 proxy한다.
+
+평시 credit mode는 `standard`다. import/recovery의 승인된 `unlimited`는 최대
+8시간이고 종료 시 `standard` assertion이 필수다. Terraform parameter는 실제
+secret 대신 `UNSET` container만 관리한다. 필요한 GitHub Environment/variables와
+운영 절차는 `BUDGET_PRODUCTION_RUNBOOK.md`, threat boundary는
+`BUDGET_PRODUCTION_THREAT_MODEL.md`를 따른다.

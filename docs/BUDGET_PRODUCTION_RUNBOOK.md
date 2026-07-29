@@ -1,0 +1,108 @@
+# Budget Production Runbook
+
+## 준비
+
+GitHub Environment를 다음처럼 만든다.
+
+- `budget-production-plan`: reviewer 없이 read-only plan
+- `budget-production`: `kwongwangjae` required reviewer
+
+Repository/Environment variables:
+
+- `AWS_BUDGET_PRODUCTION_PLAN_ROLE_ARN`
+- `AWS_BUDGET_PRODUCTION_APPLY_ROLE_ARN`
+- `AWS_BUDGET_PRODUCTION_DEPLOY_ROLE_ARN`
+- `BUDGET_PRODUCTION_TF_STATE_BUCKET`, `BUDGET_PRODUCTION_TF_STATE_KMS_ARN`
+- `BUDGET_PRODUCTION_HOSTED_ZONE_ID`, `BUDGET_PRODUCTION_ALARM_EMAIL`
+- `BUDGET_PRODUCTION_ACCEPTANCE_EVIDENCE_S3_URI`
+
+Acceptance URI는 `s3://home-search-budget-production-backup-<account-id>/budget-production/acceptance/<release-tag>`
+형식으로 고정한다. 그 prefix에는 `acceptance.json`, `security.json`,
+`observability.json`, `release-exceptions.json`이 있어야 하고 각 파일의
+`release_tag`와 `commit_sha`가 실행 입력과 정확히 일치해야 한다. 스키마와 gate는
+`infra/deploy/build-budget-production-ready-evidence.sh`가 단일 source다. 실제
+secret, user ID, JWT, prompt/query/answer, private key는 evidence에 넣지 않는다.
+
+## 최초 배포
+
+1. bootstrap state를 apply해 budget OIDC role을 만든다.
+2. `Deploy budget production` workflow를 `operation=registry`로 실행한다. plan을
+   확인하고 protected apply를 승인한다. 이 단계는 budget Postgres/Valkey ECR만 만든다.
+3. same-origin frontend가 포함된 새 tag를 발행한다. `v1.0.4`는 사용하지 않는다.
+   release evidence가 17 application + 2 platform digest/SBOM/Grype를 포함하는지 확인한다.
+4. SSM의 외부 credential parameter를 채운다. Terraform에는 값을 전달하지 않는다.
+   Kakao console에는 `homesearch.world`와 staging origin, callback을 등록한다. 현재
+   API contract 때문에 Google/Kakao/Naver credential을 모두 준비한다.
+5. current 24h SLO, SNS test alarm 수신, Kakao/OAuth console, network/ACL probe를
+   acceptance prefix에 업로드한다.
+6. workflow를 `operation=deploy`와 exact tag/SHA, migration S3 prefix/SHA로 실행한다.
+7. foundation plan의 AMI/AZ, zero-destroy, `$95/$99` cost gate를 확인해 apply를 승인한다.
+8. workflow가 secret bootstrap/readiness, Postgres/Valkey, Flyway, data-only import,
+   reconcile, marker projection, logical backup을 순서대로 실행한다.
+9. import 동안만 Unlimited를 사용한다. 실패 여부와 무관하게 다음 step에서
+   `standard`를 재설정하는지 확인한다. rollout job timeout까지 대비한 별도
+   `budget-production-credit-cleanup` protected job도 host를 다시 찾아 Standard를
+   확인하며, 이 job이 성공하지 않으면 DNS plan은 시작하지 않는다.
+10. ingress 없는 recovery instance의 logical restore와 EBS clone restore가 모두
+    4시간 이내인지 확인한다.
+11. private service, public gateway, `curl --resolve`와 CPU credit 216 gate가
+    통과하면 별도 DNS plan을 검토한다.
+12. `public_dns_enable_approved=true`일 때만 마지막 protected job을 승인한다.
+    A record와 backup schedule 적용 뒤 `BUDGET_PRODUCTION_READY.json`이 생성된다.
+
+중단 조건은 plan의 destroy/금지 resource, 비용 초과, `UNSET`, digest/SBOM 누락,
+staging origin, disk headroom 부족, ACL/IMDS/public port 실패, reconcile/restore
+mismatch, 미확인 SNS/Kakao/OAuth evidence, credit `standard` 미복원이다.
+
+## SSM과 Admin
+
+SSH는 사용하지 않는다. Session Manager로 host에 접속한다. Admin API/gateway는
+desired 0이며 승인된 maintenance window에만 ECS desired count를 1로 올리고 SSM
+port forwarding으로 18001에 접근한다. 종료 시 두 service를 0으로 되돌리고
+task/event evidence를 남긴다. 18001, 18081을 Security Group에 열지 않는다.
+
+## Certificate renewal
+
+ACM renewal event가 `home-search-budget-production-configure-edge` document를
+호출한다. 실패 alarm 시 certificate ARN/renewal 상태와 SSM association을 확인하고
+document를 exact host instance에 재실행한다. output log에 passphrase/key/body를
+복사하지 않는다. `nginx -t` 실패 시 기존 key/config를 유지하고 DNS는 바꾸지 않는다.
+
+## Backup과 restore drill
+
+- 01:30 KST: DLM data EBS snapshot, 최근 7개
+- 03:30 KST: 4개 logical DB custom dump, Object Lock Governance 35일
+- 매월: logical restore runner
+- 분기: EBS clone/prewarm/restore runner
+
+`infra/budget/run-recovery-rehearsal.sh`는 7개 인자면 logical, snapshot/postgres
+digest를 추가하면 EBS mode다. instance와 clone volume은 `Purpose`/`RunId`를 다시
+확인한 뒤에만 종료/삭제한다. 원본 data volume과 live PostgreSQL을 mount하거나
+overwrite하지 않는다.
+
+## Host replacement
+
+1. incident를 선언하고 instance ID, EIP allocation, data volume ID/AZ, exact AMI를 기록한다.
+2. 기존 instance를 stop한다. data volume detach는 상태 확인과 별도 승인을 거친다.
+3. 같은 AZ/exact AMI의 termination-protected `t3a.large`를 만든다.
+4. 기존 data EBS를 연결한다. filesystem을 format하지 않는다.
+5. host bootstrap, edge certificate, observability SSM document를 재적용한다.
+6. platform→private→public 순서로 task를 확인하고 EIP를 재연결한다.
+7. `curl --resolve`, marker parity, ACL/IMDS, backup age를 검증한다. 목표 RTO는 1시간이다.
+
+## Data recovery와 확장
+
+data volume 손상은 최근 snapshot에서 새 volume을 만들고 block을 순차 read해
+prewarm한다. logical 손상은 dump를 새 volume/DB에 restore한다. 기존 volume을
+덮어쓰지 않는다. free space 20GiB 미만이면 DNS/cutover를 중단하고 `ModifyVolume`
+후 XFS online grow를 별도 reviewed plan으로 수행한다.
+
+## HA 승격과 rollback
+
+90일 review에서 비용/SLO/availability가 맞지 않으면 기존 HA Production root로
+동일 digest와 data-only migration을 배포한다. 검증 후 `homesearch.world` A record를
+state transfer 또는 explicit import로 한 owner에게만 넘긴다.
+
+Application rollback은 이전 task definition, AI graph는 동일 digest의 mode `off`,
+host config는 이전 SSM bundle SHA를 사용한다. DB down migration과
+`terraform destroy`는 사용하지 않는다.

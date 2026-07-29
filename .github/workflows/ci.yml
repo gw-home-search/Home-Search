@@ -217,6 +217,13 @@ jobs:
           .github/scripts/test-verify-release-eligibility.sh
           infra/release/test-create-release-manifest.sh
           infra/deploy/test-deploy-scripts.sh
+          infra/deploy/test-release-manifest-to-budget-tfvars.sh
+          infra/deploy/test-run-budget-ecs-task.sh
+          infra/deploy/test-build-budget-production-ready-evidence.sh
+          infra/budget/test-run-pg-backup.sh
+          infra/budget/test-recovery-runner.sh
+          infra/cost/test-calculate-budget-production.sh
+          .github/scripts/test-budget-production-deploy-contract.sh
 
   ml-image-test:
     name: ml-image-test
@@ -317,6 +324,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Verify reproducible multi-image manifest
         run: infra/images/test-build-manifest.sh
+      - name: Verify budget platform image boundaries
+        run: infra/images/test-budget-platform-images.sh
 
   terraform-test:
     name: terraform-test
@@ -341,6 +350,9 @@ jobs:
           terraform -chdir=infra/terraform/staging init -backend=false -input=false
           terraform -chdir=infra/terraform/staging validate
           terraform -chdir=infra/terraform/staging test
+          terraform -chdir=infra/terraform/budget-production init -backend=false -input=false
+          terraform -chdir=infra/terraform/budget-production validate
+          terraform -chdir=infra/terraform/budget-production test
 
   admin-service-test:
     name: admin-service-test

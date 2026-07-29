@@ -64,6 +64,27 @@ cat > "${fake_bin}/aws" <<'EOF'
 printf 'aws' >> "${FAKE_AWS_LOG}"
 printf ' %q' "$@" >> "${FAKE_AWS_LOG}"
 printf '\n' >> "${FAKE_AWS_LOG}"
+if [[ "$1 $2" == 's3api head-object' ]]; then
+  key=''
+  previous=''
+  for argument in "$@"; do
+    if [[ "${previous}" == '--key' ]]; then key="${argument}"; fi
+    previous="${argument}"
+  done
+  file="${FAKE_AWS_UPLOAD_ROOT}/${key##*/}"
+  size="$(wc -c <"${file}" | tr -d ' ')"
+  checksum="$(python3 - "${file}" <<'PY'
+import base64
+import hashlib
+import pathlib
+import sys
+
+print(base64.b64encode(hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).digest()).decode("ascii"))
+PY
+)"
+  if [[ "${FAKE_AWS_CHECKSUM_MISMATCH:-false}" == 'true' ]]; then checksum='INVALID'; fi
+  printf '%s\t%s\n' "${size}" "${checksum}"
+fi
 EOF
 chmod +x "${fake_bin}/psql" "${fake_bin}/pg_dump" "${fake_bin}/pg_restore" "${fake_bin}/aws"
 
@@ -73,6 +94,7 @@ run_backup() {
   PATH="${fake_bin}:${PATH}" \
   FAKE_ARGV_LOG="${argv_log}" \
   FAKE_AWS_LOG="${aws_log}" \
+  FAKE_AWS_UPLOAD_ROOT="${output_dir}" \
   HOME_BACKUP_PGHOST=fake-postgres \
   HOME_BACKUP_PGPORT=5432 \
   HOME_BACKUP_PGUSER=backup_user \
@@ -105,10 +127,12 @@ if grep -Fq "${sentinel}" "${argv_log}" || grep -Fq "${sentinel}" "${test_dir}/s
   echo '상태: Fail - backup password가 argv 또는 stdout에 노출되었습니다.' >&2
   exit 1
 fi
-[[ "$(wc -l < "${aws_log}" | tr -d ' ')" == '8' ]]
+[[ "$(wc -l < "${aws_log}" | tr -d ' ')" == '16' ]]
 grep -Fq 's3://fixture-bucket/staging/property-20260716T010203Z.dump' "${aws_log}"
 grep -Fq 's3://fixture-bucket/staging/user-20260716T010203Z.manifest.tsv' "${aws_log}"
 grep -Fq 's3://fixture-bucket/staging/ai-20260716T010203Z.manifest.tsv' "${aws_log}"
+grep -Fq -- '--checksum-algorithm SHA256' "${aws_log}"
+grep -Fq -- 's3api head-object' "${aws_log}"
 if grep -Fq '/coordinate-' "${aws_log}"; then
   echo 'ERROR: default backup set must defer coordinate source data.' >&2
   exit 1

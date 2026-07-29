@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+set +x
+umask 077
+
+dnf install -y amazon-cloudwatch-agent jq >/dev/null
+
+cat >/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<'JSON'
+{
+  "agent": {"metrics_collection_interval": 60, "run_as_user": "root"},
+  "metrics": {
+    "namespace": "HomeSearch/BudgetProduction",
+    "append_dimensions": {"InstanceId": "$${aws:InstanceId}"},
+    "metrics_collected": {
+      "mem": {"measurement": ["mem_used_percent"], "metrics_collection_interval": 60},
+      "disk": {
+        "measurement": ["free"],
+        "resources": ["/", "/srv/home-search"],
+        "drop_device": true,
+        "ignore_file_system_types": ["sysfs", "devtmpfs", "tmpfs", "overlay", "squashfs"]
+      }
+    }
+  },
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [{
+          "file_path": "/var/log/nginx/home-search-access.json",
+          "log_group_name": "/home-search/budget-production/host-nginx",
+          "log_stream_name": "{instance_id}"
+        }]
+      }
+    }
+  }
+}
+JSON
+
+cat >/usr/local/sbin/home-search-publish-ecs-counts <<SCRIPT
+#!/usr/bin/env bash
+set -Eeuo pipefail
+set +x
+tmp_file="\$(mktemp)"
+cleanup() { unlink "\$tmp_file" "\$${tmp_file}.metrics" 2>/dev/null || true; }
+trap cleanup EXIT
+aws ecs describe-services --region '${aws_region}' --cluster '${ecs_cluster}' \\
+  --services property-api user-api ai chat-bff public-gateway >"\$tmp_file"
+jq --arg cluster '${ecs_cluster}' '[{
+  MetricName:"ECSMissingServiceCount",
+  Dimensions:[{Name:"ClusterName",Value:\$cluster}],
+  Value:(5 - ([.services[] | select(.runningCount >= 1)] | length)),
+  Unit:"Count"
+}]' "\$tmp_file" >"\$${tmp_file}.metrics"
+aws cloudwatch put-metric-data --region '${aws_region}' --namespace 'HomeSearch/BudgetProduction' \\
+  --metric-data "file://\$${tmp_file}.metrics"
+SCRIPT
+chmod 0755 /usr/local/sbin/home-search-publish-ecs-counts
+
+cat >/usr/local/sbin/home-search-publish-backup-age <<SCRIPT
+#!/usr/bin/env bash
+set -Eeuo pipefail
+set +x
+latest="\$(aws s3api list-objects-v2 --region '${aws_region}' --bucket '${backup_bucket}' --prefix logical/ \\
+  --query 'reverse(sort_by(Contents[?ends_with(Key, `.manifest.tsv`)], &LastModified))[0].LastModified' --output text)"
+if [[ "\$latest" == 'None' || -z "\$latest" ]]; then
+  age=999999
+else
+  age="\$(( \$(date -u +%s) - \$(date -u -d "\$latest" +%s) ))"
+fi
+aws cloudwatch put-metric-data --region '${aws_region}' --namespace 'HomeSearch/BudgetProduction' \\
+  --metric-name BackupAgeSeconds --value "\$age" --unit Seconds
+SCRIPT
+chmod 0755 /usr/local/sbin/home-search-publish-backup-age
+
+cat >/etc/systemd/system/home-search-ecs-counts.service <<'UNIT'
+[Unit]
+Description=Publish budget-production ECS running counts
+After=network-online.target ecs.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/home-search-publish-ecs-counts
+UNIT
+cat >/etc/systemd/system/home-search-ecs-counts.timer <<'UNIT'
+[Unit]
+Description=Publish budget-production ECS running counts every minute
+
+[Timer]
+OnBootSec=2m
+OnUnitActiveSec=1m
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target
+UNIT
+cat >/etc/systemd/system/home-search-backup-age.service <<'UNIT'
+[Unit]
+Description=Publish budget-production logical backup age
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/home-search-publish-backup-age
+UNIT
+cat >/etc/systemd/system/home-search-backup-age.timer <<'UNIT'
+[Unit]
+Description=Publish budget-production logical backup age hourly
+
+[Timer]
+OnBootSec=5m
+OnUnitActiveSec=1h
+AccuracySec=5m
+
+[Install]
+WantedBy=timers.target
+UNIT
+
+systemctl daemon-reload
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+  -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+systemctl enable --now home-search-ecs-counts.timer home-search-backup-age.timer
+echo 'host observability configured'

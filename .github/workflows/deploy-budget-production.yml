@@ -1,0 +1,593 @@
+name: Deploy budget production
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "Bootstrap budget platform registries first, then run deploy after release publication"
+        required: true
+        default: deploy
+        type: choice
+        options: [deploy, registry]
+      release_tag:
+        description: "Approved environment-neutral vMAJOR.MINOR.PATCH release"
+        required: false
+        type: string
+      release_sha:
+        description: "Exact 40-hex commit SHA behind the approved release tag"
+        required: false
+        type: string
+      migration_artifact_uri:
+        description: "Reviewed Property+Reference data-only S3 prefix"
+        required: false
+        type: string
+      migration_manifest_sha256:
+        description: "Exact lowercase SHA-256 of the data-only manifest"
+        required: false
+        type: string
+      public_dns_enable_approved:
+        description: "Apply the separately reviewed homesearch.world A-record plan"
+        required: true
+        default: false
+        type: boolean
+
+permissions: { contents: read, actions: read, id-token: write }
+concurrency: { group: deploy-budget-production, cancel-in-progress: false }
+
+env:
+  AWS_REGION: ap-northeast-2
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  TF_STATE_KEY: home-search/budget-production/terraform.tfstate
+
+jobs:
+  plan:
+    name: budget-production-read-only-plan
+    environment: budget-production-plan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with: { fetch-depth: 0, ref: "${{ inputs.operation == 'deploy' && inputs.release_sha || github.sha }}" }
+      - name: Verify exact release and download provenance
+        if: inputs.operation == 'deploy'
+        env:
+          GH_TOKEN: "${{ github.token }}"
+          RELEASE_TAG: "${{ inputs.release_tag }}"
+          RELEASE_SHA: "${{ inputs.release_sha }}"
+          MIGRATION_URI: "${{ inputs.migration_artifact_uri }}"
+          MIGRATION_SHA256: "${{ inputs.migration_manifest_sha256 }}"
+        run: |
+          set -Eeuo pipefail
+          [[ "${RELEASE_TAG}" =~ ^v[0-9]+[.][0-9]+[.][0-9]+$ && "${RELEASE_TAG}" != 'v1.0.4' ]]
+          [[ "${RELEASE_SHA}" =~ ^[0-9a-f]{40}$ && "$(git rev-parse HEAD)" == "${RELEASE_SHA}" ]]
+          [[ "$(git rev-list -n 1 "${RELEASE_TAG}")" == "${RELEASE_SHA}" ]]
+          run_id="$(gh run list --repo "${GITHUB_REPOSITORY}" --workflow release-images.yml \
+            --commit "${RELEASE_SHA}" --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+          [[ -n "${run_id}" ]]
+          mkdir -p release-evidence deployment-evidence
+          gh run download "${run_id}" --repo "${GITHUB_REPOSITORY}" \
+            --pattern "release-evidence-${RELEASE_TAG}" --dir release-evidence
+          manifest="$(find release-evidence -type f -name release-manifest.json -print -quit)"
+          [[ -n "${manifest}" ]]
+          cp "${manifest}" deployment-evidence/release-manifest.json
+          jq -e --arg tag "${RELEASE_TAG}" --arg sha "${RELEASE_SHA}" '
+            .format_version == 2 and .tag == $tag and .commit_sha == $sha
+            and (.images | length) == 17 and (.platform_images | length) == 2
+            and .vulnerability_critical_gate_passed and .vulnerability_policy_gate_passed
+          ' deployment-evidence/release-manifest.json >/dev/null
+          if LC_ALL=C grep -R -a -Fq 'staging.homesearch.world' release-evidence; then
+            echo '상태: Fail - release evidence에 staging origin이 포함됐습니다.' >&2
+            exit 1
+          fi
+          infra/deploy/release-manifest-to-budget-tfvars.sh \
+            deployment-evidence/release-manifest.json "${MIGRATION_URI}" "${MIGRATION_SHA256}" \
+            infra/terraform/budget-production/release.auto.tfvars.json
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_PLAN_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+        with: { terraform_version: 1.15.8 }
+      - name: Pin AMI and stable AZ, then create zero-destroy foundation plan
+        if: inputs.operation == 'deploy'
+        env:
+          TF_STATE_BUCKET: "${{ vars.BUDGET_PRODUCTION_TF_STATE_BUCKET }}"
+          TF_STATE_KMS_ARN: "${{ vars.BUDGET_PRODUCTION_TF_STATE_KMS_ARN }}"
+          HOSTED_ZONE_ID: "${{ vars.BUDGET_PRODUCTION_HOSTED_ZONE_ID }}"
+          ALARM_EMAIL: "${{ vars.BUDGET_PRODUCTION_ALARM_EMAIL }}"
+        run: |
+          set -Eeuo pipefail
+          recommended_ami="$(aws ssm get-parameter --region "${AWS_REGION}" \
+            --name /aws/service/ecs/optimized-ami/amazon-linux-2023/recommended/image_id \
+            --query Parameter.Value --output text)"
+          [[ "${recommended_ami}" =~ ^ami-[0-9a-f]{17}$ ]]
+          ami_shape="$(aws ec2 describe-images --region "${AWS_REGION}" --image-ids "${recommended_ami}" \
+            --query 'Images[0].[State,Architecture]' --output text)"
+          [[ "${ami_shape}" == $'available\tx86_64' ]]
+          availability_zone="$(
+            aws ec2 describe-instance-type-offerings --region "${AWS_REGION}" --location-type availability-zone \
+              --filters Name=instance-type,Values=t3a.large --query 'InstanceTypeOfferings[].Location' --output json |
+            jq -r '.[]' | while read -r zone; do
+              zone_id="$(aws ec2 describe-availability-zones --region "${AWS_REGION}" --zone-names "${zone}" \
+                --query 'AvailabilityZones[0].ZoneId' --output text)"
+              printf '%s\t%s\n' "${zone_id}" "${zone}"
+            done | LC_ALL=C sort | head -n1 | cut -f2
+          )"
+          [[ "${availability_zone}" =~ ^ap-northeast-2[a-d]$ ]]
+          jq -n --arg ami "${recommended_ami}" --arg az "${availability_zone}" \
+            --arg zone "${HOSTED_ZONE_ID}" --arg email "${ALARM_EMAIL}" \
+            '{ami_id:$ami,availability_zone:$az,hosted_zone_id:$zone,alarm_email:$email}' \
+            >infra/terraform/budget-production/foundation.auto.tfvars.json
+          terraform -chdir=infra/terraform/budget-production init \
+            -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="key=${TF_STATE_KEY}" \
+            -backend-config="region=${AWS_REGION}" -backend-config="kms_key_id=${TF_STATE_KMS_ARN}" \
+            -backend-config="use_lockfile=true"
+          terraform -chdir=infra/terraform/budget-production fmt -check
+          terraform -chdir=infra/terraform/budget-production validate
+          terraform -chdir=infra/terraform/budget-production test
+          current_phase="$(terraform -chdir=infra/terraform/budget-production output -raw deployment_phase 2>/dev/null || printf registry)"
+          [[ "${current_phase}" == 'registry' || "${current_phase}" == 'foundation' ]]
+          code=0
+          terraform -chdir=infra/terraform/budget-production plan -out=foundation.tfplan \
+            -var=deployment_phase=foundation -var=data_services_enabled=false \
+            -var=public_dns_enabled=false -var=backup_schedules_enabled=false -detailed-exitcode || code=$?
+          [[ "${code}" == 0 || "${code}" == 2 ]]
+          terraform -chdir=infra/terraform/budget-production show -json foundation.tfplan \
+            >deployment-evidence/foundation-plan.json
+          infra/deploy/verify-budget-production-plan.sh deployment-evidence/foundation-plan.json foundation "${current_phase}"
+          forecast_start="$(date -u +%F)"
+          forecast_end="$(date -u -d "$(date -u +%Y-%m-01) +1 month" +%F)"
+          account_forecast="$(aws ce get-cost-forecast --time-period "Start=${forecast_start},End=${forecast_end}" \
+            --metric UNBLENDED_COST --granularity MONTHLY --query Total.Amount --output text)"
+          infra/cost/calculate-budget-production.py --plan deployment-evidence/foundation-plan.json \
+            --fixture infra/cost/budget-production-price-fixture.json \
+            --account-forecast-usd "${account_forecast}" >deployment-evidence/cost-estimate.json
+          jq -n --arg ami "${recommended_ami}" --arg az "${availability_zone}" \
+            --arg account_forecast "${account_forecast}" \
+            '{status:"pass",ami_id:$ami,availability_zone:$az,account_forecast_usd:$account_forecast}' \
+            >deployment-evidence/foundation-preflight.json
+      - name: Create the registry-only bootstrap plan
+        if: inputs.operation == 'registry'
+        env:
+          TF_STATE_BUCKET: "${{ vars.BUDGET_PRODUCTION_TF_STATE_BUCKET }}"
+          TF_STATE_KMS_ARN: "${{ vars.BUDGET_PRODUCTION_TF_STATE_KMS_ARN }}"
+          HOSTED_ZONE_ID: "${{ vars.BUDGET_PRODUCTION_HOSTED_ZONE_ID }}"
+          ALARM_EMAIL: "${{ vars.BUDGET_PRODUCTION_ALARM_EMAIL }}"
+        run: |
+          set -Eeuo pipefail
+          mkdir -p deployment-evidence
+          ami_id="$(aws ssm get-parameter --region "${AWS_REGION}" \
+            --name /aws/service/ecs/optimized-ami/amazon-linux-2023/recommended/image_id \
+            --query Parameter.Value --output text)"
+          availability_zone="$(aws ec2 describe-instance-type-offerings --region "${AWS_REGION}" \
+            --location-type availability-zone --filters Name=instance-type,Values=t3a.large \
+            --query 'sort_by(InstanceTypeOfferings,&Location)[0].Location' --output text)"
+          jq -n --arg ami "${ami_id}" --arg az "${availability_zone}" --arg zone "${HOSTED_ZONE_ID}" \
+            --arg email "${ALARM_EMAIL}" '{ami_id:$ami,availability_zone:$az,hosted_zone_id:$zone,alarm_email:$email}' \
+            >infra/terraform/budget-production/foundation.auto.tfvars.json
+          terraform -chdir=infra/terraform/budget-production init \
+            -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="key=${TF_STATE_KEY}" \
+            -backend-config="region=${AWS_REGION}" -backend-config="kms_key_id=${TF_STATE_KMS_ARN}" \
+            -backend-config="use_lockfile=true"
+          terraform -chdir=infra/terraform/budget-production fmt -check
+          terraform -chdir=infra/terraform/budget-production validate
+          terraform -chdir=infra/terraform/budget-production test
+          current_phase="$(terraform -chdir=infra/terraform/budget-production output -raw deployment_phase 2>/dev/null || printf registry)"
+          [[ "${current_phase}" == registry ]]
+          code=0
+          terraform -chdir=infra/terraform/budget-production plan -out=registry.tfplan \
+            -var=deployment_phase=registry -detailed-exitcode || code=$?
+          [[ "${code}" == 0 || "${code}" == 2 ]]
+          terraform -chdir=infra/terraform/budget-production show -json registry.tfplan >deployment-evidence/registry-plan.json
+          infra/deploy/verify-budget-production-plan.sh deployment-evidence/registry-plan.json registry registry
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: budget-production-reviewed-foundation-${{ inputs.release_tag }}
+          path: |
+            infra/terraform/budget-production/foundation.tfplan
+            infra/terraform/budget-production/registry.tfplan
+            infra/terraform/budget-production/release.auto.tfvars.json
+            infra/terraform/budget-production/foundation.auto.tfvars.json
+            deployment-evidence/
+          if-no-files-found: error
+          retention-days: 90
+
+  foundation_apply:
+    name: budget-production-foundation-apply
+    needs: plan
+    if: inputs.operation == 'deploy'
+    environment: budget-production
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with: { ref: "${{ inputs.release_sha }}" }
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with: { name: "budget-production-reviewed-foundation-${{ inputs.release_tag }}", path: reviewed }
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_APPLY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+        with: { terraform_version: 1.15.8 }
+      - name: Apply the exact reviewed foundation plan
+        env:
+          TF_STATE_BUCKET: "${{ vars.BUDGET_PRODUCTION_TF_STATE_BUCKET }}"
+          TF_STATE_KMS_ARN: "${{ vars.BUDGET_PRODUCTION_TF_STATE_KMS_ARN }}"
+        run: |
+          set -Eeuo pipefail
+          cp reviewed/infra/terraform/budget-production/*.auto.tfvars.json infra/terraform/budget-production/
+          terraform -chdir=infra/terraform/budget-production init \
+            -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="key=${TF_STATE_KEY}" \
+            -backend-config="region=${AWS_REGION}" -backend-config="kms_key_id=${TF_STATE_KMS_ARN}" \
+            -backend-config="use_lockfile=true"
+          terraform -chdir=infra/terraform/budget-production apply -auto-approve \
+            "${GITHUB_WORKSPACE}/reviewed/infra/terraform/budget-production/foundation.tfplan"
+          mkdir -p deployment-evidence
+          terraform -chdir=infra/terraform/budget-production output -json >deployment-evidence/foundation-outputs.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with: { name: "budget-production-foundation-${{ inputs.release_tag }}", path: deployment-evidence/, if-no-files-found: error, retention-days: 365 }
+
+  registry_apply:
+    name: budget-production-registry-apply
+    needs: plan
+    if: inputs.operation == 'registry'
+    environment: budget-production
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with: { name: "budget-production-reviewed-foundation-${{ inputs.release_tag }}", path: reviewed }
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_APPLY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+        with: { terraform_version: 1.15.8 }
+      - name: Apply the exact reviewed registry-only plan
+        env:
+          TF_STATE_BUCKET: "${{ vars.BUDGET_PRODUCTION_TF_STATE_BUCKET }}"
+          TF_STATE_KMS_ARN: "${{ vars.BUDGET_PRODUCTION_TF_STATE_KMS_ARN }}"
+        run: |
+          set -Eeuo pipefail
+          cp reviewed/infra/terraform/budget-production/foundation.auto.tfvars.json infra/terraform/budget-production/
+          terraform -chdir=infra/terraform/budget-production init \
+            -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="key=${TF_STATE_KEY}" \
+            -backend-config="region=${AWS_REGION}" -backend-config="kms_key_id=${TF_STATE_KMS_ARN}" \
+            -backend-config="use_lockfile=true"
+          terraform -chdir=infra/terraform/budget-production apply -auto-approve \
+            "${GITHUB_WORKSPACE}/reviewed/infra/terraform/budget-production/registry.tfplan"
+
+  rollout:
+    name: budget-production-data-private-public
+    needs: foundation_apply
+    if: inputs.operation == 'deploy'
+    environment: budget-production
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with: { ref: "${{ inputs.release_sha }}" }
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with: { name: "budget-production-reviewed-foundation-${{ inputs.release_tag }}", path: reviewed }
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with: { name: "budget-production-foundation-${{ inputs.release_tag }}", path: foundation-evidence }
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+        with: { terraform_version: 1.15.8 }
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_APPLY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
+      - name: Register data tasks without starting PostgreSQL
+        env:
+          TF_STATE_BUCKET: "${{ vars.BUDGET_PRODUCTION_TF_STATE_BUCKET }}"
+          TF_STATE_KMS_ARN: "${{ vars.BUDGET_PRODUCTION_TF_STATE_KMS_ARN }}"
+        run: |
+          set -Eeuo pipefail
+          mkdir -p deployment-evidence
+          cp reviewed/deployment-evidence/release-manifest.json deployment-evidence/
+          cp reviewed/deployment-evidence/foundation-plan.json deployment-evidence/
+          cp reviewed/deployment-evidence/cost-estimate.json deployment-evidence/
+          cp reviewed/infra/terraform/budget-production/*.auto.tfvars.json infra/terraform/budget-production/
+          terraform -chdir=infra/terraform/budget-production init \
+            -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="key=${TF_STATE_KEY}" \
+            -backend-config="region=${AWS_REGION}" -backend-config="kms_key_id=${TF_STATE_KMS_ARN}" \
+            -backend-config="use_lockfile=true"
+          code=0
+          terraform -chdir=infra/terraform/budget-production plan -out=data-dark.tfplan \
+            -var=deployment_phase=data -var=data_services_enabled=false -detailed-exitcode || code=$?
+          [[ "${code}" == 2 ]]
+          terraform -chdir=infra/terraform/budget-production show -json data-dark.tfplan >deployment-evidence/data-dark-plan.json
+          infra/deploy/verify-budget-production-plan.sh deployment-evidence/data-dark-plan.json data foundation
+          terraform -chdir=infra/terraform/budget-production apply -auto-approve data-dark.tfplan
+          terraform -chdir=infra/terraform/budget-production output -json >deployment-evidence/data-dark-outputs.json
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_DEPLOY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
+      - name: Bootstrap generated secrets and require external credential readiness
+        run: |
+          set -Eeuo pipefail
+          cluster="$(jq -er '.ecs_cluster_name.value' deployment-evidence/data-dark-outputs.json)"
+          tasks="$(jq -ec '.one_shot_task_definition_arns.value' deployment-evidence/data-dark-outputs.json)"
+          registered=false
+          for _ in $(seq 1 60); do
+            container_instances="$(aws ecs list-container-instances --region "${AWS_REGION}" --cluster "${cluster}" \
+              --status ACTIVE --query 'length(containerInstanceArns)' --output text)"
+            if [[ "${container_instances}" -ge 1 ]]; then registered=true; break; fi
+            sleep 10
+          done
+          [[ "${registered}" == true ]]
+          for task in secret-bootstrap secret-readiness; do
+            task_definition="$(jq -er --arg task "${task}" '.[$task]' <<<"${tasks}")"
+            infra/deploy/run-budget-ecs-task.sh "${cluster}" "${task_definition}" "budget-${GITHUB_RUN_ID}"
+          done
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_APPLY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
+      - name: Start platform services after secret readiness
+        run: |
+          set -Eeuo pipefail
+          code=0
+          terraform -chdir=infra/terraform/budget-production plan -out=data-live.tfplan \
+            -var=deployment_phase=data -var=data_services_enabled=true -detailed-exitcode || code=$?
+          [[ "${code}" == 2 ]]
+          terraform -chdir=infra/terraform/budget-production show -json data-live.tfplan >deployment-evidence/data-live-plan.json
+          infra/deploy/verify-budget-production-plan.sh deployment-evidence/data-live-plan.json data data
+          terraform -chdir=infra/terraform/budget-production apply -auto-approve data-live.tfplan
+          cluster="$(terraform -chdir=infra/terraform/budget-production output -raw ecs_cluster_name)"
+          aws ecs wait services-stable --region "${AWS_REGION}" --cluster "${cluster}" --services budget-postgres budget-valkey
+          terraform -chdir=infra/terraform/budget-production output -json >deployment-evidence/data-live-outputs.json
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_DEPLOY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
+      - name: Migrate and import under time-limited Unlimited credit
+        run: |
+          set -Eeuo pipefail
+          instance_id="$(jq -er '.host_instance_id.value' deployment-evidence/data-live-outputs.json)"
+          cluster="$(jq -er '.ecs_cluster_name.value' deployment-evidence/data-live-outputs.json)"
+          tasks="$(jq -ec '.one_shot_task_definition_arns.value' deployment-evidence/data-live-outputs.json)"
+          restore_standard() {
+            aws ec2 modify-instance-credit-specification --region "${AWS_REGION}" \
+              --instance-credit-specification "InstanceId=${instance_id},CpuCredits=standard" >/dev/null
+          }
+          trap restore_standard EXIT HUP INT TERM
+          aws ec2 modify-instance-credit-specification --region "${AWS_REGION}" \
+            --instance-credit-specification "InstanceId=${instance_id},CpuCredits=unlimited" >/dev/null
+          run_task() {
+            local task="$1" task_definition
+            task_definition="$(jq -er --arg task "${task}" '.[$task]' <<<"${tasks}")"
+            infra/deploy/run-budget-ecs-task.sh "${cluster}" "${task_definition}" "budget-${GITHUB_RUN_ID}"
+          }
+          export cluster tasks
+          export -f run_task
+          timeout --signal=TERM --kill-after=5m 8h bash -Eeuo pipefail -c '
+            for task in property-flyway user-flyway admin-migration ai-migration importer-grants data-import-reconcile runtime-grants map-marker-projection scheduled-backup; do
+              run_task "${task}"
+            done
+          '
+          restore_standard
+          trap - EXIT HUP INT TERM
+          credit_mode="$(aws ec2 describe-instance-credit-specifications --region "${AWS_REGION}" \
+            --instance-ids "${instance_id}" --query 'InstanceCreditSpecifications[0].CpuCredits' --output text)"
+          [[ "${credit_mode}" == 'standard' ]]
+          backup_bucket="$(jq -er '.backup_bucket_name.value' deployment-evidence/data-live-outputs.json)"
+          aws s3 cp "s3://${backup_bucket}/deployment-evidence/${{ inputs.release_tag }}/data-migration-reconciliation.json" \
+            deployment-evidence/data-migration-reconciliation.json --only-show-errors
+      - name: Restore Standard credit even after a failed import step
+        if: always()
+        run: |
+          set -Eeuo pipefail
+          instance_id="$(jq -er '.host_instance_id.value' deployment-evidence/data-live-outputs.json)"
+          aws ec2 modify-instance-credit-specification --region "${AWS_REGION}" \
+            --instance-credit-specification "InstanceId=${instance_id},CpuCredits=standard" >/dev/null
+          [[ "$(aws ec2 describe-instance-credit-specifications --region "${AWS_REGION}" --instance-ids "${instance_id}" \
+            --query 'InstanceCreditSpecifications[0].CpuCredits' --output text)" == standard ]]
+      - name: Rehearse logical and EBS recovery on ingress-free instances
+        run: |
+          set -Eeuo pipefail
+          run_suffix="$(printf '%s' "${GITHUB_RUN_ID}" | sha256sum | cut -c1-8)"
+          run_id="$(date -u +%Y%m%dT%H%M%SZ)-${run_suffix}"
+          outputs=deployment-evidence/data-live-outputs.json
+          ami_id="$(jq -er '.ami_id.value // empty' "${outputs}" 2>/dev/null || jq -er '.ami_id' reviewed/deployment-evidence/foundation-preflight.json)"
+          subnet="$(jq -er '.public_subnet_id.value' "${outputs}")"
+          security_group="$(jq -er '.recovery_security_group_id.value' "${outputs}")"
+          profile="$(jq -er '.recovery_instance_profile_name.value' "${outputs}")"
+          backup_bucket="$(jq -er '.backup_bucket_name.value' "${outputs}")"
+          backup_image="$(jq -er '.images.backup.uri' deployment-evidence/release-manifest.json)"
+          postgres_image="$(jq -er '.platform_images["budget-postgres"].uri' deployment-evidence/release-manifest.json)"
+          started="$(date +%s)"
+          infra/budget/run-recovery-rehearsal.sh "${run_id}" "${ami_id}" "${subnet}" "${security_group}" \
+            "${profile}" "${backup_image}" "${backup_bucket}"
+          jq -n --argjson duration "$(( $(date +%s) - started ))" \
+            '{status:"pass",mode:"logical",duration_seconds:$duration,checksum_match:true,marker_parity:true}' \
+            >deployment-evidence/logical-restore.json
+          data_volume="$(jq -er '.data_volume_id.value' "${outputs}")"
+          snapshot_id="$(aws ec2 create-snapshot --region "${AWS_REGION}" --volume-id "${data_volume}" \
+            --description "budget-production pre-DNS recovery ${run_id}" \
+            --tag-specifications "ResourceType=snapshot,Tags=[{Key=Project,Value=home-search},{Key=Environment,Value=budget-production},{Key=Purpose,Value=pre-dns-recovery},{Key=RunId,Value=${run_id}}]" \
+            --query SnapshotId --output text)"
+          aws ec2 wait snapshot-completed --region "${AWS_REGION}" --snapshot-ids "${snapshot_id}"
+          started="$(date +%s)"
+          infra/budget/run-recovery-rehearsal.sh "${run_id}" "${ami_id}" "${subnet}" "${security_group}" \
+            "${profile}" "${backup_image}" "${backup_bucket}" "${snapshot_id}" "${postgres_image}"
+          jq -n --argjson duration "$(( $(date +%s) - started ))" \
+            '{status:"pass",mode:"ebs",duration_seconds:$duration,checksum_match:true,marker_parity:true}' \
+            >deployment-evidence/ebs-restore.json
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_APPLY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
+      - name: Activate private services, then public gateway without DNS
+        run: |
+          set -Eeuo pipefail
+          for phase in private public; do
+            code=0
+            terraform -chdir=infra/terraform/budget-production plan -out="${phase}.tfplan" \
+              -var="deployment_phase=${phase}" -var=data_services_enabled=true \
+              -var=public_dns_enabled=false -var=backup_schedules_enabled=false -detailed-exitcode || code=$?
+            [[ "${code}" == 2 ]]
+            terraform -chdir=infra/terraform/budget-production show -json "${phase}.tfplan" \
+              >"deployment-evidence/${phase}-plan.json"
+            current=data; [[ "${phase}" == public ]] && current=private
+            infra/deploy/verify-budget-production-plan.sh "deployment-evidence/${phase}-plan.json" "${phase}" "${current}"
+            terraform -chdir=infra/terraform/budget-production apply -auto-approve "${phase}.tfplan"
+            cluster="$(terraform -chdir=infra/terraform/budget-production output -raw ecs_cluster_name)"
+            if [[ "${phase}" == private ]]; then
+              aws ecs wait services-stable --region "${AWS_REGION}" --cluster "${cluster}" --services property-api user-api ai chat-bff
+            else
+              aws ecs wait services-stable --region "${AWS_REGION}" --cluster "${cluster}" --services public-gateway
+            fi
+          done
+          terraform -chdir=infra/terraform/budget-production output -json >deployment-evidence/public-outputs.json
+          eip="$(jq -er '.elastic_ip.value' deployment-evidence/public-outputs.json)"
+          curl --fail-with-body --silent --show-error --resolve "homesearch.world:443:${eip}" \
+            https://homesearch.world/ --output /dev/null
+          printf '%s\n' '{"status":"pass","hostname":"homesearch.world","curl_resolve_passed":true,"public_dns_passed":false}' \
+            >deployment-evidence/dns.json
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_DEPLOY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
+      - name: Require Standard credit and pre-DNS reserve
+        env:
+          ACCEPTANCE_EVIDENCE_URI: "${{ vars.BUDGET_PRODUCTION_ACCEPTANCE_EVIDENCE_S3_URI }}"
+          RELEASE_TAG: "${{ inputs.release_tag }}"
+          RELEASE_SHA: "${{ inputs.release_sha }}"
+        run: |
+          set -Eeuo pipefail
+          instance_id="$(jq -er '.host_instance_id.value' deployment-evidence/public-outputs.json)"
+          mode="$(aws ec2 describe-instance-credit-specifications --region "${AWS_REGION}" --instance-ids "${instance_id}" \
+            --query 'InstanceCreditSpecifications[0].CpuCredits' --output text)"
+          [[ "${mode}" == standard ]]
+          credit=0
+          for _ in $(seq 1 480); do
+            credit="$(aws cloudwatch get-metric-statistics --region "${AWS_REGION}" --namespace AWS/EC2 \
+              --metric-name CPUCreditBalance --dimensions "Name=InstanceId,Value=${instance_id}" \
+              --start-time "$(date -u -d '15 minutes ago' +%FT%TZ)" --end-time "$(date -u +%FT%TZ)" \
+              --period 300 --statistics Maximum --query 'max(Datapoints[].Maximum)' --output text)"
+            [[ "${credit}" != None && "${credit%.*}" -ge 216 ]] && break
+            sleep 60
+          done
+          [[ "${credit}" != None && "${credit%.*}" -ge 216 ]]
+          [[ "${ACCEPTANCE_EVIDENCE_URI}" =~ ^s3://[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]/[^/].*$ ]]
+          account_id="$(aws sts get-caller-identity --query Account --output text)"
+          [[ "${account_id}" =~ ^[0-9]{12}$ ]]
+          expected_acceptance_uri="s3://home-search-budget-production-backup-${account_id}/budget-production/acceptance/${RELEASE_TAG}"
+          [[ "${ACCEPTANCE_EVIDENCE_URI%/}" == "${expected_acceptance_uri}" ]]
+          evidence_ready=false
+          for _ in $(seq 1 240); do
+            missing=false
+            for file in acceptance.json security.json observability.json release-exceptions.json; do
+              if ! aws s3 cp "${ACCEPTANCE_EVIDENCE_URI%/}/${file}" "deployment-evidence/${file}" --only-show-errors; then
+                missing=true
+                break
+              fi
+            done
+            if [[ "${missing}" == false ]]; then evidence_ready=true; break; fi
+            sleep 60
+          done
+          [[ "${evidence_ready}" == true ]]
+          for file in acceptance.json security.json observability.json release-exceptions.json; do
+            jq -e --arg tag "${RELEASE_TAG}" --arg sha "${RELEASE_SHA}" \
+              '.release_tag == $tag and .commit_sha == $sha' "deployment-evidence/${file}" >/dev/null
+          done
+          jq -n --argjson credit "${credit}" --argjson root "$(jq -er '.root_free_bytes' deployment-evidence/acceptance.json)" \
+            --argjson data "$(jq -er '.data_free_bytes' deployment-evidence/acceptance.json)" '
+            {status:"pass",phases:["registry","foundation","data","private","public"],cpu_credit_mode:"standard",
+             cpu_credit_balance:$credit,root_free_bytes:$root,data_free_bytes:$data,release_digest_match:true}
+          ' >deployment-evidence/phase-evidence.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with: { name: "budget-production-pre-dns-${{ inputs.release_tag }}", path: deployment-evidence/, if-no-files-found: error, retention-days: 365 }
+
+  credit_cleanup:
+    name: budget-production-credit-cleanup
+    needs: rollout
+    if: always() && inputs.operation == 'deploy'
+    environment: budget-production
+    runs-on: ubuntu-latest
+    steps:
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_DEPLOY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
+      - name: Restore and assert Standard credit outside the rollout job
+        run: |
+          set -Eeuo pipefail
+          instance_ids="$(aws ec2 describe-instances --region "${AWS_REGION}" \
+            --filters Name=tag:Name,Values=home-search-budget-production-host \
+              Name=tag:Environment,Values=budget-production \
+              Name=instance-state-name,Values=pending,running,stopping,stopped \
+            --query 'Reservations[].Instances[].InstanceId' --output text)"
+          read -r -a instances <<<"${instance_ids}"
+          [[ "${#instances[@]}" == 1 && "${instances[0]}" =~ ^i-[0-9a-f]{8,17}$ ]]
+          aws ec2 modify-instance-credit-specification --region "${AWS_REGION}" \
+            --instance-credit-specification "InstanceId=${instances[0]},CpuCredits=standard" >/dev/null
+          [[ "$(aws ec2 describe-instance-credit-specifications --region "${AWS_REGION}" \
+            --instance-ids "${instances[0]}" --query 'InstanceCreditSpecifications[0].CpuCredits' --output text)" == standard ]]
+
+  dns_plan:
+    name: budget-production-dns-plan
+    needs: [rollout, credit_cleanup]
+    if: needs.rollout.result == 'success' && needs.credit_cleanup.result == 'success' && inputs.public_dns_enable_approved
+    environment: budget-production-plan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with: { ref: "${{ inputs.release_sha }}" }
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with: { name: "budget-production-reviewed-foundation-${{ inputs.release_tag }}", path: reviewed }
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with: { name: "budget-production-pre-dns-${{ inputs.release_tag }}", path: deployment-evidence }
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_PLAN_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+        with: { terraform_version: 1.15.8 }
+      - name: Create the separate DNS and backup-schedule plan
+        env:
+          TF_STATE_BUCKET: "${{ vars.BUDGET_PRODUCTION_TF_STATE_BUCKET }}"
+          TF_STATE_KMS_ARN: "${{ vars.BUDGET_PRODUCTION_TF_STATE_KMS_ARN }}"
+        run: |
+          set -Eeuo pipefail
+          cp reviewed/infra/terraform/budget-production/*.auto.tfvars.json infra/terraform/budget-production/
+          terraform -chdir=infra/terraform/budget-production init \
+            -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="key=${TF_STATE_KEY}" \
+            -backend-config="region=${AWS_REGION}" -backend-config="kms_key_id=${TF_STATE_KMS_ARN}" \
+            -backend-config="use_lockfile=true"
+          code=0
+          terraform -chdir=infra/terraform/budget-production plan -out=dns.tfplan \
+            -var=deployment_phase=public -var=data_services_enabled=true \
+            -var=public_dns_enabled=true -var=backup_schedules_enabled=true -detailed-exitcode || code=$?
+          [[ "${code}" == 2 ]]
+          terraform -chdir=infra/terraform/budget-production show -json dns.tfplan >deployment-evidence/dns-plan.json
+          infra/deploy/verify-budget-production-plan.sh deployment-evidence/dns-plan.json public public
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: budget-production-reviewed-dns-${{ inputs.release_tag }}
+          path: |
+            infra/terraform/budget-production/dns.tfplan
+            infra/terraform/budget-production/*.auto.tfvars.json
+            deployment-evidence/
+          if-no-files-found: error
+          retention-days: 90
+
+  dns_apply:
+    name: budget-production-dns-apply-and-ready
+    needs: dns_plan
+    environment: budget-production
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with: { ref: "${{ inputs.release_sha }}" }
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with: { name: "budget-production-reviewed-dns-${{ inputs.release_tag }}", path: reviewed }
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_APPLY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+        with: { terraform_version: 1.15.8 }
+      - name: Apply exact DNS plan and build readiness evidence
+        env:
+          TF_STATE_BUCKET: "${{ vars.BUDGET_PRODUCTION_TF_STATE_BUCKET }}"
+          TF_STATE_KMS_ARN: "${{ vars.BUDGET_PRODUCTION_TF_STATE_KMS_ARN }}"
+        run: |
+          set -Eeuo pipefail
+          cp reviewed/infra/terraform/budget-production/*.auto.tfvars.json infra/terraform/budget-production/
+          cp -R reviewed/deployment-evidence ./deployment-evidence
+          terraform -chdir=infra/terraform/budget-production init \
+            -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="key=${TF_STATE_KEY}" \
+            -backend-config="region=${AWS_REGION}" -backend-config="kms_key_id=${TF_STATE_KMS_ARN}" \
+            -backend-config="use_lockfile=true"
+          terraform -chdir=infra/terraform/budget-production apply -auto-approve \
+            "${GITHUB_WORKSPACE}/reviewed/infra/terraform/budget-production/dns.tfplan"
+          curl --fail-with-body --silent --show-error --retry 12 --retry-delay 10 \
+            https://homesearch.world/ --output /dev/null
+          jq '.public_dns_passed=true' deployment-evidence/dns.json >deployment-evidence/dns.next.json
+          mv deployment-evidence/dns.next.json deployment-evidence/dns.json
+          jq '.phases += ["dns"]' deployment-evidence/phase-evidence.json >deployment-evidence/phase.next.json
+          mv deployment-evidence/phase.next.json deployment-evidence/phase-evidence.json
+          infra/deploy/build-budget-production-ready-evidence.sh deployment-evidence \
+            deployment-evidence/BUDGET_PRODUCTION_READY.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with: { name: "BUDGET_PRODUCTION_READY-${{ inputs.release_tag }}", path: deployment-evidence/, if-no-files-found: error, retention-days: 365 }

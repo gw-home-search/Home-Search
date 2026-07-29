@@ -29,6 +29,7 @@ from ai_service.chat import (
     get_decision_report_enabled,
     get_property_overview_enabled,
     get_official_web_search_enabled,
+    get_property_fact_repository,
     get_semantic_goal_planner_enabled,
     get_school_fact_repository,
 )
@@ -49,6 +50,7 @@ def clear_language_model_cache() -> None:
     get_enabled_property_capabilities.cache_clear()
     get_enabled_reference_capabilities.cache_clear()
     get_school_fact_repository.cache_clear()
+    get_property_fact_repository.cache_clear()
     get_academy_registry_repository.cache_clear()
     get_academy_location_repository.cache_clear()
     get_point_facility_repository.cache_clear()
@@ -60,12 +62,51 @@ def clear_language_model_cache() -> None:
     get_enabled_property_capabilities.cache_clear()
     get_enabled_reference_capabilities.cache_clear()
     get_school_fact_repository.cache_clear()
+    get_property_fact_repository.cache_clear()
     get_academy_registry_repository.cache_clear()
     get_academy_location_repository.cache_clear()
     get_point_facility_repository.cache_clear()
     get_rail_station_repository.cache_clear()
     get_childcare_repository.cache_clear()
     get_query_timeout_seconds.cache_clear()
+
+
+def test_property_repository_pool_size_comes_from_runtime_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+    repository = object()
+    monkeypatch.setenv("HOME_AI_PROPERTY_DSN", "postgresql://runtime/property")
+    monkeypatch.setenv("HOME_AI_DB_POOL_MIN_SIZE", "1")
+    monkeypatch.setenv("HOME_AI_DB_POOL_MAX_SIZE", "2")
+    monkeypatch.setattr(
+        "ai_service.property_chat.postgres.PostgresPropertyFactRepository",
+        lambda dsn, **kwargs: captured.update(dsn=dsn, **kwargs) or repository,
+    )
+
+    assert get_property_fact_repository() is repository
+    assert captured == {
+        "dsn": "postgresql://runtime/property",
+        "min_pool_size": 1,
+        "max_pool_size": 2,
+    }
+
+
+@pytest.mark.parametrize(
+    ("minimum", "maximum"),
+    [("0", "2"), ("3", "2"), ("one", "2"), ("1", "21")],
+)
+def test_property_repository_rejects_invalid_runtime_pool_size(
+    monkeypatch: pytest.MonkeyPatch,
+    minimum: str,
+    maximum: str,
+) -> None:
+    monkeypatch.setenv("HOME_AI_PROPERTY_DSN", "postgresql://runtime/property")
+    monkeypatch.setenv("HOME_AI_DB_POOL_MIN_SIZE", minimum)
+    monkeypatch.setenv("HOME_AI_DB_POOL_MAX_SIZE", maximum)
+
+    with pytest.raises(ChatbotProviderUnavailable):
+        get_property_fact_repository()
 
 
 def test_missing_openai_configuration_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -478,7 +519,7 @@ def test_point_facility_repository_uses_reference_runtime_dsn(
     monkeypatch.setenv("HOME_AI_REFERENCE_DSN", "postgresql://runtime/reference")
     monkeypatch.setattr(
         "ai_service.property_chat.reference_facilities.PostgresPointFacilityRepository",
-        lambda dsn: captured.append(dsn) or repository,
+        lambda dsn, **_kwargs: captured.append(dsn) or repository,
     )
 
     assert get_point_facility_repository() is repository
@@ -511,7 +552,7 @@ def test_childcare_repository_uses_reference_runtime_dsn(
     monkeypatch.setenv("HOME_AI_REFERENCE_DSN", "postgresql://runtime/reference")
     monkeypatch.setattr(
         "ai_service.property_chat.childcare_centers.PostgresChildcareRepository",
-        lambda dsn: captured.append(dsn) or repository,
+        lambda dsn, **_kwargs: captured.append(dsn) or repository,
     )
 
     assert get_childcare_repository() is repository
@@ -524,7 +565,7 @@ def test_childcare_repository_wraps_connection_failure(
     monkeypatch.setenv("HOME_AI_REFERENCE_DSN", "postgresql://runtime/reference")
     monkeypatch.setattr(
         "ai_service.property_chat.childcare_centers.PostgresChildcareRepository",
-        lambda _dsn: (_ for _ in ()).throw(ValueError("private connection detail")),
+        lambda _dsn, **_kwargs: (_ for _ in ()).throw(ValueError("private connection detail")),
     )
 
     with pytest.raises(ChatbotProviderUnavailable) as error:

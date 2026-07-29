@@ -134,3 +134,43 @@ variable "github_production_allowed_refs" {
     error_message = "github_production_allowed_refs may contain only main or version tag refs."
   }
 }
+
+variable "budget_production_state_key" {
+  description = "Exact remote state object key reserved for budget-production."
+  type        = string
+  default     = "home-search/budget-production/terraform.tfstate"
+  validation {
+    condition     = var.budget_production_state_key == "home-search/budget-production/terraform.tfstate"
+    error_message = "budget_production_state_key is immutable and must use the reviewed budget-production key."
+  }
+}
+
+variable "github_budget_plan_environment" {
+  description = "Unprotected read-only GitHub Environment for budget-production plans."
+  type        = string
+  default     = "budget-production-plan"
+}
+
+variable "github_budget_apply_environment" {
+  description = "Protected GitHub Environment for budget-production apply and deploy."
+  type        = string
+  default     = "budget-production"
+}
+
+variable "github_budget_workflow_name" {
+  description = "Exact workflow claim allowed to plan, apply, and deploy budget-production."
+  type        = string
+  default     = "Deploy budget production"
+}
+
+variable "github_budget_allowed_refs" {
+  description = "Protected refs allowed to use budget-production roles."
+  type        = list(string)
+  default     = ["refs/heads/main", "refs/tags/v*"]
+  validation {
+    condition = length(var.github_budget_allowed_refs) > 0 && alltrue([
+      for ref in var.github_budget_allowed_refs : ref == "refs/heads/main" || startswith(ref, "refs/tags/v")
+    ])
+    error_message = "github_budget_allowed_refs may contain only main or version tag refs."
+  }
+}

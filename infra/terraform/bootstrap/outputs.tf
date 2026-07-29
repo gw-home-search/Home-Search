@@ -41,6 +41,21 @@ output "github_production_deploy_role_arn" {
   value       = aws_iam_role.github_production_deploy.arn
 }
 
+output "github_budget_production_plan_role_arn" {
+  value       = aws_iam_role.github_budget_production_plan.arn
+  description = "Read-only budget-production Terraform plan role."
+}
+
+output "github_budget_production_apply_role_arn" {
+  value       = aws_iam_role.github_budget_production_apply.arn
+  description = "Protected budget-production Terraform apply role."
+}
+
+output "github_budget_production_deploy_role_arn" {
+  value       = aws_iam_role.github_budget_production_deploy.arn
+  description = "Protected budget-production runtime deploy role without state access."
+}
+
 output "backend_config" {
   description = "Non-secret backend values used during the explicit state migration."
   value = {

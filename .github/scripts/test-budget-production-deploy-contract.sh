@@ -7,6 +7,7 @@ bootstrap_policy="${root}/infra/terraform/bootstrap/budget_production_oidc.tf"
 budget_backend="${root}/infra/terraform/budget-production/backend.tf"
 budget_outputs="${root}/infra/terraform/budget-production/outputs.tf"
 pin_selector="${root}/infra/deploy/select-budget-production-foundation-pins.sh"
+taint_recovery="${root}/infra/deploy/recover-budget-production-tainted-ssm.sh"
 for required in \
   'name: Deploy budget production' \
   'environment: budget-production-plan' \
@@ -17,6 +18,11 @@ for required in \
   'migration_artifact_uri:' \
   'migration_manifest_sha256:' \
   'public_dns_enable_approved:' \
+  'recover_tainted_ssm_state:' \
+  'budget-production-foundation-state-recovery' \
+  'infra/deploy/recover-budget-production-tainted-ssm.sh' \
+  "needs: state_recovery" \
+  "needs.state_recovery.result == 'success' || needs.state_recovery.result == 'skipped'" \
   'CpuCredits=unlimited' \
   'CpuCredits=standard' \
   'budget-production-credit-cleanup' \
@@ -34,10 +40,11 @@ grep -Fq 'infra/deploy/select-budget-production-foundation-pins.sh' "${workflow}
 grep -Fq 'Name=tag:Name,Values=${name}-data' "${pin_selector}"
 grep -Fq 'Name=tag:Environment,Values=budget-production' "${pin_selector}"
 grep -Fq 'partial-resources' "${pin_selector}"
+[[ -x "${taint_recovery}" ]]
 grep -Fq 'output "ami_id" {' "${budget_outputs}"
 grep -Fq 'output "availability_zone" {' "${budget_outputs}"
 [[ "$(grep -Ec '^[[:space:]]+environment: budget-production-plan$' "${workflow}")" -eq 2 ]]
-[[ "$(grep -Ec '^[[:space:]]+environment: budget-production$' "${workflow}")" -eq 5 ]]
+[[ "$(grep -Ec '^[[:space:]]+environment: budget-production$' "${workflow}")" -eq 6 ]]
 ! grep -Fq 'infra/terraform/production' "${workflow}"
 ! grep -Fq 'home-search/production/terraform.tfstate' "${workflow}"
 grep -Fq 'backend "s3" {' "${budget_backend}"
@@ -52,4 +59,5 @@ done
 ! sed -n '/budget_deploy_actions = \[/,/^  ]/p' "${bootstrap_policy}" | grep -Eq 'ecs:RunTask|ecs:StopTask|ecs:UpdateService|ssm:SendCommand'
 "${root}/infra/deploy/test-read-budget-production-phase.sh"
 "${root}/infra/deploy/test-select-budget-production-foundation-pins.sh"
+"${root}/infra/deploy/test-recover-budget-production-tainted-ssm.sh"
 echo '상태: Pass - budget workflow의 plan/apply/deploy role, phase, credit, restore, DNS readiness 순서를 확인했습니다.'

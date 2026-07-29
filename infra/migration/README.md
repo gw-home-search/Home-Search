@@ -95,6 +95,39 @@ PostgreSQL 17 clients, and PostGIS restore libraries. Its entrypoint exposes
 The source databases, transfer artifacts, and local Docker volumes are retained.
 Exclusion from this initial transfer is not authorization to delete them.
 
+### Local final export with the release image
+
+Use the protected runner for the final local Property + Reference export. It
+accepts only an exact Seoul ECR `home-search/backup@sha256:...` image, reads only
+the required assignments without sourcing either vars file, and passes them
+through a mode `0600` temporary Docker env file. The temporary file is unlinked
+immediately after the one-shot container exits. Secret values are never printed
+or placed in Docker command arguments.
+
+Prerequisites:
+
+- `home-search-postgis` is attached to exactly one local Docker network.
+- Property and Reference schedulers are paused for the final delta window.
+- `apps/property-data/.env` and `apps/ai/.env` are regular non-symlink files
+  with no group/other permissions (`chmod 600`).
+- The exact release backup image is already available to Docker.
+- The absolute output path does not exist yet and its parent has enough space.
+
+```bash
+infra/migration/run-local-data-only-export.sh \
+  --image-uri '123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/backup@sha256:<64-hex-digest>' \
+  --output '/absolute/private/path/property-reference-YYYYmmddTHHMMSSZ'
+```
+
+The container gets a read-only root filesystem, no Linux capabilities, no new
+privileges, the exact output directory as its only writable bind mount, and the
+local Postgres/MinIO network. After export, the host runner revalidates the
+checked-in catalog checksum, every listed artifact checksum, the exact file
+set, and the fixed Property 46 + Reference 21 dataset boundary. It then prints
+only the manifest path, SHA-256, and non-secret dataset counts. A failed export
+keeps its partial evidence directory for diagnosis; it never deletes or changes
+the source databases, MinIO objects, containers, or Docker volumes.
+
 ```bash
 python3 infra/migration/data_only_migration.py validate-catalog
 
@@ -122,6 +155,7 @@ post-import gates because projections are deliberately rebuilt, not copied.
 ```bash
 cd infra/migration
 python3 -m unittest -v test_data_only_migration.py
+./test-run-local-data-only-export.sh
 ./test-data-only-migration-integration.sh
 ```
 

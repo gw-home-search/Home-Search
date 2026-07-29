@@ -211,6 +211,7 @@ jobs:
       - name: Verify Property and Reference data-only migration
         run: |
           python3 -m unittest -v infra/migration/test_data_only_migration.py
+          infra/migration/test-run-local-data-only-export.sh
           infra/migration/test-data-only-migration-integration.sh
       - name: Verify release eligibility and manifest scripts
         run: |

@@ -645,6 +645,12 @@ Wolfi를 사용한다. release Grype gate는 Critical을 허용하지 않으며 
 `infra/release/vulnerability-exceptions.json`에 owner, ticket, 만료일이 모두 있는
 경우에만 한시적으로 허용한다.
 
+budget PostgreSQL runtime은 pinned PostgreSQL 17 Alpine 위에 checksum-pinned
+PROJ 9.8.1과 PostGIS 3.5.7 core extension을 source build한다. 현재 map/trade schema가
+사용하지 않는 TIFF·network grid sync·raster·topology·SFCGAL·address standardizer는
+build에서 제외하고, non-root UID 70으로 실행하므로 `gosu`도 runtime에서 제거한다.
+geometry/geography core와 공개 API 계약은 유지한다.
+
 PG17 restore runtime의 `CVE-2026-8087` 예외는 issue `#265`로 추적하며
 2026-08-11에 만료된다. Production PostgreSQL 17.10과 다른 major의 PostGIS로
 우회하지 않고, PG17-compatible package/source build와 restore reconciliation을

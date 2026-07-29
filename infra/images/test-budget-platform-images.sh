@@ -21,7 +21,7 @@ for image in "${postgres_image}" "${valkey_image}"; do
 done
 
 docker run --rm --entrypoint sh "${postgres_image}" -c \
-  'postgres --version | grep -Eq "PostgreSQL[)]? 17[.]" && test -f /usr/local/share/postgresql/extension/postgis.control'
+  'postgres --version | grep -Eq "PostgreSQL[)]? 17[.]" && test -f /usr/local/share/postgresql/extension/postgis.control && test ! -e /usr/local/bin/gosu && ! apk info -e tiff && test ! -e /usr/local/lib/postgresql/postgis_raster-3.so'
 docker run --rm --entrypoint sh "${valkey_image}" -c \
   'valkey-server --version | grep -Eq "v=8[.]1[.]" && grep -Fxq "appendonly no" /etc/valkey/valkey.conf && grep -Fxq "save \"\"" /etc/valkey/valkey.conf && grep -Fxq "maxmemory 256mb" /etc/valkey/valkey.conf'
 

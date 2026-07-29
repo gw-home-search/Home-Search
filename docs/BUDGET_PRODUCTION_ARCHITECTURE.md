@@ -80,6 +80,11 @@ Google/Kakao/Naver 모두 readiness 대상이다.
 cross-DB FK/join은 금지한다. Valkey는 cache/rate-limit 전용이며 persistence를
 끄고 Property/BFF ACL과 prefix를 분리한다.
 
+PostgreSQL runtime은 pinned PostgreSQL 17 Alpine을 base로 사용하고, 공식 OSGeo
+archive checksum에 고정한 PROJ 9.8.1과 vector-only PostGIS 3.5.7 core를 source
+build한다. 현재 schema에 없는 TIFF·raster·topology surface는 포함하지 않으며
+`geometry` 기반 map/trade query와 `CREATE EXTENSION postgis` 계약은 유지한다.
+
 EC2 hardware failure는 automatic recovery가 instance/EIP/EBS를 유지한다. OS
 손상은 exact AMI replacement와 기존 data EBS 재연결, data 손상은 snapshot clone,
 논리 손상은 logical dump를 새 DB에 restore한다.

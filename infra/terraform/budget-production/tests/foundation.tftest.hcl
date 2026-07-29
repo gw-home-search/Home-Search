@@ -76,6 +76,7 @@ run "foundation_is_single_az_single_instance_and_data_safe" {
       && !strcontains(file("files/host-bootstrap.sh.tftpl"), "mkfs.xfs -f")
       && !strcontains(file("files/host-bootstrap.sh.tftpl"), "defaults,nofail")
       && strcontains(file("files/host-bootstrap.sh.tftpl"), "ConditionPathIsMountPoint=/srv/home-search")
+      && length(regexall("install -d -m 0700 -o 70 -g 70", file("files/host-bootstrap.sh.tftpl"))) == 2
     )
     error_message = "Data EBS must be encrypted 80 GiB gp3 and never force-detached."
   }

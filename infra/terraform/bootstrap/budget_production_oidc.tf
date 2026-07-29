@@ -365,7 +365,7 @@ resource "aws_iam_role_policy" "github_budget_apply" {
         Sid      = "DenyNonBudgetHostType"
         Effect   = "Deny"
         Action   = ["ec2:RunInstances"]
-        Resource = "*"
+        Resource = ["arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*"]
         Condition = {
           StringNotEquals = { "ec2:InstanceType" = "t3a.large" }
         }

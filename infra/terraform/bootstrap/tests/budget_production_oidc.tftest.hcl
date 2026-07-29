@@ -220,6 +220,17 @@ run "budget_roles_are_separated_and_state_isolated" {
   }
 
   assert {
+    condition = anytrue([
+      for statement in jsondecode(aws_iam_role_policy.github_budget_apply.policy).Statement :
+      statement.Sid == "DenyNonBudgetHostType"
+      && statement.Action == ["ec2:RunInstances"]
+      && statement.Resource == ["arn:aws:ec2:ap-northeast-2:123456789012:instance/*"]
+      && statement.Condition.StringNotEquals["ec2:InstanceType"] == "t3a.large"
+    ])
+    error_message = "The instance-type deny must target only the instance resource so RunInstances dependency resources are not denied when ec2:InstanceType is absent."
+  }
+
+  assert {
     condition = (
       !contains(keys(local.budget_state_role_ids), "deploy")
       && !contains(local.budget_deploy_actions, "ec2:ModifyInstanceCreditSpecification")

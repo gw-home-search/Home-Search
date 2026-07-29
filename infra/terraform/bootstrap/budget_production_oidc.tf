@@ -37,20 +37,17 @@ locals {
   ]
   budget_apply_actions = [
     "acm:AddTagsToCertificate", "acm:DeleteCertificate", "acm:RemoveTagsFromCertificate", "acm:RequestCertificate",
-    "budgets:CreateBudget", "budgets:DeleteBudget", "budgets:ModifyBudget",
-    "ce:CreateAnomalyMonitor", "ce:CreateAnomalySubscription", "ce:DeleteAnomalyMonitor", "ce:DeleteAnomalySubscription", "ce:UpdateAnomalyMonitor", "ce:UpdateAnomalySubscription",
     "cloudwatch:DeleteAlarms", "cloudwatch:PutMetricAlarm", "cloudwatch:PutMetricData", "cloudwatch:TagResource", "cloudwatch:UntagResource",
     "dlm:CreateLifecyclePolicy", "dlm:DeleteLifecyclePolicy", "dlm:TagResource", "dlm:UntagResource", "dlm:UpdateLifecyclePolicy",
-    "ec2:AllocateAddress", "ec2:AssociateAddress", "ec2:AssociateIamInstanceProfile", "ec2:AttachVolume", "ec2:AuthorizeSecurityGroupIngress",
+    "ec2:AllocateAddress", "ec2:AssociateAddress", "ec2:AssociateIamInstanceProfile", "ec2:AssociateRouteTable", "ec2:AttachInternetGateway", "ec2:AttachVolume", "ec2:AuthorizeSecurityGroupEgress", "ec2:AuthorizeSecurityGroupIngress",
     "ec2:CreateInternetGateway", "ec2:CreateRoute", "ec2:CreateRouteTable", "ec2:CreateSecurityGroup", "ec2:CreateSubnet", "ec2:CreateTags", "ec2:CreateVolume", "ec2:CreateVpc",
     "ec2:DeleteInternetGateway", "ec2:DeleteRoute", "ec2:DeleteRouteTable", "ec2:DeleteSecurityGroup", "ec2:DeleteSubnet", "ec2:DeleteTags", "ec2:DeleteVolume", "ec2:DeleteVpc",
-    "ec2:DetachVolume", "ec2:DisassociateAddress", "ec2:ModifyInstanceAttribute", "ec2:ModifySubnetAttribute", "ec2:ModifyVolume", "ec2:ModifyVpcAttribute", "ec2:ReleaseAddress",
-    "ec2:ReplaceIamInstanceProfileAssociation", "ec2:RevokeSecurityGroupIngress", "ec2:RunInstances", "ec2:StartInstances", "ec2:StopInstances", "ec2:TerminateInstances",
+    "ec2:DetachInternetGateway", "ec2:DetachVolume", "ec2:DisassociateAddress", "ec2:DisassociateRouteTable", "ec2:ModifyInstanceAttribute", "ec2:ModifySubnetAttribute", "ec2:ModifyVolume", "ec2:ModifyVpcAttribute", "ec2:ReleaseAddress",
+    "ec2:ReplaceIamInstanceProfileAssociation", "ec2:RevokeSecurityGroupEgress", "ec2:RevokeSecurityGroupIngress", "ec2:RunInstances", "ec2:StartInstances", "ec2:StopInstances", "ec2:TerminateInstances",
     "ecr:CreateRepository", "ecr:DeleteLifecyclePolicy", "ecr:DeleteRepository", "ecr:PutImageScanningConfiguration", "ecr:PutImageTagMutability", "ecr:PutLifecyclePolicy", "ecr:SetRepositoryPolicy", "ecr:TagResource", "ecr:UntagResource",
     "ecs:CreateCluster", "ecs:CreateService", "ecs:DeleteCluster", "ecs:DeleteService", "ecs:DeregisterTaskDefinition", "ecs:RegisterTaskDefinition", "ecs:TagResource", "ecs:UntagResource", "ecs:UpdateCluster", "ecs:UpdateService",
     "events:DeleteRule", "events:PutRule", "events:PutTargets", "events:RemoveTargets", "events:TagResource", "events:UntagResource",
-    "logs:CreateLogGroup", "logs:DeleteLogGroup", "logs:PutRetentionPolicy", "logs:TagResource", "logs:UntagResource",
-    "route53:ChangeResourceRecordSets",
+    "logs:CreateLogGroup", "logs:DeleteLogGroup", "logs:DeleteMetricFilter", "logs:PutMetricFilter", "logs:PutRetentionPolicy", "logs:TagResource", "logs:UntagResource",
     "sns:CreateTopic", "sns:DeleteTopic", "sns:SetTopicAttributes", "sns:Subscribe", "sns:TagResource", "sns:Unsubscribe", "sns:UntagResource",
     "ssm:AddTagsToResource", "ssm:CreateAssociation", "ssm:CreateDocument", "ssm:DeleteAssociation", "ssm:DeleteDocument", "ssm:DeleteParameter", "ssm:PutParameter", "ssm:RemoveTagsFromResource", "ssm:UpdateAssociation", "ssm:UpdateDocument",
   ]
@@ -197,6 +194,10 @@ resource "aws_iam_role_policy" "github_budget_plan" {
         Sid      = "ReadPublicEcsOptimizedAmi", Effect = "Allow", Action = ["ssm:GetParameter"]
         Resource = ["arn:aws:ssm:${var.aws_region}::parameter/aws/service/ecs/optimized-ami/amazon-linux-2023/recommended/image_id"]
       },
+      {
+        Sid      = "ReadBudgetSecretContainersForProviderRefresh", Effect = "Allow", Action = ["ssm:GetParameter"]
+        Resource = ["arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/home-search/budget-production/*"]
+      },
     ]
   })
 }
@@ -213,8 +214,47 @@ resource "aws_iam_role_policy" "github_budget_apply" {
         Condition = { StringEqualsIfExists = { "aws:RequestedRegion" = var.aws_region } }
       },
       {
+        Sid      = "ReadBudgetSecretContainersForProviderRefresh", Effect = "Allow", Action = ["ssm:GetParameter"]
+        Resource = ["arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/home-search/budget-production/*"]
+      },
+      {
+        Sid      = "ManageBudgetCostControls", Effect = "Allow"
+        Action   = ["budgets:ModifyBudget", "budgets:TagResource", "budgets:UntagResource"]
+        Resource = ["arn:aws:budgets::${data.aws_caller_identity.current.account_id}:budget/home-search-budget-production-monthly"]
+      },
+      {
+        Sid      = "CreateBudgetsServiceLinkedRole", Effect = "Allow", Action = ["iam:CreateServiceLinkedRole"]
+        Resource = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-service-role/budgets.amazonaws.com/AWSServiceRoleForBudgets"]
+        Condition = {
+          StringEquals = { "iam:AWSServiceName" = "budgets.amazonaws.com" }
+        }
+      },
+      {
+        Sid      = "CreateBudgetCostAnomalyControls", Effect = "Allow"
+        Action   = ["ce:CreateAnomalyMonitor", "ce:CreateAnomalySubscription", "ce:TagResource"]
+        Resource = "*"
+        Condition = {
+          StringEquals = { "aws:RequestTag/Environment" = "budget-production" }
+        }
+      },
+      {
+        Sid    = "ManageBudgetCostAnomalyControls", Effect = "Allow"
+        Action = ["ce:DeleteAnomalyMonitor", "ce:DeleteAnomalySubscription", "ce:TagResource", "ce:UntagResource", "ce:UpdateAnomalyMonitor", "ce:UpdateAnomalySubscription"]
+        Resource = [
+          "arn:aws:ce::${data.aws_caller_identity.current.account_id}:anomalymonitor/*",
+          "arn:aws:ce::${data.aws_caller_identity.current.account_id}:anomalysubscription/*",
+        ]
+        Condition = {
+          StringEquals = { "aws:ResourceTag/Environment" = "budget-production" }
+        }
+      },
+      {
+        Sid      = "ManageBudgetHostedZoneRecords", Effect = "Allow", Action = ["route53:ChangeResourceRecordSets"]
+        Resource = ["arn:aws:route53:::hostedzone/${var.budget_production_hosted_zone_id}"]
+      },
+      {
         Sid    = "ManageBudgetRoles", Effect = "Allow"
-        Action = ["iam:AttachRolePolicy", "iam:CreateInstanceProfile", "iam:CreateRole", "iam:DeleteInstanceProfile", "iam:DeleteRole", "iam:DeleteRolePolicy", "iam:DetachRolePolicy", "iam:PassRole", "iam:PutRolePolicy", "iam:RemoveRoleFromInstanceProfile", "iam:AddRoleToInstanceProfile", "iam:TagRole", "iam:UntagRole"]
+        Action = ["iam:AttachRolePolicy", "iam:CreateInstanceProfile", "iam:CreateRole", "iam:DeleteInstanceProfile", "iam:DeleteRole", "iam:DeleteRolePolicy", "iam:DetachRolePolicy", "iam:PassRole", "iam:PutRolePolicy", "iam:RemoveRoleFromInstanceProfile", "iam:AddRoleToInstanceProfile", "iam:TagInstanceProfile", "iam:TagRole", "iam:UntagInstanceProfile", "iam:UntagRole"]
         Resource = [
           "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/home-search-budget-production-*",
           "arn:aws:iam::${data.aws_caller_identity.current.account_id}:instance-profile/home-search-budget-production-*",
@@ -225,7 +265,7 @@ resource "aws_iam_role_policy" "github_budget_apply" {
         Effect = "Allow"
         Action = [
           "s3:CreateBucket", "s3:DeleteBucket", "s3:DeleteBucketPolicy",
-          "s3:PutBucketLifecycleConfiguration", "s3:PutBucketOwnershipControls", "s3:PutBucketPolicy",
+          "s3:PutBucketLifecycleConfiguration", "s3:PutBucketObjectLockConfiguration", "s3:PutBucketOwnershipControls", "s3:PutBucketPolicy", "s3:PutBucketTagging",
           "s3:PutBucketPublicAccessBlock", "s3:PutBucketVersioning", "s3:PutEncryptionConfiguration",
         ]
         Resource = [
@@ -246,11 +286,12 @@ resource "aws_iam_role_policy" "github_budget_apply" {
         Sid    = "DenyCrossEnvironmentEc2Mutation"
         Effect = "Deny"
         Action = [
-          "ec2:AssociateAddress", "ec2:AttachVolume", "ec2:DeleteInternetGateway", "ec2:DeleteRouteTable",
+          "ec2:AssociateAddress", "ec2:AssociateRouteTable", "ec2:AttachInternetGateway", "ec2:AttachVolume", "ec2:AuthorizeSecurityGroupEgress",
+          "ec2:DeleteInternetGateway", "ec2:DeleteRouteTable",
           "ec2:DeleteSecurityGroup", "ec2:DeleteSubnet", "ec2:DeleteVpc", "ec2:DetachVolume",
-          "ec2:DisassociateAddress", "ec2:ModifyInstanceAttribute", "ec2:ModifyVolume",
+          "ec2:DetachInternetGateway", "ec2:DisassociateAddress", "ec2:DisassociateRouteTable", "ec2:ModifyInstanceAttribute", "ec2:ModifyVolume",
           "ec2:ModifyVpcAttribute", "ec2:ReleaseAddress", "ec2:StartInstances", "ec2:StopInstances",
-          "ec2:TerminateInstances",
+          "ec2:RevokeSecurityGroupEgress", "ec2:TerminateInstances",
         ]
         Resource = "*"
         Condition = {
@@ -276,7 +317,7 @@ resource "aws_iam_role_policy" "github_budget_apply" {
       {
         Sid    = "DenyCrossEnvironmentControlPlaneMutation"
         Effect = "Deny"
-        Action = ["cloudwatch:DeleteAlarms", "cloudwatch:PutMetricAlarm", "logs:CreateLogGroup", "logs:DeleteLogGroup", "logs:PutRetentionPolicy", "logs:TagResource", "logs:UntagResource", "events:DeleteRule", "events:PutRule", "events:PutTargets", "events:RemoveTargets", "events:TagResource", "events:UntagResource", "sns:CreateTopic", "sns:DeleteTopic", "sns:SetTopicAttributes", "sns:Subscribe", "sns:TagResource", "sns:Unsubscribe", "sns:UntagResource", "ssm:AddTagsToResource", "ssm:CreateAssociation", "ssm:CreateDocument", "ssm:DeleteAssociation", "ssm:DeleteDocument", "ssm:DeleteParameter", "ssm:PutParameter", "ssm:RemoveTagsFromResource", "ssm:UpdateAssociation", "ssm:UpdateDocument"]
+        Action = ["cloudwatch:DeleteAlarms", "cloudwatch:PutMetricAlarm", "logs:CreateLogGroup", "logs:DeleteLogGroup", "logs:DeleteMetricFilter", "logs:PutMetricFilter", "logs:PutRetentionPolicy", "logs:TagResource", "logs:UntagResource", "events:DeleteRule", "events:PutRule", "events:PutTargets", "events:RemoveTargets", "events:TagResource", "events:UntagResource", "sns:CreateTopic", "sns:DeleteTopic", "sns:SetTopicAttributes", "sns:Subscribe", "sns:TagResource", "sns:Unsubscribe", "sns:UntagResource", "ssm:AddTagsToResource", "ssm:CreateAssociation", "ssm:CreateDocument", "ssm:DeleteAssociation", "ssm:DeleteDocument", "ssm:DeleteParameter", "ssm:PutParameter", "ssm:RemoveTagsFromResource", "ssm:UpdateAssociation", "ssm:UpdateDocument"]
         NotResource = [
           "arn:aws:cloudwatch:${var.aws_region}:${data.aws_caller_identity.current.account_id}:alarm:home-search-budget-production-*",
           "arn:aws:events:${var.aws_region}:${data.aws_caller_identity.current.account_id}:rule/home-search-budget-production-*",

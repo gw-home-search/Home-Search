@@ -11,7 +11,7 @@ GitHub OIDC↔AWS role, live EBS↔backup/recovery다.
 |---|---|---|---|
 | public host compromise | 전체 단일 노드 장악 | 80/443만, no SSH, IMDSv2, container IMDS reject, no privileged/NET_RAW | 단일 host blast radius |
 | bridge lateral movement | task 간 port 접근 | DB role, Valkey ACL/prefix, task별 execution role, runtime secret read 금지 | task별 SG 없음 |
-| secret exfiltration | DB/OAuth/JWT/ACM 탈취 | SSM ARN allowlist, `UNSET`, no Terraform value, 0400 key, log/artifact scan | host root는 certificate 접근 가능 |
+| secret exfiltration | DB/OAuth/JWT/ACM 탈취 | SSM ARN allowlist, `value_wo` `UNSET`, no Terraform state value, 0400 key, log/artifact scan | provider refresh 때문에 plan/apply role은 budget prefix를 일시 복호화할 수 있고 host root는 certificate 접근 가능 |
 | EBS loss/corruption | 모든 DB 중단/손실 | encrypted protected data EBS, daily snapshot, logical dump, clone restore | RPO 최대 24h |
 | backup tampering/deletion | 복구 불가 | versioning, Object Lock Governance 35일, checksum/head verify, TLS-only policy | AWS-managed KMS key policy 격리 약화 |
 | release substitution | 악성/환경 종속 image | exact tag+SHA, 17+2 digest, SBOM/Grype, staging-origin scan, immutable ECR | scanner 미탐 가능 |

@@ -14,12 +14,12 @@ output "host_instance_id" {
 }
 
 output "ami_id" {
-  value       = try(aws_instance.host[0].ami, null)
+  value       = local.foundation_enabled ? var.ami_id : null
   description = "Exact ECS-optimized AMI pinned by the first foundation apply."
 }
 
 output "availability_zone" {
-  value       = try(aws_subnet.public[0].availability_zone, null)
+  value       = local.foundation_enabled ? var.availability_zone : null
   description = "Stable single availability zone pinned by the first foundation apply."
 }
 

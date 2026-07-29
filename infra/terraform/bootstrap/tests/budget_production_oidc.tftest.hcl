@@ -5,8 +5,9 @@ mock_provider "aws" {
 run "budget_roles_are_separated_and_state_isolated" {
   command = plan
   variables {
-    state_bucket_name = "home-search-state-fixture"
-    github_repository = "example/home-search"
+    state_bucket_name                       = "home-search-state-fixture"
+    github_repository                       = "example/home-search"
+    budget_production_hosted_zone_id        = "Z0123456789ABCDEFG"
   }
 
   assert {
@@ -62,6 +63,123 @@ run "budget_roles_are_separated_and_state_isolated" {
       ])
     )
     error_message = "Budget plan must read only the exact public ECS-optimized AMI parameter."
+  }
+
+  assert {
+    condition = alltrue([
+      for policy in [
+        aws_iam_role_policy.github_budget_plan.policy,
+        aws_iam_role_policy.github_budget_apply.policy,
+      ] : anytrue([
+        for statement in jsondecode(policy).Statement :
+        statement.Sid == "ReadBudgetSecretContainersForProviderRefresh"
+        && statement.Action == ["ssm:GetParameter"]
+        && statement.Resource == ["arn:aws:ssm:ap-northeast-2:123456789012:parameter/home-search/budget-production/*"]
+      ])
+    ])
+    error_message = "Plan/apply must scope the provider-required SecureString refresh to the budget-production parameter prefix."
+  }
+
+  assert {
+    condition = (
+      alltrue([
+        for action in [
+          "ec2:AssociateRouteTable",
+          "ec2:AttachInternetGateway",
+          "ec2:AuthorizeSecurityGroupEgress",
+          "ec2:DetachInternetGateway",
+          "ec2:DisassociateRouteTable",
+          "ec2:RevokeSecurityGroupEgress",
+          "logs:DeleteMetricFilter",
+          "logs:PutMetricFilter",
+        ] : contains(local.budget_apply_actions, action)
+      ])
+      && alltrue([
+        for action in [
+          "budgets:CreateBudget",
+          "budgets:DeleteBudget",
+          "budgets:ModifyBudget",
+          "ce:CreateAnomalyMonitor",
+          "ce:CreateAnomalySubscription",
+          "ce:DeleteAnomalyMonitor",
+          "ce:DeleteAnomalySubscription",
+          "ce:UpdateAnomalyMonitor",
+          "ce:UpdateAnomalySubscription",
+          "route53:ChangeResourceRecordSets",
+        ] : !contains(local.budget_apply_actions, action)
+      ])
+    )
+    error_message = "Regional mutations must include provider CRUD actions while global services remain outside the RequestedRegion-gated action set."
+  }
+
+  assert {
+    condition = (
+      anytrue([
+        for statement in jsondecode(aws_iam_role_policy.github_budget_apply.policy).Statement :
+        statement.Sid == "ManageBudgetCostControls"
+        && contains(statement.Action, "budgets:ModifyBudget")
+        && statement.Resource == ["arn:aws:budgets::123456789012:budget/home-search-budget-production-monthly"]
+        && !contains(keys(statement), "Condition")
+      ])
+      && anytrue([
+        for statement in jsondecode(aws_iam_role_policy.github_budget_apply.policy).Statement :
+        statement.Sid == "CreateBudgetCostAnomalyControls"
+        && contains(statement.Action, "ce:CreateAnomalyMonitor")
+        && statement.Resource == "*"
+        && statement.Condition.StringEquals["aws:RequestTag/Environment"] == "budget-production"
+      ])
+      && anytrue([
+        for statement in jsondecode(aws_iam_role_policy.github_budget_apply.policy).Statement :
+        statement.Sid == "ManageBudgetHostedZoneRecords"
+        && statement.Action == ["route53:ChangeResourceRecordSets"]
+        && statement.Resource == ["arn:aws:route53:::hostedzone/Z0123456789ABCDEFG"]
+        && !contains(keys(statement), "Condition")
+      ])
+      && anytrue([
+        for statement in jsondecode(aws_iam_role_policy.github_budget_apply.policy).Statement :
+        statement.Sid == "CreateBudgetsServiceLinkedRole"
+        && statement.Action == ["iam:CreateServiceLinkedRole"]
+        && statement.Resource == ["arn:aws:iam::123456789012:role/aws-service-role/budgets.amazonaws.com/AWSServiceRoleForBudgets"]
+        && statement.Condition.StringEquals["iam:AWSServiceName"] == "budgets.amazonaws.com"
+      ])
+    )
+    error_message = "Budgets, its exact service-linked role, Cost Explorer, and Route53 must use explicit global-service statements without a regional condition."
+  }
+
+  assert {
+    condition = (
+      anytrue([
+        for statement in jsondecode(aws_iam_role_policy.github_budget_apply.policy).Statement :
+        statement.Sid == "ManageBudgetRoles"
+        && contains(statement.Action, "iam:TagInstanceProfile")
+        && contains(statement.Action, "iam:UntagInstanceProfile")
+      ])
+      && anytrue([
+        for statement in jsondecode(aws_iam_role_policy.github_budget_apply.policy).Statement :
+        statement.Sid == "ManageBudgetBucketsOnly"
+        && contains(statement.Action, "s3:PutBucketObjectLockConfiguration")
+        && contains(statement.Action, "s3:PutBucketTagging")
+      ])
+    )
+    error_message = "Foundation apply must include the instance-profile and protected-bucket tag/Object Lock APIs used by the provider."
+  }
+
+  assert {
+    condition = anytrue([
+      for statement in jsondecode(aws_iam_role_policy.github_budget_apply.policy).Statement :
+      statement.Sid == "DenyCrossEnvironmentEc2Mutation"
+      && alltrue([
+        for action in [
+          "ec2:AssociateRouteTable",
+          "ec2:AttachInternetGateway",
+          "ec2:AuthorizeSecurityGroupEgress",
+          "ec2:DetachInternetGateway",
+          "ec2:DisassociateRouteTable",
+          "ec2:RevokeSecurityGroupEgress",
+        ] : contains(statement.Action, action)
+      ])
+    ])
+    error_message = "Every added EC2 connection and egress mutation must retain the cross-environment explicit deny boundary."
   }
 
   assert {

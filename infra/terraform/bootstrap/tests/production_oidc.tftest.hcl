@@ -5,8 +5,9 @@ mock_provider "aws" {
 run "production_workflow_roles_are_separated" {
   command = plan
   variables {
-    state_bucket_name = "home-search-state-fixture"
-    github_repository = "example/home-search"
+    state_bucket_name                = "home-search-state-fixture"
+    github_repository                = "example/home-search"
+    budget_production_hosted_zone_id = "Z0123456789ABCDEFG"
   }
 
   assert {

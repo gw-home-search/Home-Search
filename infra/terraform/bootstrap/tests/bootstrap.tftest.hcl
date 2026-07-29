@@ -15,6 +15,7 @@ run "secure_remote_state_and_exact_oidc_trust" {
     github_repository    = "home-search-org/home-search"
     github_environment   = "staging"
     github_workflow_name = "Deploy staging"
+    budget_production_hosted_zone_id = "Z0123456789ABCDEFG"
   }
   assert {
     condition     = aws_s3_bucket_versioning.terraform_state.versioning_configuration[0].status == "Enabled"

@@ -21,8 +21,9 @@ override_resource {
 run "staging_foundation_roles_are_separated_and_state_scoped" {
   command = plan
   variables {
-    state_bucket_name = "home-search-state-fixture"
-    github_repository = "example/home-search"
+    state_bucket_name                = "home-search-state-fixture"
+    github_repository                = "example/home-search"
+    budget_production_hosted_zone_id = "Z0123456789ABCDEFG"
   }
 
   assert {

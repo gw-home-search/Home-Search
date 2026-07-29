@@ -942,6 +942,8 @@ Security Group에서 허용하지 않는다. Host Nginx가 ACM exportable certif
 
 평시 credit mode는 `standard`다. import/recovery의 승인된 `unlimited`는 최대
 8시간이고 종료 시 `standard` assertion이 필수다. Terraform parameter는 실제
-secret 대신 `UNSET` container만 관리한다. 필요한 GitHub Environment/variables와
+secret 대신 write-only `value_wo`로 `UNSET` container만 생성한다. provider refresh
+권한은 budget parameter prefix로 제한하고 복호화 값은 state/log에 저장하지 않는다.
+필요한 GitHub Environment/variables와
 운영 절차는 `BUDGET_PRODUCTION_RUNBOOK.md`, threat boundary는
 `BUDGET_PRODUCTION_THREAT_MODEL.md`를 따른다.

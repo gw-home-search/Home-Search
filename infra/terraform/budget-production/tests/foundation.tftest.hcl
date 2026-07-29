@@ -99,6 +99,20 @@ run "foundation_is_single_az_single_instance_and_data_safe" {
     )
     error_message = "Only HTTP/HTTPS may enter the host and edge TLS automation must preserve SSE behavior."
   }
+
+  assert {
+    condition = (
+      aws_iam_role_policy_attachment.dlm[0].policy_arn == "arn:aws:iam::aws:policy/service-role/AWSDataLifecycleManagerServiceRole"
+      && alltrue([
+        for parameter in aws_ssm_parameter.runtime :
+        parameter.value_wo_version == 1
+      ])
+      && strcontains(file("ssm_parameter_containers.tf"), "value_wo")
+      && !strcontains(file("ssm_parameter_containers.tf"), "value       = \"UNSET\"")
+      && !strcontains(file("ssm_parameter_containers.tf"), "ignore_changes")
+    )
+    error_message = "Foundation must use the official DLM snapshot role and write-only SSM seed values that never enter Terraform state."
+  }
 }
 
 run "public_dns_is_an_explicit_last_step" {

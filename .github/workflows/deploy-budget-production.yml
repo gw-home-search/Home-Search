@@ -105,25 +105,11 @@ jobs:
           terraform -chdir=infra/terraform/budget-production test
           current_phase="$(infra/deploy/read-budget-production-phase.sh infra/terraform/budget-production)"
           [[ "${current_phase}" == 'registry' || "${current_phase}" == 'foundation' ]]
-          pin_source=state
-          if [[ "${current_phase}" == 'registry' ]]; then
-            pin_source=recommended
-            pinned_ami="$(aws ssm get-parameter --region "${AWS_REGION}" \
-              --name /aws/service/ecs/optimized-ami/amazon-linux-2023/recommended/image_id \
-              --query Parameter.Value --output text)"
-            pinned_az="$(
-              aws ec2 describe-instance-type-offerings --region "${AWS_REGION}" --location-type availability-zone \
-                --filters Name=instance-type,Values=t3a.large --query 'InstanceTypeOfferings[].Location' --output json |
-              jq -r '.[]' | while read -r zone; do
-                zone_id="$(aws ec2 describe-availability-zones --region "${AWS_REGION}" --zone-names "${zone}" \
-                  --query 'AvailabilityZones[0].ZoneId' --output text)"
-                printf '%s\t%s\n' "${zone_id}" "${zone}"
-              done | LC_ALL=C sort | head -n1 | cut -f2
-            )"
-          else
-            pinned_ami="$(terraform -chdir=infra/terraform/budget-production output -raw ami_id)"
-            pinned_az="$(terraform -chdir=infra/terraform/budget-production output -raw availability_zone)"
-          fi
+          pins="$(infra/deploy/select-budget-production-foundation-pins.sh \
+            infra/terraform/budget-production "${AWS_REGION}")"
+          pinned_ami="$(jq -er '.ami_id' <<<"${pins}")"
+          pinned_az="$(jq -er '.availability_zone' <<<"${pins}")"
+          pin_source="$(jq -er '.pin_source' <<<"${pins}")"
           [[ "${pinned_ami}" =~ ^ami-[0-9a-f]{17}$ ]]
           [[ "${pinned_az}" =~ ^ap-northeast-2[a-d]$ ]]
           ami_shape="$(aws ec2 describe-images --region "${AWS_REGION}" --image-ids "${pinned_ami}" \

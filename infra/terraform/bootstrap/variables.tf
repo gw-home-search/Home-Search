@@ -145,6 +145,15 @@ variable "budget_production_state_key" {
   }
 }
 
+variable "budget_production_hosted_zone_id" {
+  description = "Exact existing Route53 hosted zone ID allowed for budget-production records."
+  type        = string
+  validation {
+    condition     = can(regex("^Z[A-Z0-9]{10,31}$", var.budget_production_hosted_zone_id))
+    error_message = "budget_production_hosted_zone_id must be one exact existing Route53 hosted zone ID."
+  }
+}
+
 variable "github_budget_plan_environment" {
   description = "Unprotected read-only GitHub Environment for budget-production plans."
   type        = string

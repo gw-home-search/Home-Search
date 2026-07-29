@@ -6,6 +6,7 @@ workflow="${root}/.github/workflows/deploy-budget-production.yml"
 bootstrap_policy="${root}/infra/terraform/bootstrap/budget_production_oidc.tf"
 budget_backend="${root}/infra/terraform/budget-production/backend.tf"
 budget_outputs="${root}/infra/terraform/budget-production/outputs.tf"
+pin_selector="${root}/infra/deploy/select-budget-production-foundation-pins.sh"
 for required in \
   'name: Deploy budget production' \
   'environment: budget-production-plan' \
@@ -29,8 +30,10 @@ done
 [[ "$(grep -Fc "if: inputs.operation == 'deploy' || inputs.operation == 'foundation'" "${workflow}")" -eq 2 ]]
 grep -Fq 'with: { ref: "${{ inputs.operation == '\''deploy'\'' && inputs.release_sha || github.sha }}" }' "${workflow}"
 [[ "$(grep -Fc "if: inputs.operation == 'deploy'" "${workflow}")" -ge 4 ]]
-grep -Fq 'terraform -chdir=infra/terraform/budget-production output -raw ami_id' "${workflow}"
-grep -Fq 'terraform -chdir=infra/terraform/budget-production output -raw availability_zone' "${workflow}"
+grep -Fq 'infra/deploy/select-budget-production-foundation-pins.sh' "${workflow}"
+grep -Fq 'Name=tag:Name,Values=${name}-data' "${pin_selector}"
+grep -Fq 'Name=tag:Environment,Values=budget-production' "${pin_selector}"
+grep -Fq 'partial-resources' "${pin_selector}"
 grep -Fq 'output "ami_id" {' "${budget_outputs}"
 grep -Fq 'output "availability_zone" {' "${budget_outputs}"
 [[ "$(grep -Ec '^[[:space:]]+environment: budget-production-plan$' "${workflow}")" -eq 2 ]]
@@ -48,4 +51,5 @@ done
 ! sed -n '/budget_deploy_actions = \[/,/^  ]/p' "${bootstrap_policy}" | grep -Eq 's3:GetObject|s3:PutObject'
 ! sed -n '/budget_deploy_actions = \[/,/^  ]/p' "${bootstrap_policy}" | grep -Eq 'ecs:RunTask|ecs:StopTask|ecs:UpdateService|ssm:SendCommand'
 "${root}/infra/deploy/test-read-budget-production-phase.sh"
+"${root}/infra/deploy/test-select-budget-production-foundation-pins.sh"
 echo '상태: Pass - budget workflow의 plan/apply/deploy role, phase, credit, restore, DNS readiness 순서를 확인했습니다.'

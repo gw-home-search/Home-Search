@@ -44,14 +44,14 @@ locals {
 }
 
 resource "aws_ssm_parameter" "runtime" {
-  for_each    = local.foundation_enabled ? local.runtime_parameter_names : toset([])
-  name        = "/home-search/budget-production/${each.value}"
-  description = "Budget production protected value container; populated out-of-band after foundation apply."
-  type        = "SecureString"
-  value       = "UNSET"
+  for_each         = local.foundation_enabled ? local.runtime_parameter_names : toset([])
+  name             = "/home-search/budget-production/${each.value}"
+  description      = "Budget production protected value container; populated out-of-band after foundation apply."
+  type             = "SecureString"
+  value_wo         = "UNSET"
+  value_wo_version = 1
 
   lifecycle {
-    ignore_changes  = [value]
     prevent_destroy = true
   }
 

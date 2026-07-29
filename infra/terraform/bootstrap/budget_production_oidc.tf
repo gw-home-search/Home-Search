@@ -202,17 +202,35 @@ resource "aws_iam_role_policy" "github_budget_plan" {
   })
 }
 
+resource "aws_iam_policy" "github_budget_apply_regional" {
+  name = "home-search-budget-production-regional-apply"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid       = "ManageTaggedBudgetResources", Effect = "Allow", Action = local.budget_apply_actions, Resource = "*"
+      Condition = { StringEqualsIfExists = { "aws:RequestedRegion" = var.aws_region } }
+    }]
+  })
+  tags = {
+    Project     = "home-search"
+    Environment = "budget-production"
+    ManagedBy   = "terraform"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "github_budget_apply_regional" {
+  role       = aws_iam_role.github_budget_production_apply.name
+  policy_arn = aws_iam_policy.github_budget_apply_regional.arn
+}
+
 resource "aws_iam_role_policy" "github_budget_apply" {
-  name = "budget-production-reviewed-apply"
-  role = aws_iam_role.github_budget_production_apply.id
+  name       = "budget-production-reviewed-apply"
+  role       = aws_iam_role.github_budget_production_apply.id
+  depends_on = [aws_iam_role_policy_attachment.github_budget_apply_regional]
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       { Sid = "ReadBudgetMetadata", Effect = "Allow", Action = local.budget_read_actions, Resource = "*" },
-      {
-        Sid       = "ManageTaggedBudgetResources", Effect = "Allow", Action = local.budget_apply_actions, Resource = "*"
-        Condition = { StringEqualsIfExists = { "aws:RequestedRegion" = var.aws_region } }
-      },
       {
         Sid      = "ReadBudgetSecretContainersForProviderRefresh", Effect = "Allow", Action = ["ssm:GetParameter"]
         Resource = ["arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/home-search/budget-production/*"]

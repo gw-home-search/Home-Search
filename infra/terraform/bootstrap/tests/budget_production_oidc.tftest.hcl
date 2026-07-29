@@ -2,6 +2,22 @@ mock_provider "aws" {
   mock_data "aws_caller_identity" { defaults = { account_id = "123456789012" } }
 }
 
+override_resource {
+  target          = aws_kms_key.terraform_state
+  override_during = plan
+  values = {
+    arn = "arn:aws:kms:ap-northeast-2:123456789012:key/11111111-1111-1111-1111-111111111111"
+  }
+}
+
+override_resource {
+  target          = aws_s3_bucket.terraform_state
+  override_during = plan
+  values = {
+    arn = "arn:aws:s3:::home-search-state-fixture"
+  }
+}
+
 run "budget_roles_are_separated_and_state_isolated" {
   command = plan
   variables {
@@ -205,8 +221,20 @@ run "budget_roles_are_separated_and_state_isolated" {
   }
 
   assert {
-    condition     = length(aws_iam_role_policy.github_budget_apply.policy) <= 10240
-    error_message = "Budget apply inline IAM policy exceeds the AWS 10,240-byte role policy limit."
+    condition = (
+      length(aws_iam_role_policy.github_budget_apply.policy)
+      + length(aws_iam_role_policy.github_budget_state["apply"].policy) <= 10240
+      && length(aws_iam_policy.github_budget_apply_regional.policy) <= 6144
+      && aws_iam_role_policy_attachment.github_budget_apply_regional.role == aws_iam_role.github_budget_production_apply.name
+      && one(jsondecode(aws_iam_policy.github_budget_apply_regional.policy).Statement).Sid == "ManageTaggedBudgetResources"
+      && one(jsondecode(aws_iam_policy.github_budget_apply_regional.policy).Statement).Action == local.budget_apply_actions
+      && one(jsondecode(aws_iam_policy.github_budget_apply_regional.policy).Statement).Condition.StringEqualsIfExists["aws:RequestedRegion"] == "ap-northeast-2"
+      && alltrue([
+        for statement in jsondecode(aws_iam_role_policy.github_budget_apply.policy).Statement :
+        statement.Sid != "ManageTaggedBudgetResources"
+      ])
+    )
+    error_message = "Budget apply inline aggregate and regional managed policy must stay within AWS policy limits and preserve the regional condition."
   }
 
   assert {

@@ -55,7 +55,7 @@ locals {
     "ssm:AddTagsToResource", "ssm:CreateAssociation", "ssm:CreateDocument", "ssm:DeleteAssociation", "ssm:DeleteDocument", "ssm:DeleteParameter", "ssm:PutParameter", "ssm:RemoveTagsFromResource", "ssm:UpdateAssociation", "ssm:UpdateDocument",
   ]
   budget_apply_explicit_deny_actions = [
-    "ec2:DeleteVolume", "ec2:DetachVolume", "s3:DeleteBucket", "s3:DeleteObject", "ssm:DeleteParameter",
+    "ec2:DeleteVolume", "ec2:DetachVolume", "s3:DeleteBucket", "ssm:DeleteParameter",
   ]
   budget_deploy_actions = [
     "cloudwatch:DescribeAlarms", "cloudwatch:GetMetricData", "cloudwatch:GetMetricStatistics", "ec2:DescribeImages", "ec2:DescribeInstances", "ec2:DescribeInstanceCreditSpecifications", "ec2:DescribeInstanceStatus",

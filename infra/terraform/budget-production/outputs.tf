@@ -13,6 +13,16 @@ output "host_instance_id" {
   description = "Single protected budget-production EC2 instance ID."
 }
 
+output "ami_id" {
+  value       = try(aws_instance.host[0].ami, null)
+  description = "Exact ECS-optimized AMI pinned by the first foundation apply."
+}
+
+output "availability_zone" {
+  value       = try(aws_subnet.public[0].availability_zone, null)
+  description = "Stable single availability zone pinned by the first foundation apply."
+}
+
 output "data_volume_id" {
   value       = try(aws_ebs_volume.data[0].id, null)
   description = "Protected data EBS volume ID."

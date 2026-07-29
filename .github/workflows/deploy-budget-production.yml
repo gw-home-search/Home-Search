@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: "Bootstrap budget platform registries first, then run deploy after release publication"
+        description: "Run registry, then foundation, then deploy after release and migration evidence are ready"
         required: true
         default: deploy
         type: choice
-        options: [deploy, registry]
+        options: [deploy, foundation, registry]
       release_tag:
         description: "Approved environment-neutral vMAJOR.MINOR.PATCH release"
         required: false
@@ -87,7 +87,7 @@ jobs:
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
         with: { terraform_version: 1.15.8 }
       - name: Pin AMI and stable AZ, then create zero-destroy foundation plan
-        if: inputs.operation == 'deploy'
+        if: inputs.operation == 'deploy' || inputs.operation == 'foundation'
         env:
           TF_STATE_BUCKET: "${{ vars.BUDGET_PRODUCTION_TF_STATE_BUCKET }}"
           TF_STATE_KMS_ARN: "${{ vars.BUDGET_PRODUCTION_TF_STATE_KMS_ARN }}"
@@ -95,27 +95,7 @@ jobs:
           ALARM_EMAIL: "${{ vars.BUDGET_PRODUCTION_ALARM_EMAIL }}"
         run: |
           set -Eeuo pipefail
-          recommended_ami="$(aws ssm get-parameter --region "${AWS_REGION}" \
-            --name /aws/service/ecs/optimized-ami/amazon-linux-2023/recommended/image_id \
-            --query Parameter.Value --output text)"
-          [[ "${recommended_ami}" =~ ^ami-[0-9a-f]{17}$ ]]
-          ami_shape="$(aws ec2 describe-images --region "${AWS_REGION}" --image-ids "${recommended_ami}" \
-            --query 'Images[0].[State,Architecture]' --output text)"
-          [[ "${ami_shape}" == $'available\tx86_64' ]]
-          availability_zone="$(
-            aws ec2 describe-instance-type-offerings --region "${AWS_REGION}" --location-type availability-zone \
-              --filters Name=instance-type,Values=t3a.large --query 'InstanceTypeOfferings[].Location' --output json |
-            jq -r '.[]' | while read -r zone; do
-              zone_id="$(aws ec2 describe-availability-zones --region "${AWS_REGION}" --zone-names "${zone}" \
-                --query 'AvailabilityZones[0].ZoneId' --output text)"
-              printf '%s\t%s\n' "${zone_id}" "${zone}"
-            done | LC_ALL=C sort | head -n1 | cut -f2
-          )"
-          [[ "${availability_zone}" =~ ^ap-northeast-2[a-d]$ ]]
-          jq -n --arg ami "${recommended_ami}" --arg az "${availability_zone}" \
-            --arg zone "${HOSTED_ZONE_ID}" --arg email "${ALARM_EMAIL}" \
-            '{ami_id:$ami,availability_zone:$az,hosted_zone_id:$zone,alarm_email:$email}' \
-            >infra/terraform/budget-production/foundation.auto.tfvars.json
+          mkdir -p deployment-evidence
           terraform -chdir=infra/terraform/budget-production init \
             -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="key=${TF_STATE_KEY}" \
             -backend-config="region=${AWS_REGION}" -backend-config="kms_key_id=${TF_STATE_KMS_ARN}" \
@@ -125,6 +105,38 @@ jobs:
           terraform -chdir=infra/terraform/budget-production test
           current_phase="$(infra/deploy/read-budget-production-phase.sh infra/terraform/budget-production)"
           [[ "${current_phase}" == 'registry' || "${current_phase}" == 'foundation' ]]
+          pin_source=state
+          if [[ "${current_phase}" == 'registry' ]]; then
+            pin_source=recommended
+            pinned_ami="$(aws ssm get-parameter --region "${AWS_REGION}" \
+              --name /aws/service/ecs/optimized-ami/amazon-linux-2023/recommended/image_id \
+              --query Parameter.Value --output text)"
+            pinned_az="$(
+              aws ec2 describe-instance-type-offerings --region "${AWS_REGION}" --location-type availability-zone \
+                --filters Name=instance-type,Values=t3a.large --query 'InstanceTypeOfferings[].Location' --output json |
+              jq -r '.[]' | while read -r zone; do
+                zone_id="$(aws ec2 describe-availability-zones --region "${AWS_REGION}" --zone-names "${zone}" \
+                  --query 'AvailabilityZones[0].ZoneId' --output text)"
+                printf '%s\t%s\n' "${zone_id}" "${zone}"
+              done | LC_ALL=C sort | head -n1 | cut -f2
+            )"
+          else
+            pinned_ami="$(terraform -chdir=infra/terraform/budget-production output -raw ami_id)"
+            pinned_az="$(terraform -chdir=infra/terraform/budget-production output -raw availability_zone)"
+          fi
+          [[ "${pinned_ami}" =~ ^ami-[0-9a-f]{17}$ ]]
+          [[ "${pinned_az}" =~ ^ap-northeast-2[a-d]$ ]]
+          ami_shape="$(aws ec2 describe-images --region "${AWS_REGION}" --image-ids "${pinned_ami}" \
+            --query 'Images[0].[State,Architecture]' --output text)"
+          [[ "${ami_shape}" == $'available\tx86_64' ]]
+          offering_count="$(aws ec2 describe-instance-type-offerings --region "${AWS_REGION}" \
+            --location-type availability-zone --filters Name=instance-type,Values=t3a.large \
+            "Name=location,Values=${pinned_az}" --query 'length(InstanceTypeOfferings)' --output text)"
+          [[ "${offering_count}" == 1 ]]
+          jq -n --arg ami "${pinned_ami}" --arg az "${pinned_az}" \
+            --arg zone "${HOSTED_ZONE_ID}" --arg email "${ALARM_EMAIL}" \
+            '{ami_id:$ami,availability_zone:$az,hosted_zone_id:$zone,alarm_email:$email}' \
+            >infra/terraform/budget-production/foundation.auto.tfvars.json
           code=0
           terraform -chdir=infra/terraform/budget-production plan -out=foundation.tfplan \
             -var=deployment_phase=foundation -var=data_services_enabled=false \
@@ -140,9 +152,9 @@ jobs:
           infra/cost/calculate-budget-production.py --plan deployment-evidence/foundation-plan.json \
             --fixture infra/cost/budget-production-price-fixture.json \
             --account-forecast-usd "${account_forecast}" >deployment-evidence/cost-estimate.json
-          jq -n --arg ami "${recommended_ami}" --arg az "${availability_zone}" \
+          jq -n --arg ami "${pinned_ami}" --arg az "${pinned_az}" --arg pin_source "${pin_source}" \
             --arg account_forecast "${account_forecast}" \
-            '{status:"pass",ami_id:$ami,availability_zone:$az,account_forecast_usd:$account_forecast}' \
+            '{status:"pass",ami_id:$ami,availability_zone:$az,pin_source:$pin_source,account_forecast_usd:$account_forecast}' \
             >deployment-evidence/foundation-preflight.json
       - name: Create the registry-only bootstrap plan
         if: inputs.operation == 'registry'
@@ -193,12 +205,12 @@ jobs:
   foundation_apply:
     name: budget-production-foundation-apply
     needs: plan
-    if: inputs.operation == 'deploy'
+    if: inputs.operation == 'deploy' || inputs.operation == 'foundation'
     environment: budget-production
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with: { ref: "${{ inputs.release_sha }}" }
+        with: { ref: "${{ inputs.operation == 'deploy' && inputs.release_sha || github.sha }}" }
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with: { name: "budget-production-reviewed-foundation-${{ inputs.release_tag }}", path: reviewed }
       - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2

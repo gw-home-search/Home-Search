@@ -45,7 +45,17 @@ resource "aws_security_group" "host" {
   name        = "${local.name}-host"
   description = "Budget production public host; no SSH, database, cache, or admin ingress"
   vpc_id      = aws_vpc.this[0].id
-  tags        = { Name = "${local.name}-host" }
+  dynamic "egress" {
+    for_each = local.host_egress
+    content {
+      cidr_blocks = ["0.0.0.0/0"]
+      protocol    = egress.value.protocol
+      from_port   = egress.value.port
+      to_port     = egress.value.port
+      description = egress.value.description
+    }
+  }
+  tags = { Name = "${local.name}-host" }
 }
 
 locals { public_ingress_ports = toset(["80", "443"]) }
@@ -69,14 +79,11 @@ locals {
   } : {}
 }
 
-resource "aws_vpc_security_group_egress_rule" "host" {
-  for_each          = local.host_egress
-  security_group_id = aws_security_group.host[0].id
-  cidr_ipv4         = "0.0.0.0/0"
-  ip_protocol       = each.value.protocol
-  from_port         = each.value.port
-  to_port           = each.value.port
-  description       = each.value.description
+removed {
+  from = aws_vpc_security_group_egress_rule.host
+  lifecycle {
+    destroy = false
+  }
 }
 
 resource "aws_eip" "public" {

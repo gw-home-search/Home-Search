@@ -30,7 +30,7 @@ if (( requested_index < current_index )); then
   exit 1
 fi
 
-violations="$(jq -c '
+violations="$(jq -c --arg requested_phase "${requested_phase}" --arg current_phase "${current_phase}" '
   [
     "aws_db_instance", "aws_db_cluster", "aws_rds_cluster", "aws_rds_cluster_instance", "aws_msk_cluster", "aws_msk_serverless_cluster",
     "aws_nat_gateway", "aws_vpc_endpoint", "aws_lb", "aws_lb_listener", "aws_lb_target_group", "aws_vpn_gateway",
@@ -38,12 +38,28 @@ violations="$(jq -c '
     "aws_customer_gateway", "aws_elasticache_cluster", "aws_elasticache_replication_group",
     "aws_prometheus_workspace", "aws_grafana_workspace", "aws_ebs_fast_snapshot_restore"
   ] as $forbidden_types |
+  [
+    "aws_vpc_security_group_egress_rule.host[\"https\"]",
+    "aws_vpc_security_group_egress_rule.host[\"dns-t\"]",
+    "aws_vpc_security_group_egress_rule.host[\"dns-u\"]",
+    "aws_vpc_security_group_egress_rule.host[\"ntp\"]"
+  ] as $allowed_forget_addresses |
   [.resource_changes[]
    | select(.mode == "managed")
    | select(.change.actions != ["no-op"] and .change.actions != ["read"])
    | . as $change
    | select(
        (.change.actions | index("delete")) != null
+       or (
+         (.change.actions | index("forget")) != null
+         and ((
+           $requested_phase == "foundation"
+           and $current_phase == "foundation"
+           and $change.change.actions == ["forget"]
+           and $change.type == "aws_vpc_security_group_egress_rule"
+           and ($allowed_forget_addresses | index($change.address)) != null
+         ) | not)
+       )
        or ($forbidden_types | index($change.type)) != null
        or ((.change.after | tostring) | test("home-search-(staging|production)([^-]|$)"))
      )
@@ -67,4 +83,4 @@ if [[ "${requested_phase}" == 'registry' ]]; then
   }
 fi
 
-echo "상태: Pass - ${current_phase} -> ${requested_phase} plan은 monotonic, zero-destroy, budget allowlist 경계를 충족합니다."
+echo "상태: Pass - ${current_phase} -> ${requested_phase} plan은 monotonic, zero-destroy, 제한된 state forget, budget allowlist 경계를 충족합니다."

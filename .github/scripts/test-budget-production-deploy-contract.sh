@@ -77,9 +77,13 @@ foundation_plan_line="$(grep -nF 'name: Pin AMI and stable AZ, then create zero-
 [[ "${foundation_plan_line}" =~ ^[0-9]+$ ]]
 foundation_plan_block="$(sed -n "${foundation_plan_line},$((foundation_plan_line + 90))p" "${workflow}")"
 grep -Fq 'current_data_services_enabled="$(terraform -chdir=infra/terraform/budget-production output -raw data_services_enabled)"' <<<"${foundation_plan_block}"
+grep -Fq '[[ "${current_data_services_enabled}" == true || "${current_data_services_enabled}" == false ]]' <<<"${foundation_plan_block}"
+! grep -Fq '[[ "${current_data_services_enabled}" == false ]]' <<<"${foundation_plan_block}"
 grep -Fq 'reviewed_phase=data' <<<"${foundation_plan_block}"
 grep -Fq -- '-var="deployment_phase=${reviewed_phase}"' <<<"${foundation_plan_block}"
 grep -Fq 'deployment-evidence/foundation-plan.json "${reviewed_phase}" "${current_phase}"' <<<"${foundation_plan_block}"
+grep -Fq -- '--arg current_data_services_enabled "${current_data_services_enabled}"' <<<"${foundation_plan_block}"
+grep -Fq 'current_data_services_enabled:($current_data_services_enabled == "true")' <<<"${foundation_plan_block}"
 data_dark_line="$(grep -nF 'name: Register data tasks without starting PostgreSQL' "${workflow}" | cut -d: -f1)"
 [[ "${data_dark_line}" =~ ^[0-9]+$ ]]
 data_dark_block="$(sed -n "${data_dark_line},$((data_dark_line + 55))p" "${workflow}")"

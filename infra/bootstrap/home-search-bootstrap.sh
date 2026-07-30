@@ -11,7 +11,7 @@ required() {
   [[ -n "${!name:-}" ]] || { echo "상태: Fail - ${name} 설정이 필요합니다." >&2; exit 1; }
 }
 
-random_hex() { openssl rand -hex 32; }
+random_hex() { openssl rand -hex 32 | tr -d '\n'; }
 
 sql_literal() {
   local value="$1"

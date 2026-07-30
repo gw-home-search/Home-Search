@@ -90,6 +90,20 @@ security group 이름/설명/무인바운드를 전부 확인한 뒤 state taint
 중단한다. parameter 값과 live resource는 읽거나 갱신하지 않으며 정상 복구 후 다음
 실행부터 입력은 다시 `false`로 둔다.
 
+초기 data service 기동 전에 생성된 64자 hex parameter에 단일 LF가 포함됐다는
+Valkey URL-safe 오류가 확인되면 import를 시작하지 않는다. 먼저 exact Terraform
+plan으로 `deployment_phase=data`, `data_services_enabled=false`를 적용해 PostgreSQL과
+Valkey의 desired/running/pending count가 모두 0인지 확인한다. 그 뒤
+`infra/deploy/run-budget-generated-value-normalization.sh`를 기존 reviewed
+`secret-bootstrap` task definition ARN과 run-specific `started-by`로 한 번 실행한다.
+runner는 기존 reviewed image와 최소 SSM task role을 재사용하고, AWS 내부에서만
+17개 생성값의 끝 LF와 3개 AI DSN을 정규화하며 값은 stdout, task definition,
+Terraform state에 넣지 않는다. task 종료 후 임시 task definition은 deregister한다.
+service가 data-dark가 아니거나 값 검증 preflight가 실패하면 parameter를 수정하지 않고
+중단한다. `PutParameter` 중간 실패는 같은 idempotent runner를 재실행해 수렴시킨다.
+다음 deploy는 새 plan과 protected approval로 재시작하며, platform waiter
+후 PostgreSQL/Valkey가 각각 desired 1, running 1, pending 0인지 별도 assertion한다.
+
 ## SSM과 Admin
 
 SSH는 사용하지 않는다. Session Manager로 host에 접속한다. Admin API/gateway는

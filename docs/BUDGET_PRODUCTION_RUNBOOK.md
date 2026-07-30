@@ -55,7 +55,10 @@ secret, user ID, JWT, prompt/query/answer, private key는 evidence에 넣지 않
    acceptance prefix에 업로드한다.
 7. workflow를 `operation=deploy`와 exact tag/SHA, migration S3 prefix/SHA로 실행한다.
 8. foundation plan이 state에 고정된 동일 AMI/AZ를 사용하고 zero-destroy인지 다시
-   확인해 apply를 승인한다.
+   확인해 apply를 승인한다. 기존 data phase에서 새 release로 재개할 때는
+   `skip_destroy=true`인 exact budget task definition의 image digest/Release evidence
+   revision만 예외다. 같은 ECR repository, 불변 role/port/env/command, data import의
+   동일 bucket release evidence suffix를 검증하며 이전 ECS revision은 보존한다.
 9. workflow가 secret bootstrap/readiness, Postgres/Valkey, Flyway, data-only import,
    reconcile, marker projection, logical backup을 순서대로 실행한다.
 10. import 동안만 Unlimited를 사용한다. 실패 여부와 무관하게 다음 step에서
@@ -69,7 +72,8 @@ secret, user ID, JWT, prompt/query/answer, private key는 evidence에 넣지 않
 13. `public_dns_enable_approved=true`일 때만 마지막 protected job을 승인한다.
     A record와 backup schedule 적용 뒤 `BUDGET_PRODUCTION_READY.json`이 생성된다.
 
-중단 조건은 plan의 destroy/금지 resource, 비용 초과, `UNSET`, digest/SBOM 누락,
+중단 조건은 보존형 task definition release revision 외 plan의 destroy/금지 resource,
+비용 초과, `UNSET`, digest/SBOM 누락,
 staging origin, disk headroom 부족, ACL/IMDS/public port 실패, reconcile/restore
 mismatch, 미확인 SNS/Kakao/OAuth evidence, credit `standard` 미복원이다.
 

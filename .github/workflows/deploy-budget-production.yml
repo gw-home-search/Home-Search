@@ -296,7 +296,7 @@ jobs:
   rollout:
     name: budget-production-data-private-public
     needs: foundation_apply
-    if: inputs.operation == 'deploy'
+    if: always() && needs.foundation_apply.result == 'success' && inputs.operation == 'deploy'
     environment: budget-production
     runs-on: ubuntu-latest
     timeout-minutes: 360
@@ -553,7 +553,7 @@ jobs:
   dns_plan:
     name: budget-production-dns-plan
     needs: [rollout, credit_cleanup]
-    if: needs.rollout.result == 'success' && needs.credit_cleanup.result == 'success' && inputs.public_dns_enable_approved
+    if: always() && needs.rollout.result == 'success' && needs.credit_cleanup.result == 'success' && inputs.public_dns_enable_approved
     environment: budget-production-plan
     runs-on: ubuntu-latest
     steps:
@@ -598,6 +598,7 @@ jobs:
   dns_apply:
     name: budget-production-dns-apply-and-ready
     needs: dns_plan
+    if: always() && needs.dns_plan.result == 'success'
     environment: budget-production
     runs-on: ubuntu-latest
     steps:

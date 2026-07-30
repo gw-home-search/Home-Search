@@ -40,8 +40,11 @@ done
 [[ "$(grep -Fc "if: inputs.operation == 'deploy' || inputs.operation == 'foundation'" "${workflow}")" -eq 1 ]]
 grep -Fq "if: always() && needs.plan.result == 'success' && (inputs.operation == 'deploy' || inputs.operation == 'foundation')" "${workflow}"
 grep -Fq "if: always() && needs.plan.result == 'success' && inputs.operation == 'registry'" "${workflow}"
+grep -Fq "if: always() && needs.foundation_apply.result == 'success' && inputs.operation == 'deploy'" "${workflow}"
+grep -Fq "if: always() && needs.rollout.result == 'success' && needs.credit_cleanup.result == 'success' && inputs.public_dns_enable_approved" "${workflow}"
+grep -Fq "if: always() && needs.dns_plan.result == 'success'" "${workflow}"
 grep -Fq 'with: { ref: "${{ inputs.operation == '\''deploy'\'' && inputs.release_sha || github.sha }}" }' "${workflow}"
-[[ "$(grep -Fc "if: inputs.operation == 'deploy'" "${workflow}")" -ge 3 ]]
+[[ "$(grep -Fc "if: inputs.operation == 'deploy'" "${workflow}")" -ge 2 ]]
 grep -Fq 'infra/deploy/select-budget-production-foundation-pins.sh' "${workflow}"
 grep -Fq 'Name=tag:Name,Values=${name}-data' "${pin_selector}"
 grep -Fq 'Name=tag:Environment,Values=budget-production' "${pin_selector}"

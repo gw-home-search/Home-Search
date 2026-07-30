@@ -45,6 +45,10 @@ grep -Fq "if: always() && needs.rollout.result == 'success' && needs.credit_clea
 grep -Fq "if: always() && needs.dns_plan.result == 'success'" "${workflow}"
 [[ "$(grep -Fc 'terraform_wrapper: false' "${workflow}")" -eq 7 ]]
 grep -Fq 'if [[ -f deployment-evidence/data-live-outputs.json ]]; then' "${workflow}"
+cleanup_reauth_line="$(grep -nF 'name: Re-authenticate deploy role for unconditional credit cleanup' "${workflow}" | cut -d: -f1)"
+[[ "${cleanup_reauth_line}" =~ ^[0-9]+$ ]]
+sed -n "${cleanup_reauth_line},$((cleanup_reauth_line + 6))p" "${workflow}" | grep -Fq 'if: always()'
+sed -n "${cleanup_reauth_line},$((cleanup_reauth_line + 6))p" "${workflow}" | grep -Fq 'role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_DEPLOY_ROLE_ARN }}"'
 [[ "$(grep -Fc 'Name=tag:Name,Values=home-search-budget-production-host' "${workflow}")" -eq 2 ]]
 grep -Fq 'with: { ref: "${{ inputs.operation == '\''deploy'\'' && inputs.release_sha || github.sha }}" }' "${workflow}"
 [[ "$(grep -Fc "if: inputs.operation == 'deploy'" "${workflow}")" -ge 2 ]]

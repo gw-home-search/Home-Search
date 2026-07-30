@@ -141,6 +141,7 @@ resource "aws_ecs_task_definition" "one_shot" {
   execution_role_arn       = aws_iam_role.task_execution[each.key].arn
   task_role_arn            = aws_iam_role.task_runtime[each.key].arn
   skip_destroy             = true
+  enable_fault_injection   = false
 
   runtime_platform {
     cpu_architecture        = "X86_64"
@@ -150,8 +151,9 @@ resource "aws_ecs_task_definition" "one_shot" {
   dynamic "volume" {
     for_each = contains(["data-import-reconcile", "scheduled-backup"], each.key) ? [1] : []
     content {
-      name      = "task-work"
-      host_path = "/srv/home-search/backup-staging"
+      name                = "task-work"
+      host_path           = "/srv/home-search/backup-staging"
+      configure_at_launch = false
     }
   }
 
@@ -169,11 +171,14 @@ resource "aws_ecs_task_definition" "one_shot" {
       containerPath = each.key == "data-import-reconcile" ? "/work" : "/backup-staging"
       readOnly      = false
     }] : []
+    portMappings           = []
+    systemControls         = []
+    volumesFrom            = []
     readonlyRootFilesystem = false
     privileged             = false
     linuxParameters = {
       initProcessEnabled = true
-      capabilities       = { drop = ["NET_RAW"] }
+      capabilities       = { add = [], drop = ["NET_RAW"] }
     }
     stopTimeout      = 120
     logConfiguration = local.awslogs[each.key]

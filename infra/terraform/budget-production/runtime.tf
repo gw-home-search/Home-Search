@@ -236,6 +236,7 @@ resource "aws_ecs_task_definition" "platform" {
   execution_role_arn       = aws_iam_role.task_execution[each.key].arn
   task_role_arn            = aws_iam_role.task_runtime[each.key].arn
   skip_destroy             = true
+  enable_fault_injection   = false
 
   runtime_platform {
     cpu_architecture        = "X86_64"
@@ -245,8 +246,9 @@ resource "aws_ecs_task_definition" "platform" {
   dynamic "volume" {
     for_each = each.value.volumes
     content {
-      name      = volume.key
-      host_path = volume.value.host_path
+      name                = volume.key
+      host_path           = volume.value.host_path
+      configure_at_launch = false
     }
   }
 
@@ -269,11 +271,13 @@ resource "aws_ecs_task_definition" "platform" {
       containerPath = volume.container_path
       readOnly      = false
     }]
+    systemControls         = []
+    volumesFrom            = []
     readonlyRootFilesystem = false
     privileged             = false
     linuxParameters = {
       initProcessEnabled = true
-      capabilities       = { drop = ["NET_RAW"] }
+      capabilities       = { add = [], drop = ["NET_RAW"] }
     }
     healthCheck = {
       command     = each.value.health
@@ -319,6 +323,7 @@ resource "aws_ecs_task_definition" "application" {
   execution_role_arn       = aws_iam_role.task_execution[each.key].arn
   task_role_arn            = aws_iam_role.task_runtime[each.key].arn
   skip_destroy             = true
+  enable_fault_injection   = false
 
   runtime_platform {
     cpu_architecture        = "X86_64"
@@ -327,14 +332,18 @@ resource "aws_ecs_task_definition" "application" {
 
   dynamic "volume" {
     for_each = length(local.application_key_parameters[each.key]) > 0 ? [1] : []
-    content { name = "keys" }
+    content {
+      name                = "keys"
+      configure_at_launch = false
+    }
   }
 
   dynamic "volume" {
     for_each = each.key == "ml" ? [1] : []
     content {
-      name      = "model"
-      host_path = "/srv/home-search/runtime/ml-model"
+      name                = "model"
+      host_path           = "/srv/home-search/runtime/ml-model"
+      configure_at_launch = false
     }
   }
 
@@ -358,11 +367,13 @@ resource "aws_ecs_task_definition" "application" {
         each.key == "ml" ? [{ sourceVolume = "model", containerPath = "/model", readOnly = true }] : [],
       )
       dependsOn              = length(local.application_key_parameters[each.key]) > 0 ? [{ containerName = "key-materializer", condition = "SUCCESS" }] : []
+      systemControls         = []
+      volumesFrom            = []
       readonlyRootFilesystem = each.value.readonly_root
       privileged             = false
       linuxParameters = {
         initProcessEnabled = true
-        capabilities       = { drop = ["NET_RAW"] }
+        capabilities       = { add = [], drop = ["NET_RAW"] }
       }
       healthCheck = {
         command     = each.value.health
@@ -382,11 +393,14 @@ resource "aws_ecs_task_definition" "application" {
       environment            = [{ name = "KEY_OUTPUT_DIRECTORY", value = "/run/keys" }]
       secrets                = [for name, parameter in local.application_key_parameters[each.key] : { name = name, valueFrom = aws_ssm_parameter.runtime[parameter].arn }]
       mountPoints            = [{ sourceVolume = "keys", containerPath = "/run/keys", readOnly = false }]
+      portMappings           = []
+      systemControls         = []
+      volumesFrom            = []
       readonlyRootFilesystem = false
       privileged             = false
       linuxParameters = {
         initProcessEnabled = true
-        capabilities       = { drop = ["NET_RAW"] }
+        capabilities       = { add = [], drop = ["NET_RAW"] }
       }
       logConfiguration = local.awslogs[each.key]
     }] : [],

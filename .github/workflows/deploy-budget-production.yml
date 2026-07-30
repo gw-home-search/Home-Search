@@ -78,7 +78,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with: { fetch-depth: 0, ref: "${{ inputs.operation == 'deploy' && inputs.release_sha || github.sha }}" }
+        with: { fetch-depth: 0, ref: "${{ github.sha }}" }
       - name: Verify exact release and download provenance
         if: inputs.operation == 'deploy'
         env:
@@ -90,7 +90,8 @@ jobs:
         run: |
           set -Eeuo pipefail
           [[ "${RELEASE_TAG}" =~ ^v[0-9]+[.][0-9]+[.][0-9]+$ && "${RELEASE_TAG}" != 'v1.0.4' ]]
-          [[ "${RELEASE_SHA}" =~ ^[0-9a-f]{40}$ && "$(git rev-parse HEAD)" == "${RELEASE_SHA}" ]]
+          [[ "${RELEASE_SHA}" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$(git rev-parse "${RELEASE_SHA}^{commit}")" == "${RELEASE_SHA}" ]]
           [[ "$(git rev-list -n 1 "${RELEASE_TAG}")" == "${RELEASE_SHA}" ]]
           run_id="$(gh run list --repo "${GITHUB_REPOSITORY}" --workflow release-images.yml \
             --commit "${RELEASE_SHA}" --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
@@ -135,7 +136,23 @@ jobs:
           terraform -chdir=infra/terraform/budget-production validate
           terraform -chdir=infra/terraform/budget-production test
           current_phase="$(infra/deploy/read-budget-production-phase.sh infra/terraform/budget-production)"
-          [[ "${current_phase}" == 'registry' || "${current_phase}" == 'foundation' ]]
+          current_data_services_enabled=false
+          if [[ "${current_phase}" != registry ]]; then
+            current_data_services_enabled="$(terraform -chdir=infra/terraform/budget-production output -raw data_services_enabled)"
+          fi
+          case "${current_phase}" in
+            registry | foundation)
+              reviewed_phase=foundation
+              ;;
+            data)
+              [[ "${current_data_services_enabled}" == false ]]
+              reviewed_phase=data
+              ;;
+            *)
+              echo "상태: Fail - foundation plan은 dark data partial apply까지만 재개할 수 있습니다: ${current_phase}" >&2
+              exit 1
+              ;;
+          esac
           pins="$(infra/deploy/select-budget-production-foundation-pins.sh \
             infra/terraform/budget-production "${AWS_REGION}")"
           pinned_ami="$(jq -er '.ami_id' <<<"${pins}")"
@@ -164,12 +181,13 @@ jobs:
             >infra/terraform/budget-production/foundation.auto.tfvars.json
           code=0
           terraform -chdir=infra/terraform/budget-production plan -out=foundation.tfplan \
-            -var=deployment_phase=foundation -var=data_services_enabled=false \
+            -var="deployment_phase=${reviewed_phase}" -var=data_services_enabled=false \
             -var=public_dns_enabled=false -var=backup_schedules_enabled=false -detailed-exitcode || code=$?
           [[ "${code}" == 0 || "${code}" == 2 ]]
           terraform -chdir=infra/terraform/budget-production show -json foundation.tfplan \
             >deployment-evidence/foundation-plan.json
-          infra/deploy/verify-budget-production-plan.sh deployment-evidence/foundation-plan.json foundation "${current_phase}"
+          infra/deploy/verify-budget-production-plan.sh \
+            deployment-evidence/foundation-plan.json "${reviewed_phase}" "${current_phase}"
           forecast_start="$(date -u +%F)"
           forecast_end="$(date -u -d "$(date -u +%Y-%m-01) +1 month" +%F)"
           account_forecast="$(aws ce get-cost-forecast --time-period "Start=${forecast_start},End=${forecast_end}" \
@@ -179,7 +197,10 @@ jobs:
             --account-forecast-usd "${account_forecast}" >deployment-evidence/cost-estimate.json
           jq -n --arg ami "${pinned_ami}" --arg az "${pinned_az}" --arg pin_source "${pin_source}" \
             --arg account_forecast "${account_forecast}" --arg cost_monitor "${cost_anomaly_monitor_arn}" \
-            '{status:"pass",ami_id:$ami,availability_zone:$az,pin_source:$pin_source,account_forecast_usd:$account_forecast,cost_anomaly_monitor_arn:$cost_monitor}' \
+            --arg current_phase "${current_phase}" --arg reviewed_phase "${reviewed_phase}" \
+            '{status:"pass",ami_id:$ami,availability_zone:$az,pin_source:$pin_source,
+              account_forecast_usd:$account_forecast,cost_anomaly_monitor_arn:$cost_monitor,
+              current_phase:$current_phase,reviewed_phase:$reviewed_phase}' \
             >deployment-evidence/foundation-preflight.json
       - name: Create the registry-only bootstrap plan
         if: inputs.operation == 'registry'
@@ -235,7 +256,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with: { ref: "${{ inputs.operation == 'deploy' && inputs.release_sha || github.sha }}" }
+        with: { ref: "${{ github.sha }}" }
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with: { name: "budget-production-reviewed-foundation-${{ inputs.release_tag }}", path: reviewed }
       - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
@@ -302,7 +323,7 @@ jobs:
     timeout-minutes: 360
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with: { ref: "${{ inputs.release_sha }}" }
+        with: { ref: "${{ github.sha }}" }
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with: { name: "budget-production-reviewed-foundation-${{ inputs.release_tag }}", path: reviewed }
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
@@ -326,13 +347,19 @@ jobs:
             -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="key=${TF_STATE_KEY}" \
             -backend-config="region=${AWS_REGION}" -backend-config="kms_key_id=${TF_STATE_KMS_ARN}" \
             -backend-config="use_lockfile=true"
+          current_phase="$(infra/deploy/read-budget-production-phase.sh infra/terraform/budget-production)"
+          [[ "${current_phase}" == foundation || "${current_phase}" == data ]]
+          current_data_services_enabled="$(terraform -chdir=infra/terraform/budget-production output -raw data_services_enabled)"
+          [[ "${current_data_services_enabled}" == false ]]
           code=0
           terraform -chdir=infra/terraform/budget-production plan -out=data-dark.tfplan \
             -var=deployment_phase=data -var=data_services_enabled=false -detailed-exitcode || code=$?
-          [[ "${code}" == 2 ]]
+          [[ "${code}" == 0 || "${code}" == 2 ]]
           terraform -chdir=infra/terraform/budget-production show -json data-dark.tfplan >deployment-evidence/data-dark-plan.json
-          infra/deploy/verify-budget-production-plan.sh deployment-evidence/data-dark-plan.json data foundation
-          terraform -chdir=infra/terraform/budget-production apply -auto-approve data-dark.tfplan
+          infra/deploy/verify-budget-production-plan.sh deployment-evidence/data-dark-plan.json data "${current_phase}"
+          if [[ "${code}" == 2 ]]; then
+            terraform -chdir=infra/terraform/budget-production apply -auto-approve data-dark.tfplan
+          fi
           terraform -chdir=infra/terraform/budget-production output -json >deployment-evidence/data-dark-outputs.json
       - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
         with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_DEPLOY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
@@ -573,7 +600,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with: { ref: "${{ inputs.release_sha }}" }
+        with: { ref: "${{ github.sha }}" }
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with: { name: "budget-production-reviewed-foundation-${{ inputs.release_tag }}", path: reviewed }
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
@@ -618,7 +645,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with: { ref: "${{ inputs.release_sha }}" }
+        with: { ref: "${{ github.sha }}" }
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with: { name: "budget-production-reviewed-dns-${{ inputs.release_tag }}", path: reviewed }
       - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2

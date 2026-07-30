@@ -403,6 +403,10 @@ jobs:
           backup_bucket="$(jq -er '.backup_bucket_name.value' deployment-evidence/data-live-outputs.json)"
           aws s3 cp "s3://${backup_bucket}/deployment-evidence/${{ inputs.release_tag }}/data-migration-reconciliation.json" \
             deployment-evidence/data-migration-reconciliation.json --only-show-errors
+      - name: Re-authenticate deploy role for unconditional credit cleanup
+        if: always()
+        uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_DEPLOY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
       - name: Restore Standard credit even after a failed import step
         if: always()
         run: |

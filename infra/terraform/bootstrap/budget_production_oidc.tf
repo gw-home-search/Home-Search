@@ -33,6 +33,7 @@ locals {
     "ecr:ListTagsForResource", "ecs:Describe*", "ecs:List*", "events:Describe*", "events:List*",
     "iam:Get*", "iam:List*", "logs:Describe*", "logs:List*", "route53:Get*", "route53:List*",
     "s3:GetBucket*", "s3:GetEncryptionConfiguration", "s3:GetLifecycleConfiguration", "s3:ListBucket",
+    "scheduler:GetSchedule", "scheduler:GetScheduleGroup", "scheduler:ListTagsForResource",
     "sns:Get*", "sns:List*", "ssm:Describe*", "ssm:GetDocument", "ssm:List*", "tag:GetResources",
   ]
   budget_apply_actions = [
@@ -257,6 +258,41 @@ resource "aws_iam_policy" "github_budget_apply_service_linked_roles" {
   }
 }
 
+resource "aws_iam_policy" "github_budget_apply_schedules" {
+  name = "home-search-budget-production-backup-schedules"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ManageBudgetBackupScheduleGroup"
+        Effect = "Allow"
+        Action = [
+          "scheduler:CreateScheduleGroup",
+          "scheduler:DeleteScheduleGroup",
+          "scheduler:TagResource",
+          "scheduler:UntagResource",
+        ]
+        Resource = ["arn:aws:scheduler:${var.aws_region}:${data.aws_caller_identity.current.account_id}:schedule-group/home-search-budget-production-backup"]
+      },
+      {
+        Sid    = "ManageBudgetLogicalBackupSchedule"
+        Effect = "Allow"
+        Action = [
+          "scheduler:CreateSchedule",
+          "scheduler:DeleteSchedule",
+          "scheduler:UpdateSchedule",
+        ]
+        Resource = ["arn:aws:scheduler:${var.aws_region}:${data.aws_caller_identity.current.account_id}:schedule/home-search-budget-production-backup/home-search-budget-production-logical-backup"]
+      },
+    ]
+  })
+  tags = {
+    Project     = "home-search"
+    Environment = "budget-production"
+    ManagedBy   = "terraform"
+  }
+}
+
 resource "aws_iam_role_policy_attachment" "github_budget_apply_regional" {
   role       = aws_iam_role.github_budget_production_apply.name
   policy_arn = aws_iam_policy.github_budget_apply_regional.arn
@@ -265,6 +301,11 @@ resource "aws_iam_role_policy_attachment" "github_budget_apply_regional" {
 resource "aws_iam_role_policy_attachment" "github_budget_apply_service_linked_roles" {
   role       = aws_iam_role.github_budget_production_apply.name
   policy_arn = aws_iam_policy.github_budget_apply_service_linked_roles.arn
+}
+
+resource "aws_iam_role_policy_attachment" "github_budget_apply_schedules" {
+  role       = aws_iam_role.github_budget_production_apply.name
+  policy_arn = aws_iam_policy.github_budget_apply_schedules.arn
 }
 
 resource "aws_iam_role_policy" "github_budget_apply" {

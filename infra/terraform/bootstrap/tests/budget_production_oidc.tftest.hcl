@@ -153,6 +153,37 @@ run "budget_roles_are_separated_and_state_isolated" {
 
   assert {
     condition = (
+      contains(local.budget_read_actions, "scheduler:GetSchedule")
+      && contains(local.budget_read_actions, "scheduler:GetScheduleGroup")
+      && contains(local.budget_read_actions, "scheduler:ListTagsForResource")
+      && anytrue([
+        for statement in jsondecode(aws_iam_policy.github_budget_apply_schedules.policy).Statement :
+        statement.Sid == "ManageBudgetBackupScheduleGroup"
+        && toset(statement.Action) == toset([
+          "scheduler:CreateScheduleGroup",
+          "scheduler:DeleteScheduleGroup",
+          "scheduler:TagResource",
+          "scheduler:UntagResource",
+        ])
+        && statement.Resource == ["arn:aws:scheduler:ap-northeast-2:123456789012:schedule-group/home-search-budget-production-backup"]
+      ])
+      && anytrue([
+        for statement in jsondecode(aws_iam_policy.github_budget_apply_schedules.policy).Statement :
+        statement.Sid == "ManageBudgetLogicalBackupSchedule"
+        && toset(statement.Action) == toset([
+          "scheduler:CreateSchedule",
+          "scheduler:DeleteSchedule",
+          "scheduler:UpdateSchedule",
+        ])
+        && statement.Resource == ["arn:aws:scheduler:ap-northeast-2:123456789012:schedule/home-search-budget-production-backup/home-search-budget-production-logical-backup"]
+      ])
+      && aws_iam_role_policy_attachment.github_budget_apply_schedules.role == aws_iam_role.github_budget_production_apply.name
+    )
+    error_message = "Budget apply must manage only the reviewed logical-backup schedule and its exact schedule group."
+  }
+
+  assert {
+    condition = (
       anytrue([
         for statement in jsondecode(aws_iam_role_policy.github_budget_apply.policy).Statement :
         statement.Sid == "ManageBudgetCostControls"
@@ -339,6 +370,7 @@ run "budget_roles_are_separated_and_state_isolated" {
       + length(aws_iam_role_policy.github_budget_state["apply"].policy) <= 10000
       && length(aws_iam_policy.github_budget_apply_regional.policy) <= 6144
       && length(aws_iam_policy.github_budget_apply_service_linked_roles.policy) <= 6144
+      && length(aws_iam_policy.github_budget_apply_schedules.policy) <= 6144
       && aws_iam_role_policy_attachment.github_budget_apply_regional.role == aws_iam_role.github_budget_production_apply.name
       && one(jsondecode(aws_iam_policy.github_budget_apply_regional.policy).Statement).Sid == "ManageTaggedBudgetResources"
       && one(jsondecode(aws_iam_policy.github_budget_apply_regional.policy).Statement).Action == local.budget_apply_actions

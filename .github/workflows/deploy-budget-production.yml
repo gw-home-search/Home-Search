@@ -246,6 +246,7 @@ jobs:
         env:
           TF_STATE_BUCKET: "${{ vars.BUDGET_PRODUCTION_TF_STATE_BUCKET }}"
           TF_STATE_KMS_ARN: "${{ vars.BUDGET_PRODUCTION_TF_STATE_KMS_ARN }}"
+          ALARM_EMAIL: "${{ vars.BUDGET_PRODUCTION_ALARM_EMAIL }}"
         run: |
           set -Eeuo pipefail
           cp reviewed/infra/terraform/budget-production/*.auto.tfvars.json infra/terraform/budget-production/
@@ -256,6 +257,10 @@ jobs:
           terraform -chdir=infra/terraform/budget-production apply -auto-approve \
             "${GITHUB_WORKSPACE}/reviewed/infra/terraform/budget-production/foundation.tfplan"
           mkdir -p deployment-evidence
+          account_id="$(aws sts get-caller-identity --query Account --output text)"
+          infra/deploy/reconcile-budget-production-budget-notifications.sh \
+            "${account_id}" home-search-budget-production-monthly "${ALARM_EMAIL}" \
+            | tee deployment-evidence/budget-notifications.txt
           terraform -chdir=infra/terraform/budget-production output -json >deployment-evidence/foundation-outputs.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with: { name: "budget-production-foundation-${{ inputs.release_tag }}", path: deployment-evidence/, if-no-files-found: error, retention-days: 365 }

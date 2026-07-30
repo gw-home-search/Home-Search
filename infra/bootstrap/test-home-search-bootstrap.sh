@@ -466,6 +466,8 @@ BUDGET_PARAMETER_PREFIX=/home-search/budget-production \
 budget_puts_after="$(grep -c 'ssm put-parameter' "${FAKE_AWS_ARGV_LOG}" || true)"
 [[ "$((budget_puts_after - budget_puts_before))" == '24' ]]
 [[ -s "${FAKE_AWS_STATE}/ssm_home-search_budget-production_ai_migrator-dsn" ]]
+budget_valkey_admin_state="${FAKE_AWS_STATE}/ssm_home-search_budget-production_valkey_admin-password"
+[[ "$(wc -c <"${budget_valkey_admin_state}" | tr -d '[:space:]')" == '65' ]]
 BUDGET_PARAMETER_PREFIX=/home-search/budget-production \
   "${script}" budget-secret-bootstrap >>"${tmp_dir}/budget-bootstrap.out" 2>>"${tmp_dir}/budget-bootstrap.err"
 [[ "$(grep -c 'ssm put-parameter' "${FAKE_AWS_ARGV_LOG}")" == "${budget_puts_after}" ]]

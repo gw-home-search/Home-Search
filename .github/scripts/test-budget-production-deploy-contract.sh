@@ -87,6 +87,7 @@ grep -Fq 'current_phase="$(infra/deploy/read-budget-production-phase.sh infra/te
 grep -Fq '[[ "${code}" == 0 || "${code}" == 2 ]]' <<<"${data_dark_block}"
 grep -Fq 'deployment-evidence/data-dark-plan.json data "${current_phase}"' <<<"${data_dark_block}"
 grep -Fq 'if [[ "${code}" == 2 ]]; then' <<<"${data_dark_block}"
+grep -Fq 'infra/deploy/wait-budget-platform-services-healthy.sh "${cluster}"' "${workflow}"
 grep -Fq 'role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_DEPLOY_ROLE_ARN }}"' "${workflow}"
 for scoped_sid in ManageBudgetBucketsOnly DenyCrossEnvironmentEc2Mutation DenyCrossEnvironmentEcsMutation DenyCrossEnvironmentEcrMutation DenyCrossEnvironmentControlPlaneMutation LaunchTaggedRecoveryInstance TerminateTaggedRecoveryInstance PassBudgetRuntimeRolesOnly RunBudgetOneShotTasks StopBudgetOneShotTasks SendCommandToTaggedRecoveryOnly ReadBudgetBackupEvidence; do
   grep -Fq "${scoped_sid}" "${bootstrap_policy}"
@@ -98,4 +99,7 @@ done
 "${root}/infra/deploy/test-select-budget-production-foundation-pins.sh"
 "${root}/infra/deploy/test-recover-budget-production-tainted-ssm.sh"
 "${root}/infra/deploy/test-reconcile-budget-production-budget-notifications.sh"
+"${root}/infra/bootstrap/test-normalize-budget-generated-values.sh"
+"${root}/infra/deploy/test-run-budget-generated-value-normalization.sh"
+"${root}/infra/deploy/test-wait-budget-platform-services-healthy.sh"
 echo '상태: Pass - budget workflow의 plan/apply/deploy role, phase, credit, restore, DNS readiness 순서를 확인했습니다.'

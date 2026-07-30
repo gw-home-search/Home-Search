@@ -231,7 +231,10 @@ resource "aws_instance" "host" {
     data_volume_id    = aws_ebs_volume.data[0].id
   })
   user_data_replace_on_change = false
-  lifecycle { ignore_changes = [ami, user_data] }
+  lifecycle {
+    # The provider reports true after the retained EIP is associated; that observation must not replace the host.
+    ignore_changes = [ami, user_data, associate_public_ip_address]
+  }
   depends_on = [
     aws_iam_role_policy_attachment.host_ecs,
     aws_iam_role_policy_attachment.host_ssm,

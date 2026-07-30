@@ -69,6 +69,17 @@ run "foundation_is_single_az_single_instance_and_data_safe" {
 
   assert {
     condition = (
+      length(aws_instance.host) == 1
+      && length(regexall(
+        "ignore_changes\\s*=\\s*\\[[^]]*associate_public_ip_address",
+        file("foundation.tf"),
+      )) == 1
+    )
+    error_message = "The retained EIP host must ignore provider-normalized public-IP association drift instead of replacing the instance."
+  }
+
+  assert {
+    condition = (
       aws_ebs_volume.data[0].size == 80
       && aws_ebs_volume.data[0].type == "gp3"
       && aws_ebs_volume.data[0].iops == 3000

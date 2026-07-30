@@ -22,7 +22,33 @@ fi
 chmod 0600 "${private_key}"
 
 if [ -s "${PGDATA:-/var/lib/postgresql/data}/PG_VERSION" ]; then
-  PGDATA="${PGDATA:-/var/lib/postgresql/data}" /docker-entrypoint-initdb.d/99-budget-hba.sh
+  PGDATA="${PGDATA:-/var/lib/postgresql/data}"
+  export PGDATA
+  /docker-entrypoint-initdb.d/99-budget-hba.sh
+
+  reconcile_directory="$(mktemp -d)"
+  reconcile_started=false
+  reconcile_cleanup() {
+    if [ "${reconcile_started}" = true ]; then
+      pg_ctl -D "${PGDATA}" -m fast -w stop >/dev/null 2>&1 || true
+    fi
+    find "${reconcile_directory}" -depth -delete 2>/dev/null || true
+  }
+  trap reconcile_cleanup EXIT
+  trap 'exit 130' HUP INT TERM
+
+  pg_ctl -D "${PGDATA}" \
+    -l "${reconcile_directory}/postgres.log" \
+    -o "-c listen_addresses='' -c ssl=off -c password_encryption=scram-sha-256 -c unix_socket_directories='${reconcile_directory}'" \
+    -w start >/dev/null
+  reconcile_started=true
+  psql -X -q -v ON_ERROR_STOP=1 \
+    -h "${reconcile_directory}" -U "${POSTGRES_USER}" -d postgres \
+    -f /docker-entrypoint-initdb.d/15-budget-role-reconcile.sql >/dev/null
+  pg_ctl -D "${PGDATA}" -m fast -w stop >/dev/null
+  reconcile_started=false
+  find "${reconcile_directory}" -depth -delete
+  trap - EXIT HUP INT TERM
 fi
 
 exec docker-entrypoint.sh "$@" \

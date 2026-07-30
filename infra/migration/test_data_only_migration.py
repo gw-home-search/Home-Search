@@ -7,7 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import data_only_migration as migration
@@ -225,6 +225,38 @@ class ManifestValidationTest(unittest.TestCase):
             self.assertNotIn("HOME_MIGRATION_PROPERTY_SOURCE_PASSWORD", migration.sanitized_environment())
         finally:
             os.environ.pop("HOME_MIGRATION_PROPERTY_SOURCE_PASSWORD", None)
+
+    def test_postgres_connection_enforces_tcp_keepalive_for_long_exports(self) -> None:
+        environment = {
+            "HOME_MIGRATION_PROPERTY_SOURCE_HOST": "postgis",
+            "HOME_MIGRATION_PROPERTY_SOURCE_PORT": "5432",
+            "HOME_MIGRATION_PROPERTY_SOURCE_DATABASE": "home_search",
+            "HOME_MIGRATION_PROPERTY_SOURCE_USER": "home_search",
+            "HOME_MIGRATION_PROPERTY_SOURCE_PASSWORD": "sentinel",
+            "PGOPTIONS": "-c application_name=home_migration_test",
+        }
+
+        with patch.dict(os.environ, environment, clear=True):
+            child_environment = migration.PostgresConnection("property", "source").environment()
+
+        self.assertEqual(child_environment["PGPASSWORD"], "sentinel")
+        self.assertNotIn("HOME_MIGRATION_PROPERTY_SOURCE_PASSWORD", child_environment)
+        self.assertIn("-c application_name=home_migration_test", child_environment["PGOPTIONS"])
+        self.assertTrue(child_environment["PGOPTIONS"].endswith(migration.POSTGRES_KEEPALIVE_OPTIONS))
+
+    def test_snapshot_cleanup_does_not_mask_the_export_failure(self) -> None:
+        process = MagicMock()
+        process.stdout.readline.side_effect = ["snapshot-id\n", "0/1234\n"]
+        process.stderr.read.return_value = "holder connection failed"
+        process.returncode = 1
+        connection = MagicMock()
+        connection.args.return_value = ["psql"]
+        connection.environment.return_value = {}
+
+        with patch.object(migration.subprocess, "Popen", return_value=process):
+            with self.assertRaisesRegex(migration.MigrationError, "primary export failure"):
+                with migration.exported_snapshot(connection):
+                    raise migration.MigrationError("primary export failure")
 
     def test_tampered_chunk_is_rejected_before_import(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

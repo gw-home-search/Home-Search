@@ -25,6 +25,9 @@ MIGRATION_ID = re.compile(r"^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{16}$")
 SAFE_FILE = re.compile(r"^[a-z0-9][a-z0-9._-]*[.]csv[.]zst$")
 RAW_FILE = re.compile(r"^reference-raw-[0-9a-f]{64}[.]bin$")
 RAW_OBJECT_KEY = re.compile(r"^raw/(?:[A-Za-z0-9._-]+/)*[A-Za-z0-9._-]+$")
+POSTGRES_KEEPALIVE_OPTIONS = (
+    "-c tcp_keepalives_idle=10 -c tcp_keepalives_interval=10 -c tcp_keepalives_count=3"
+)
 FORBIDDEN_TABLE = re.compile(
     r"(^|_)(user_account|admin_account|session|token|flyway_schema_history|ai_schema_history|batch_job)(_|$)"
 )
@@ -335,6 +338,8 @@ class PostgresConnection:
     def environment(self) -> dict[str, str]:
         environment = sanitized_environment()
         environment["PGPASSWORD"] = self.password
+        existing_options = environment.get("PGOPTIONS", "").strip()
+        environment["PGOPTIONS"] = f"{existing_options} {POSTGRES_KEEPALIVE_OPTIONS}".strip()
         return environment
 
 
@@ -408,8 +413,12 @@ def exported_snapshot(connection: PostgresConnection) -> Iterator[tuple[str, str
         process.terminate()
         stderr = process.stderr.read() if process.stderr else ""
         raise MigrationError(f"failed to export PostgreSQL snapshot: {stderr.strip()}")
+    primary_exception: BaseException | None = None
     try:
         yield snapshot, watermark
+    except BaseException as exception:
+        primary_exception = exception
+        raise
     finally:
         try:
             process.stdin.write("ROLLBACK;\n\\q\n")
@@ -419,7 +428,11 @@ def exported_snapshot(connection: PostgresConnection) -> Iterator[tuple[str, str
         process.wait(timeout=15)
         if process.returncode != 0:
             stderr = process.stderr.read() if process.stderr else ""
-            raise MigrationError(f"snapshot holder failed: {stderr.strip()}")
+            message = f"snapshot holder failed: {stderr.strip()}"
+            if primary_exception is not None:
+                primary_exception.add_note(message)
+            else:
+                raise MigrationError(message)
 
 
 def snapshot_sql(snapshot: str, statement: str) -> str:

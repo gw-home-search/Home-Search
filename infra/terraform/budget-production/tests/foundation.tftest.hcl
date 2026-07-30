@@ -89,16 +89,35 @@ run "foundation_is_single_az_single_instance_and_data_safe" {
       && strcontains(file("files/host-bootstrap.sh.tftpl"), "mkfs.xfs")
       && !strcontains(file("files/host-bootstrap.sh.tftpl"), "mkfs.xfs -f")
       && !strcontains(file("files/host-bootstrap.sh.tftpl"), "defaults,nofail")
+      && strcontains(file("files/host-bootstrap.sh.tftpl"), "findmnt --mountpoint")
+      && !strcontains(file("files/host-bootstrap.sh.tftpl"), "findmnt --noheadings --output SOURCE --target")
+      && strcontains(file("files/host-bootstrap.sh.tftpl"), "http://127.0.0.1:51678/v1/metadata")
+      && strcontains(file("files/host-bootstrap.sh.tftpl"), "aws ecs deregister-container-instance")
+      && strcontains(file("files/host-bootstrap.sh.tftpl"), "unlink /var/lib/ecs/data/agent.db")
+      && strcontains(file("files/host-bootstrap.sh.tftpl"), "systemctl restart docker\nsystemctl restart home-search-docker-guard.service\nsystemctl restart ecs")
       && strcontains(file("files/host-bootstrap.sh.tftpl"), "ConditionPathIsMountPoint=/srv/home-search")
       && length(regexall("install -d -m 0700 -o 70 -g 70", file("files/host-bootstrap.sh.tftpl"))) == 2
     )
-    error_message = "Data EBS must be encrypted 80 GiB gp3 and never force-detached."
+    error_message = "Data EBS must stay protected and host bootstrap must mount the exact target and migrate ECS agent state safely."
   }
 
   assert {
     condition = (
       toset([for rule in aws_vpc_security_group_ingress_rule.public : rule.from_port]) == toset([80, 443])
       && alltrue([for rule in aws_vpc_security_group_ingress_rule.public : rule.to_port == rule.from_port])
+      && toset([for rule in aws_security_group.host[0].egress : "${rule.protocol}:${rule.from_port}:${rule.to_port}"]) == toset([
+        "tcp:443:443",
+        "tcp:53:53",
+        "udp:53:53",
+        "udp:123:123",
+      ])
+      && alltrue([
+        for rule in aws_security_group.host[0].egress :
+        length(rule.cidr_blocks) == 1 && one(rule.cidr_blocks) == "0.0.0.0/0"
+      ])
+      && !strcontains(file("foundation.tf"), "resource \"aws_vpc_security_group_egress_rule\" \"host\"")
+      && strcontains(file("foundation.tf"), "from = aws_vpc_security_group_egress_rule.host")
+      && strcontains(file("foundation.tf"), "destroy = false")
       && length(aws_ssm_document.configure_edge) == 1
       && strcontains(file("files/configure-edge.sh.tftpl"), "proxy_buffering off")
       && strcontains(file("files/configure-edge.sh.tftpl"), "acm export-certificate")
@@ -106,8 +125,11 @@ run "foundation_is_single_az_single_instance_and_data_safe" {
       && aws_dlm_lifecycle_policy.data[0].policy_details[0].schedule[0].retain_rule[0].count == 7
       && aws_security_group.recovery[0].description == "Ephemeral recovery rehearsal; intentionally no ingress"
       && length(aws_ssm_document.configure_observability) == 1
+      && strcontains(file("host_observability.tf"), "resource \"aws_ssm_document\" \"configure_host\"")
+      && strcontains(file("host_observability.tf"), "resource \"aws_ssm_association\" \"configure_host\"")
+      && length(regexall("depends_on\\s*=\\s*\\[aws_ssm_association.configure_host\\]", file("host_observability.tf"))) == 1
     )
-    error_message = "Only HTTP/HTTPS may enter the host and edge TLS automation must preserve SSE behavior."
+    error_message = "The host must remove default egress, support retryable bootstrap, and preserve edge TLS behavior."
   }
 
   assert {

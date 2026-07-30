@@ -4,6 +4,7 @@ set -euo pipefail
 readonly EXPECTED_VOLUME_ID='${data_volume_id}'
 readonly EXPECTED_AZ='${availability_zone}'
 readonly MOUNT_POINT='/srv/home-search'
+readonly DESIRED_CLUSTER='${cluster_name}'
 
 imds_token="$(curl --fail --silent --show-error --request PUT \
   --header 'X-aws-ec2-metadata-token-ttl-seconds: 300' \
@@ -60,7 +61,7 @@ test -n "$${filesystem_uuid}" || {
 }
 
 mkdir -p "$${MOUNT_POINT}"
-mounted_source="$(findmnt --noheadings --output SOURCE --target "$${MOUNT_POINT}" 2>/dev/null || true)"
+mounted_source="$(findmnt --mountpoint "$${MOUNT_POINT}" --noheadings --output SOURCE 2>/dev/null || true)"
 if test -n "$${mounted_source}"; then
   mounted_uuid="$(blkid -o value -s UUID "$${mounted_source}" 2>/dev/null || true)"
   test "$${mounted_uuid}" = "$${filesystem_uuid}" || {
@@ -85,7 +86,36 @@ install -d -m 0750 -o root -g root "$${MOUNT_POINT}/runtime"
 install -d -m 0700 -o 70 -g 70 "$${MOUNT_POINT}/runtime/postgres-tls"
 install -d -m 0750 -o 10001 -g 10001 "$${MOUNT_POINT}/runtime/ml-model"
 
+configured_cluster="$(sed -n 's/^ECS_CLUSTER=//p' /etc/ecs/ecs.config 2>/dev/null | tail -n1)"
+agent_metadata="$(curl --silent --show-error --max-time 3 \
+  http://127.0.0.1:51678/v1/metadata 2>/dev/null || true)"
+registered_cluster="$(jq -r '.Cluster // empty' <<<"$${agent_metadata}" 2>/dev/null || true)"
+registered_arn="$(jq -r '.ContainerInstanceArn // empty' <<<"$${agent_metadata}" 2>/dev/null || true)"
+reset_agent_checkpoint=false
+if test -n "$${registered_cluster}" && test "$${registered_cluster}" != "$${DESIRED_CLUSTER}"; then
+  case "$${registered_arn}" in
+    arn:aws:ecs:ap-northeast-2:*:container-instance/*) ;;
+    *)
+      echo "refusing ECS cluster migration: registered container instance ARN is invalid" >&2
+      exit 1
+      ;;
+  esac
+  reset_agent_checkpoint=true
+elif test -z "$${registered_cluster}" && test "$${configured_cluster}" != "$${DESIRED_CLUSTER}"; then
+  reset_agent_checkpoint=true
+fi
+
 systemctl stop ecs || true
+if test "$${reset_agent_checkpoint}" = true; then
+  if test -n "$${registered_cluster}"; then
+    aws ecs deregister-container-instance \
+      --cluster "$${registered_cluster}" \
+      --container-instance "$${registered_arn}" \
+      --force \
+      --region ap-northeast-2 >/dev/null
+  fi
+  test ! -f /var/lib/ecs/data/agent.db || unlink /var/lib/ecs/data/agent.db
+fi
 systemctl stop docker || true
 install -d -m 0755 /etc/docker /etc/ecs \
   /etc/systemd/system/docker.service.d /etc/systemd/system/ecs.service.d
@@ -138,5 +168,5 @@ UNIT
 systemctl daemon-reload
 systemctl enable home-search-docker-guard.service
 systemctl restart docker
+systemctl restart home-search-docker-guard.service
 systemctl restart ecs
-systemctl start home-search-docker-guard.service

@@ -197,6 +197,10 @@ run "data_phase_keeps_platform_services_dark_before_secret_bootstrap" {
       && length(aws_ecs_task_definition.application) == 0
       && aws_ecs_service.platform["budget-postgres"].desired_count == 0
       && aws_ecs_service.platform["budget-valkey"].desired_count == 0
+      && one([
+        for item in local.one_shot_specs["secret-readiness"].environment :
+        item.value if item.name == "HOME_USER_OAUTH_ENABLED_PROVIDERS"
+      ]) == "kakao"
     )
     error_message = "Data phase must define digest-pinned platform tasks but keep them stopped before secret bootstrap."
   }
@@ -268,6 +272,15 @@ run "private_phase_uses_fixed_bridge_ports_and_least_privilege_roles" {
       && aws_ecs_service.application["property-api"].deployment_minimum_healthy_percent == 0
       && aws_ecs_service.application["property-api"].deployment_maximum_percent == 100
       && aws_iam_role.task_execution["property-api"].name != aws_iam_role.task_execution["user-api"].name
+      && one([
+        for item in local.application_specs["user-api"].environment :
+        item.value if item.name == "HOME_USER_OAUTH_ENABLED_PROVIDERS"
+      ]) == "kakao"
+      && toset(keys(local.application_secret_parameters["user-api"])) == toset([
+        "USER_DB_PASSWORD",
+        "KAKAO_OAUTH_CLIENT_ID",
+        "KAKAO_OAUTH_CLIENT_SECRET",
+      ])
     )
     error_message = "Private phase must use fixed bridge ports, keep the gateway dark, and separate execution roles."
   }

@@ -6,12 +6,14 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.home.application.auth.RefreshTokenService;
+import com.home.domain.user.OAuthProvider;
 import com.home.user.config.properties.AuthProperties;
 import com.home.user.config.properties.CookieProperties;
 import com.home.user.config.properties.OAuthProperties;
 import com.home.user.cookie.RefreshTokenCookieFactory;
 import java.net.URI;
 import java.time.Duration;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -37,7 +39,8 @@ class OAuthLoginSuccessHandlerTest {
                 sessions,
                 new OAuthProperties(
                         URI.create("https://home.example/auth/success"),
-                        URI.create("https://home.example/auth/failure")));
+                        URI.create("https://home.example/auth/failure"),
+                        Set.of(OAuthProvider.KAKAO)));
 
         assertThatThrownBy(() -> handler.onAuthenticationSuccess(request, response, authentication))
                 .isInstanceOf(IllegalStateException.class);

@@ -756,8 +756,33 @@ budget_secret_bootstrap() {
 }
 
 budget_secret_readiness() {
-  local suffix value_file="${tmp_dir}/budget-readiness-value" missing=()
+  local suffix provider value_file="${tmp_dir}/budget-readiness-value" seen=',' missing=()
+  local -a enabled_providers oauth_parameter_suffixes
   required BUDGET_PARAMETER_PREFIX
+  required HOME_USER_OAUTH_ENABLED_PROVIDERS
+  IFS=',' read -r -a enabled_providers <<<"${HOME_USER_OAUTH_ENABLED_PROVIDERS}"
+  (( ${#enabled_providers[@]} > 0 )) || {
+    echo '상태: Fail - OAuth enabled provider set은 비어 있을 수 없습니다.' >&2
+    exit 1
+  }
+  for provider in "${enabled_providers[@]}"; do
+    case "${provider}" in
+      google|kakao|naver) ;;
+      *)
+        echo "상태: Fail - 허용되지 않은 OAuth enabled provider입니다: ${provider}" >&2
+        exit 1
+        ;;
+    esac
+    [[ "${seen}" != *",${provider},"* ]] || {
+      echo "상태: Fail - OAuth enabled provider가 중복됐습니다: ${provider}" >&2
+      exit 1
+    }
+    seen+="${provider},"
+    oauth_parameter_suffixes+=(
+      "user/oauth/${provider}-client-id"
+      "user/oauth/${provider}-client-secret"
+    )
+  done
   for suffix in \
     postgres/superuser-password \
     postgres/property-runtime-password \
@@ -784,15 +809,10 @@ budget_secret_readiness() {
     ai/reference-dsn \
     ai/migrator-dsn \
     property/kakao-rest-api-key \
-    user/oauth/google-client-id \
-    user/oauth/google-client-secret \
-    user/oauth/kakao-client-id \
-    user/oauth/kakao-client-secret \
-    user/oauth/naver-client-id \
-    user/oauth/naver-client-secret \
     ai/openai-api-key \
     ai/openai-primary-model \
-    ai/openai-secondary-model; do
+    ai/openai-secondary-model \
+    "${oauth_parameter_suffixes[@]}"; do
     budget_read_parameter "${suffix}" "${value_file}"
     if grep -qx 'UNSET' "${value_file}"; then
       missing+=("${suffix}")

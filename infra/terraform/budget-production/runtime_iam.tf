@@ -32,13 +32,9 @@ locals {
       ADMIN_DB_PASSWORD = "postgres/admin-runtime-password"
     }
     user-api = {
-      USER_DB_PASSWORD           = "postgres/user-runtime-password"
-      GOOGLE_OAUTH_CLIENT_ID     = "user/oauth/google-client-id"
-      GOOGLE_OAUTH_CLIENT_SECRET = "user/oauth/google-client-secret"
-      KAKAO_OAUTH_CLIENT_ID      = "user/oauth/kakao-client-id"
-      KAKAO_OAUTH_CLIENT_SECRET  = "user/oauth/kakao-client-secret"
-      NAVER_OAUTH_CLIENT_ID      = "user/oauth/naver-client-id"
-      NAVER_OAUTH_CLIENT_SECRET  = "user/oauth/naver-client-secret"
+      USER_DB_PASSWORD          = "postgres/user-runtime-password"
+      KAKAO_OAUTH_CLIENT_ID     = "user/oauth/kakao-client-id"
+      KAKAO_OAUTH_CLIENT_SECRET = "user/oauth/kakao-client-secret"
     }
     ai = {
       HOME_AI_PROPERTY_DSN           = "ai/property-dsn"

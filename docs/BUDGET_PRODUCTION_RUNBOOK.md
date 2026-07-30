@@ -40,6 +40,12 @@ secret, user ID, JWT, prompt/query/answer, private key는 evidence에 넣지 않
    월간 비용이 발생하며 public DNS와 data/application service는 아직 비활성이다.
 5. foundation output의 backup/reference bucket, SSM parameter, instance/EBS/EIP를
    기록한다. SSM의 외부 credential parameter를 채우되 Terraform에는 값을 전달하지 않는다.
+   foundation apply는 Terraform state만 신뢰하지 않고 AWS Budgets API에서 actual `$50`,
+   forecast `$80/$100` 알림과 승인 email subscriber를 exact 검증한다. provider create가
+   중간 취소되어 budget만 남은 경우에는 누락 알림만 보정하고, 예상 밖 threshold나
+   subscriber가 있으면 삭제하지 않고 중단한다. SNS alarm topic의 별도 subscription도
+   email에서 `Confirm subscription`을 완료하고 live ARN이 `PendingConfirmation`이 아닌지
+   확인한다.
    Kakao console에는 `homesearch.world`와 staging origin, callback을 등록한다. 현재
    초기 enablement set은 Kakao만 사용하며 비활성 Google/Naver credential은 readiness에서
    요구하지 않는다. redirect URI와 secret을 준비한 provider만 이후 set에 추가한다.

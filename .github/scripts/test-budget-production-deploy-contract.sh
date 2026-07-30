@@ -43,6 +43,9 @@ grep -Fq "if: always() && needs.plan.result == 'success' && inputs.operation == 
 grep -Fq "if: always() && needs.foundation_apply.result == 'success' && inputs.operation == 'deploy'" "${workflow}"
 grep -Fq "if: always() && needs.rollout.result == 'success' && needs.credit_cleanup.result == 'success' && inputs.public_dns_enable_approved" "${workflow}"
 grep -Fq "if: always() && needs.dns_plan.result == 'success'" "${workflow}"
+[[ "$(grep -Fc 'terraform_wrapper: false' "${workflow}")" -eq 7 ]]
+grep -Fq 'if [[ -f deployment-evidence/data-live-outputs.json ]]; then' "${workflow}"
+[[ "$(grep -Fc 'Name=tag:Name,Values=home-search-budget-production-host' "${workflow}")" -eq 2 ]]
 grep -Fq 'with: { ref: "${{ inputs.operation == '\''deploy'\'' && inputs.release_sha || github.sha }}" }' "${workflow}"
 [[ "$(grep -Fc "if: inputs.operation == 'deploy'" "${workflow}")" -ge 2 ]]
 grep -Fq 'infra/deploy/select-budget-production-foundation-pins.sh' "${workflow}"

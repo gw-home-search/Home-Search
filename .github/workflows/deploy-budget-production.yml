@@ -56,7 +56,7 @@ jobs:
       - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
         with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_APPLY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
-        with: { terraform_version: 1.15.8 }
+        with: { terraform_version: 1.15.8, terraform_wrapper: false }
       - name: Clear only verified partial-create tainted state
         env:
           TF_STATE_BUCKET: "${{ vars.BUDGET_PRODUCTION_TF_STATE_BUCKET }}"
@@ -116,7 +116,7 @@ jobs:
       - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
         with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_PLAN_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
-        with: { terraform_version: 1.15.8 }
+        with: { terraform_version: 1.15.8, terraform_wrapper: false }
       - name: Pin AMI and stable AZ, then create zero-destroy foundation plan
         if: inputs.operation == 'deploy' || inputs.operation == 'foundation'
         env:
@@ -241,7 +241,7 @@ jobs:
       - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
         with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_APPLY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
-        with: { terraform_version: 1.15.8 }
+        with: { terraform_version: 1.15.8, terraform_wrapper: false }
       - name: Apply the exact reviewed foundation plan
         env:
           TF_STATE_BUCKET: "${{ vars.BUDGET_PRODUCTION_TF_STATE_BUCKET }}"
@@ -278,7 +278,7 @@ jobs:
       - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
         with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_APPLY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
-        with: { terraform_version: 1.15.8 }
+        with: { terraform_version: 1.15.8, terraform_wrapper: false }
       - name: Apply the exact reviewed registry-only plan
         env:
           TF_STATE_BUCKET: "${{ vars.BUDGET_PRODUCTION_TF_STATE_BUCKET }}"
@@ -308,7 +308,7 @@ jobs:
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with: { name: "budget-production-foundation-${{ inputs.release_tag }}", path: foundation-evidence }
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
-        with: { terraform_version: 1.15.8 }
+        with: { terraform_version: 1.15.8, terraform_wrapper: false }
       - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
         with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_APPLY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
       - name: Register data tasks without starting PostgreSQL
@@ -407,7 +407,18 @@ jobs:
         if: always()
         run: |
           set -Eeuo pipefail
-          instance_id="$(jq -er '.host_instance_id.value' deployment-evidence/data-live-outputs.json)"
+          if [[ -f deployment-evidence/data-live-outputs.json ]]; then
+            instance_id="$(jq -er '.host_instance_id.value' deployment-evidence/data-live-outputs.json)"
+          else
+            instance_ids="$(aws ec2 describe-instances --region "${AWS_REGION}" \
+              --filters Name=tag:Name,Values=home-search-budget-production-host \
+                Name=tag:Environment,Values=budget-production \
+                Name=instance-state-name,Values=pending,running,stopping,stopped \
+              --query 'Reservations[].Instances[].InstanceId' --output text)"
+            read -r -a instances <<<"${instance_ids}"
+            [[ "${#instances[@]}" == 1 && "${instances[0]}" =~ ^i-[0-9a-f]{8,17}$ ]]
+            instance_id="${instances[0]}"
+          fi
           aws ec2 modify-instance-credit-specification --region "${AWS_REGION}" \
             --instance-credit-specification "InstanceId=${instance_id},CpuCredits=standard" >/dev/null
           [[ "$(aws ec2 describe-instance-credit-specifications --region "${AWS_REGION}" --instance-ids "${instance_id}" \
@@ -566,7 +577,7 @@ jobs:
       - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
         with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_PLAN_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
-        with: { terraform_version: 1.15.8 }
+        with: { terraform_version: 1.15.8, terraform_wrapper: false }
       - name: Create the separate DNS and backup-schedule plan
         env:
           TF_STATE_BUCKET: "${{ vars.BUDGET_PRODUCTION_TF_STATE_BUCKET }}"
@@ -609,7 +620,7 @@ jobs:
       - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
         with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_APPLY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
-        with: { terraform_version: 1.15.8 }
+        with: { terraform_version: 1.15.8, terraform_wrapper: false }
       - name: Apply exact DNS plan and build readiness evidence
         env:
           TF_STATE_BUCKET: "${{ vars.BUDGET_PRODUCTION_TF_STATE_BUCKET }}"

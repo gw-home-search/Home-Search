@@ -197,6 +197,17 @@ run "data_phase_keeps_platform_services_dark_before_secret_bootstrap" {
       && length(aws_ecs_task_definition.application) == 0
       && aws_ecs_service.platform["budget-postgres"].desired_count == 0
       && aws_ecs_service.platform["budget-valkey"].desired_count == 0
+      && aws_ecs_task_definition.platform["budget-postgres"].enable_fault_injection == false
+      && aws_ecs_task_definition.one_shot["secret-bootstrap"].enable_fault_injection == false
+      && length(jsondecode(aws_ecs_task_definition.one_shot["secret-bootstrap"].container_definitions)[0].portMappings) == 0
+      && length(jsondecode(aws_ecs_task_definition.one_shot["secret-bootstrap"].container_definitions)[0].systemControls) == 0
+      && length(jsondecode(aws_ecs_task_definition.one_shot["secret-bootstrap"].container_definitions)[0].volumesFrom) == 0
+      && length(jsondecode(aws_ecs_task_definition.one_shot["secret-bootstrap"].container_definitions)[0].linuxParameters.capabilities.add) == 0
+      && strcontains(file("runtime.tf"), "configure_at_launch = false")
+      && strcontains(file("runtime.tf"), "systemControls         = []")
+      && strcontains(file("runtime.tf"), "volumesFrom            = []")
+      && strcontains(file("runtime.tf"), "capabilities       = { add = [], drop = [\"NET_RAW\"] }")
+      && strcontains(file("one_shot.tf"), "configure_at_launch = false")
       && one([
         for item in local.one_shot_specs["secret-readiness"].environment :
         item.value if item.name == "HOME_USER_OAUTH_ENABLED_PROVIDERS"
@@ -264,6 +275,12 @@ run "private_phase_uses_fixed_bridge_ports_and_least_privilege_roles" {
       aws_ecs_task_definition.application["public-gateway"].network_mode == "bridge"
       && jsondecode(aws_ecs_task_definition.application["public-gateway"].container_definitions)[0].portMappings[0].containerPort == 8080
       && jsondecode(aws_ecs_task_definition.application["public-gateway"].container_definitions)[0].portMappings[0].hostPort == 18000
+      && aws_ecs_task_definition.application["public-gateway"].enable_fault_injection == false
+      && strcontains(file("runtime.tf"), "configure_at_launch = false")
+      && strcontains(file("runtime.tf"), "portMappings           = []")
+      && strcontains(file("runtime.tf"), "systemControls         = []")
+      && strcontains(file("runtime.tf"), "volumesFrom            = []")
+      && strcontains(file("runtime.tf"), "capabilities       = { add = [], drop = [\"NET_RAW\"] }")
       && aws_ecs_service.application["public-gateway"].desired_count == 0
       && aws_ecs_service.application["property-api"].desired_count == 1
       && aws_ecs_service.application["user-api"].desired_count == 1

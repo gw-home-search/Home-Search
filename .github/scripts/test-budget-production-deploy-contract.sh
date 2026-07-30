@@ -50,7 +50,13 @@ cleanup_reauth_line="$(grep -nF 'name: Re-authenticate deploy role for unconditi
 sed -n "${cleanup_reauth_line},$((cleanup_reauth_line + 6))p" "${workflow}" | grep -Fq 'if: always()'
 sed -n "${cleanup_reauth_line},$((cleanup_reauth_line + 6))p" "${workflow}" | grep -Fq 'role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_DEPLOY_ROLE_ARN }}"'
 [[ "$(grep -Fc 'Name=tag:Name,Values=home-search-budget-production-host' "${workflow}")" -eq 2 ]]
-grep -Fq 'with: { ref: "${{ inputs.operation == '\''deploy'\'' && inputs.release_sha || github.sha }}" }' "${workflow}"
+grep -Fq 'with: { fetch-depth: 0, ref: "${{ github.sha }}" }' "${workflow}"
+grep -Fq 'git rev-parse "${RELEASE_SHA}^{commit}"' "${workflow}"
+grep -Fq 'git rev-list -n 1 "${RELEASE_TAG}"' "${workflow}"
+[[ "$(grep -Fc 'with: { ref: "${{ github.sha }}" }' "${workflow}")" -eq 4 ]]
+! grep -Fq 'with: { ref: "${{ inputs.release_sha }}" }' "${workflow}"
+! grep -Fq "inputs.operation == 'deploy' && inputs.release_sha || github.sha" "${workflow}"
+! grep -Fq 'path: release-source' "${workflow}"
 [[ "$(grep -Fc "if: inputs.operation == 'deploy'" "${workflow}")" -ge 2 ]]
 grep -Fq 'infra/deploy/select-budget-production-foundation-pins.sh' "${workflow}"
 grep -Fq 'Name=tag:Name,Values=${name}-data' "${pin_selector}"
@@ -65,8 +71,22 @@ grep -Fq 'output "availability_zone" {' "${budget_outputs}"
 ! grep -Fq 'infra/terraform/production' "${workflow}"
 ! grep -Fq 'home-search/production/terraform.tfstate' "${workflow}"
 grep -Fq 'backend "s3" {' "${budget_backend}"
-[[ "$(grep -Fc 'infra/deploy/read-budget-production-phase.sh' "${workflow}")" -eq 2 ]]
+[[ "$(grep -Fc 'infra/deploy/read-budget-production-phase.sh' "${workflow}")" -eq 3 ]]
 ! grep -Fq 'output -raw deployment_phase' "${workflow}"
+foundation_plan_line="$(grep -nF 'name: Pin AMI and stable AZ, then create zero-destroy foundation plan' "${workflow}" | cut -d: -f1)"
+[[ "${foundation_plan_line}" =~ ^[0-9]+$ ]]
+foundation_plan_block="$(sed -n "${foundation_plan_line},$((foundation_plan_line + 90))p" "${workflow}")"
+grep -Fq 'current_data_services_enabled="$(terraform -chdir=infra/terraform/budget-production output -raw data_services_enabled)"' <<<"${foundation_plan_block}"
+grep -Fq 'reviewed_phase=data' <<<"${foundation_plan_block}"
+grep -Fq -- '-var="deployment_phase=${reviewed_phase}"' <<<"${foundation_plan_block}"
+grep -Fq 'deployment-evidence/foundation-plan.json "${reviewed_phase}" "${current_phase}"' <<<"${foundation_plan_block}"
+data_dark_line="$(grep -nF 'name: Register data tasks without starting PostgreSQL' "${workflow}" | cut -d: -f1)"
+[[ "${data_dark_line}" =~ ^[0-9]+$ ]]
+data_dark_block="$(sed -n "${data_dark_line},$((data_dark_line + 55))p" "${workflow}")"
+grep -Fq 'current_phase="$(infra/deploy/read-budget-production-phase.sh infra/terraform/budget-production)"' <<<"${data_dark_block}"
+grep -Fq '[[ "${code}" == 0 || "${code}" == 2 ]]' <<<"${data_dark_block}"
+grep -Fq 'deployment-evidence/data-dark-plan.json data "${current_phase}"' <<<"${data_dark_block}"
+grep -Fq 'if [[ "${code}" == 2 ]]; then' <<<"${data_dark_block}"
 grep -Fq 'role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_DEPLOY_ROLE_ARN }}"' "${workflow}"
 for scoped_sid in ManageBudgetBucketsOnly DenyCrossEnvironmentEc2Mutation DenyCrossEnvironmentEcsMutation DenyCrossEnvironmentEcrMutation DenyCrossEnvironmentControlPlaneMutation LaunchTaggedRecoveryInstance TerminateTaggedRecoveryInstance PassBudgetRuntimeRolesOnly RunBudgetOneShotTasks StopBudgetOneShotTasks SendCommandToTaggedRecoveryOnly ReadBudgetBackupEvidence; do
   grep -Fq "${scoped_sid}" "${bootstrap_policy}"

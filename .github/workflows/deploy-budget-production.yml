@@ -140,12 +140,12 @@ jobs:
           if [[ "${current_phase}" != registry ]]; then
             current_data_services_enabled="$(terraform -chdir=infra/terraform/budget-production output -raw data_services_enabled)"
           fi
+          [[ "${current_data_services_enabled}" == true || "${current_data_services_enabled}" == false ]]
           case "${current_phase}" in
             registry | foundation)
               reviewed_phase=foundation
               ;;
             data)
-              [[ "${current_data_services_enabled}" == false ]]
               reviewed_phase=data
               ;;
             *)
@@ -198,9 +198,11 @@ jobs:
           jq -n --arg ami "${pinned_ami}" --arg az "${pinned_az}" --arg pin_source "${pin_source}" \
             --arg account_forecast "${account_forecast}" --arg cost_monitor "${cost_anomaly_monitor_arn}" \
             --arg current_phase "${current_phase}" --arg reviewed_phase "${reviewed_phase}" \
+            --arg current_data_services_enabled "${current_data_services_enabled}" \
             '{status:"pass",ami_id:$ami,availability_zone:$az,pin_source:$pin_source,
               account_forecast_usd:$account_forecast,cost_anomaly_monitor_arn:$cost_monitor,
-              current_phase:$current_phase,reviewed_phase:$reviewed_phase}' \
+              current_phase:$current_phase,reviewed_phase:$reviewed_phase,
+              current_data_services_enabled:($current_data_services_enabled == "true")}' \
             >deployment-evidence/foundation-preflight.json
       - name: Create the registry-only bootstrap plan
         if: inputs.operation == 'registry'

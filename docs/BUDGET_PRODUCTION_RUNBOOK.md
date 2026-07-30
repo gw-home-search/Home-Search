@@ -77,6 +77,11 @@ Foundation apply가 중간 실패하면 기존 plan을 다시 apply하지 않는
 동일 tag의 host, state output, 부분 생성된 data EBS/subnet 순으로 AMI/AZ pin을
 재사용하며 tag 일치 resource가 여러 개거나 AZ가 다르면 fail closed한다. 새 plan의
 destroy가 0이고 기존 data EBS/EIP/VPC를 유지하는지 확인한 뒤에만 재승인한다.
+이전 rollout이 data phase에서 PostgreSQL/Valkey를 시작한 뒤 실패했다면 state의
+`data_services_enabled=true`를 재개 가능한 상태로 인정한다. 새 reviewed foundation
+plan은 기존 값을 preflight evidence에 기록하고 `data_services_enabled=false`를 목표로
+두 service를 먼저 data-dark로 수렴시킨 뒤 task definition 등록과 bootstrap을 다시
+시작한다. `true|false` 이외의 output, phase 후퇴, destroy가 있으면 그대로 중단한다.
 실패한 provider create가 live resource를 남기고 state instance만 `tainted`로 표시한
 경우에만 `recover_tainted_ssm_state=true`로 foundation workflow를 다시 실행한다.
 이 입력은 protected apply role로 먼저 실행되며, 허용 대상은

@@ -202,10 +202,11 @@ if ! grep -A55 '^  user-service:' "${compose_file}" | grep -Fq 'env_file:'; then
   exit 1
 fi
 for required_user_setting in \
+  HOME_USER_OAUTH_ENABLED_PROVIDERS \
   GOOGLE_OAUTH_CLIENT_ID KAKAO_OAUTH_CLIENT_ID NAVER_OAUTH_CLIENT_ID \
   USER_ALLOWED_ORIGIN USER_OAUTH_SUCCESS_REDIRECT USER_OAUTH_FAILURE_REDIRECT \
   USER_JWT_ACTIVE_KID USER_JWT_PRIVATE_KEY_PATH USER_JWT_ACTIVE_PUBLIC_KEY_PATH; do
-  if ! grep -Fq "\${${required_user_setting}}" "${user_runtime_config}" \
+  if ! grep -Fq "\${${required_user_setting}" "${user_runtime_config}" \
       && ! grep -A55 '^  user-service:' "${compose_file}" | grep -Fq "${required_user_setting}:"; then
     echo "ERROR: user-service runtime setting is missing: ${required_user_setting}" >&2
     exit 1

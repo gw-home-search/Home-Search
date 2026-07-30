@@ -2,12 +2,15 @@ package com.home.user.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.home.domain.user.OAuthProvider;
 import com.home.user.config.properties.AuthProperties;
 import com.home.user.config.properties.JwtProperties;
+import com.home.user.config.properties.OAuthProperties;
 import jakarta.validation.Validation;
 import java.net.URI;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class UserConfigurationPropertiesTest {
@@ -30,6 +33,18 @@ class UserConfigurationPropertiesTest {
                             Duration.ZERO)))
                     .extracting(violation -> violation.getPropertyPath().toString())
                     .contains("lifetimePositive");
+            assertThat(validator.validate(new OAuthProperties(
+                            URI.create("https://home.example/auth/success"),
+                            URI.create("https://home.example/auth/failure"),
+                            Set.of())))
+                    .extracting(violation -> violation.getPropertyPath().toString())
+                    .contains("enabledProviders");
+            assertThat(new OAuthProperties(
+                                    URI.create("https://home.example/auth/success"),
+                                    URI.create("https://home.example/auth/failure"),
+                                    Set.of(OAuthProvider.KAKAO))
+                            .enabledProviders())
+                    .containsExactly(OAuthProvider.KAKAO);
         }
     }
 }

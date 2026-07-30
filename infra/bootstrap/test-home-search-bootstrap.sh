@@ -474,15 +474,33 @@ BUDGET_PARAMETER_PREFIX=/home-search/budget-production \
 
 for suffix in \
   property/kakao-rest-api-key \
-  user/oauth/google-client-id user/oauth/google-client-secret \
   user/oauth/kakao-client-id user/oauth/kakao-client-secret \
-  user/oauth/naver-client-id user/oauth/naver-client-secret \
   ai/openai-api-key ai/openai-primary-model ai/openai-secondary-model; do
   printf 'EXTERNAL_SENTINEL' >"${FAKE_AWS_STATE}/ssm_home-search_budget-production_${suffix//\//_}"
 done
+HOME_USER_OAUTH_ENABLED_PROVIDERS=kakao \
 BUDGET_PARAMETER_PREFIX=/home-search/budget-production \
   "${script}" budget-secret-readiness >"${tmp_dir}/budget-readiness.out" 2>"${tmp_dir}/budget-readiness.err"
 grep -Fq '상태: Pass' "${tmp_dir}/budget-readiness.out"
 ! grep -Fq 'EXTERNAL_SENTINEL' "${tmp_dir}/budget-readiness.out" "${tmp_dir}/budget-readiness.err"
+
+for suffix in \
+  user/oauth/google-client-id user/oauth/google-client-secret \
+  user/oauth/naver-client-id user/oauth/naver-client-secret; do
+  printf 'EXTERNAL_SENTINEL' >"${FAKE_AWS_STATE}/ssm_home-search_budget-production_${suffix//\//_}"
+done
+HOME_USER_OAUTH_ENABLED_PROVIDERS=google,kakao,naver \
+BUDGET_PARAMETER_PREFIX=/home-search/budget-production \
+  "${script}" budget-secret-readiness >"${tmp_dir}/budget-all-providers.out" \
+  2>"${tmp_dir}/budget-all-providers.err"
+grep -Fq '상태: Pass' "${tmp_dir}/budget-all-providers.out"
+if HOME_USER_OAUTH_ENABLED_PROVIDERS=kakao,unknown \
+  BUDGET_PARAMETER_PREFIX=/home-search/budget-production \
+  "${script}" budget-secret-readiness >"${tmp_dir}/budget-unknown-provider.out" \
+    2>"${tmp_dir}/budget-unknown-provider.err"; then
+  echo 'unknown budget OAuth provider must fail readiness' >&2
+  exit 1
+fi
+grep -Fq '허용되지 않은 OAuth enabled provider' "${tmp_dir}/budget-unknown-provider.err"
 
 echo '상태: Pass - secret idempotency, argv/stdout 비노출, DB/bootstrap/importer grant 및 key materialization을 확인했습니다.'

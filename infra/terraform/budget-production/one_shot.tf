@@ -16,6 +16,9 @@ locals {
       environment = [{
         name  = "BUDGET_PARAMETER_PREFIX"
         value = "/home-search/budget-production"
+        }, {
+        name  = "HOME_USER_OAUTH_ENABLED_PROVIDERS"
+        value = "kakao"
       }]
     }
     property-flyway = {

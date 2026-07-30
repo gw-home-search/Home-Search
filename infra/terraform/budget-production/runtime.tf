@@ -124,6 +124,7 @@ locals {
         { name = "USER_JWT_ACTIVE_KID", value = "budget-production-1" },
         { name = "USER_JWT_PRIVATE_KEY_PATH", value = "/run/keys/private.pem" },
         { name = "USER_JWT_ACTIVE_PUBLIC_KEY_PATH", value = "/run/keys/public.pem" },
+        { name = "HOME_USER_OAUTH_ENABLED_PROVIDERS", value = "kakao" },
       ]
     }
     ai = {

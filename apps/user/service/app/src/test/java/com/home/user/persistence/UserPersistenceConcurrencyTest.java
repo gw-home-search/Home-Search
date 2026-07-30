@@ -114,12 +114,9 @@ class UserPersistenceConcurrencyTest {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
-        registry.add("GOOGLE_OAUTH_CLIENT_ID", () -> "google-test");
-        registry.add("GOOGLE_OAUTH_CLIENT_SECRET", () -> "google-secret");
         registry.add("KAKAO_OAUTH_CLIENT_ID", () -> "kakao-test");
         registry.add("KAKAO_OAUTH_CLIENT_SECRET", () -> "kakao-secret");
-        registry.add("NAVER_OAUTH_CLIENT_ID", () -> "naver-test");
-        registry.add("NAVER_OAUTH_CLIENT_SECRET", () -> "naver-secret");
+        registry.add("HOME_USER_OAUTH_ENABLED_PROVIDERS", () -> "kakao");
         registry.add("USER_ALLOWED_ORIGIN", () -> "http://localhost:5173");
         registry.add("USER_OAUTH_SUCCESS_REDIRECT", () -> "http://localhost:5173/auth/success");
         registry.add("USER_OAUTH_FAILURE_REDIRECT", () -> "http://localhost:5173/auth/failure");
@@ -197,6 +194,13 @@ class UserPersistenceConcurrencyTest {
     @Test
     void returnsNotFoundProblemForUnsupportedOAuthProviderThroughSecurityChain() throws Exception {
         mockMvc.perform(get("/oauth2/authorization/unknown"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("OAUTH_PROVIDER_NOT_SUPPORTED"));
+    }
+
+    @Test
+    void returnsNotFoundForConfiguredButDisabledOAuthProvider() throws Exception {
+        mockMvc.perform(get("/oauth2/authorization/google"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("OAUTH_PROVIDER_NOT_SUPPORTED"));
     }

@@ -103,6 +103,12 @@ service가 data-dark가 아니거나 값 검증 preflight가 실패하면 parame
 중단한다. `PutParameter` 중간 실패는 같은 idempotent runner를 재실행해 수렴시킨다.
 다음 deploy는 새 plan과 protected approval로 재시작하며, platform waiter
 후 PostgreSQL/Valkey가 각각 desired 1, running 1, pending 0인지 별도 assertion한다.
+정규화 전 password로 이미 초기화된 retained PostgreSQL cluster는 새
+`budget-postgres` image가 정상 TCP listener를 열기 전에 local trust Unix socket으로만
+bootstrap/service role 13개의 password를 현재 runtime parameter와 idempotent하게
+맞춘다. 이 과정은 database, schema, table, row를 삭제하거나 다시 만들지 않으며
+password를 command line이나 log에 출력하지 않는다. role 누락 또는 reconcile 실패 시
+container가 fail closed하므로 Flyway/import를 실행하지 않는다.
 
 ## SSM과 Admin
 

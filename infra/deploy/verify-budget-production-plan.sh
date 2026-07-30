@@ -31,6 +31,96 @@ if (( requested_index < current_index )); then
 fi
 
 violations="$(jq -c --arg requested_phase "${requested_phase}" --arg current_phase "${current_phase}" '
+  def task_definition_without_release_revision:
+    .ipc_mode = (.ipc_mode // "")
+    | .pid_mode = (.pid_mode // "")
+    | del(
+      .container_definitions,
+      .arn,
+      .arn_without_revision,
+      .id,
+      .revision,
+      .tags.Release,
+      .tags_all.Release
+    );
+  def containers_without_release_revision($address):
+    map(
+      del(.image)
+      | if $address == "aws_ecs_task_definition.one_shot[\"data-import-reconcile\"]" then
+          .environment |= map(
+            if .name == "HOME_MIGRATION_EVIDENCE_S3_URI" then
+              .value = "__RELEASE_EVIDENCE_URI__"
+            else
+              .
+            end
+          )
+        else
+          .
+        end
+    );
+  def immutable_budget_image:
+    type == "string"
+    and test("^[0-9]{12}[.]dkr[.]ecr[.]ap-northeast-2[.]amazonaws[.]com/home-search/[a-z0-9-]+@sha256:[0-9a-f]{64}$");
+  def safe_task_definition_release_revision:
+    [
+      "aws_ecs_task_definition.platform[\"budget-postgres\"]",
+      "aws_ecs_task_definition.platform[\"budget-valkey\"]",
+      "aws_ecs_task_definition.one_shot[\"secret-bootstrap\"]",
+      "aws_ecs_task_definition.one_shot[\"secret-readiness\"]",
+      "aws_ecs_task_definition.one_shot[\"property-flyway\"]",
+      "aws_ecs_task_definition.one_shot[\"user-flyway\"]",
+      "aws_ecs_task_definition.one_shot[\"admin-migration\"]",
+      "aws_ecs_task_definition.one_shot[\"ai-migration\"]",
+      "aws_ecs_task_definition.one_shot[\"importer-grants\"]",
+      "aws_ecs_task_definition.one_shot[\"scheduled-backup\"]",
+      "aws_ecs_task_definition.one_shot[\"data-import-reconcile\"]",
+      "aws_ecs_task_definition.one_shot[\"map-marker-projection\"]",
+      "aws_ecs_task_definition.one_shot[\"runtime-grants\"]"
+    ] as $allowed_addresses |
+    . as $change |
+    (($change.change.before.container_definitions | fromjson?) // []) as $before_containers |
+    (($change.change.after.container_definitions | fromjson?) // []) as $after_containers |
+    [$before_containers[0].environment[]? | select(.name == "HOME_MIGRATION_EVIDENCE_S3_URI") | .value] as $before_evidence_uris |
+    [$after_containers[0].environment[]? | select(.name == "HOME_MIGRATION_EVIDENCE_S3_URI") | .value] as $after_evidence_uris |
+    $requested_phase == "data"
+    and $current_phase == "data"
+    and $change.type == "aws_ecs_task_definition"
+    and ($allowed_addresses | index($change.address)) != null
+    and $change.change.actions == ["delete", "create"]
+    and $change.change.replace_paths == [["container_definitions"]]
+    and ($change.change.before | task_definition_without_release_revision)
+      == ($change.change.after | task_definition_without_release_revision)
+    and $change.change.before.skip_destroy == true
+    and $change.change.after.skip_destroy == true
+    and ($change.change.after.family | type == "string" and startswith("home-search-budget-production-"))
+    and $change.change.after.tags_all.Environment == "budget-production"
+    and ($change.change.before.tags.Release | type == "string" and test("^v[0-9]+[.][0-9]+[.][0-9]+$"))
+    and ($change.change.after.tags.Release | type == "string" and test("^v[0-9]+[.][0-9]+[.][0-9]+$"))
+    and $change.change.before.tags_all.Release == $change.change.before.tags.Release
+    and $change.change.after.tags_all.Release == $change.change.after.tags.Release
+    and $change.change.before.tags.Release != $change.change.after.tags.Release
+    and ($before_containers | length) == 1
+    and ($after_containers | length) == 1
+    and ($before_containers[0].image | immutable_budget_image)
+    and ($after_containers[0].image | immutable_budget_image)
+    and $before_containers[0].image != $after_containers[0].image
+    and ($before_containers[0].image | split("@sha256:")[0])
+      == ($after_containers[0].image | split("@sha256:")[0])
+    and (
+      $change.address != "aws_ecs_task_definition.one_shot[\"data-import-reconcile\"]"
+      or (
+        ($before_evidence_uris | length) == 1
+        and ($after_evidence_uris | length) == 1
+        and ($before_evidence_uris[0] | test("^s3://home-search-budget-production-backup-[0-9]{12}/deployment-evidence/v[0-9]+[.][0-9]+[.][0-9]+$"))
+        and ($after_evidence_uris[0] | test("^s3://home-search-budget-production-backup-[0-9]{12}/deployment-evidence/v[0-9]+[.][0-9]+[.][0-9]+$"))
+        and ($before_evidence_uris[0] | endswith("/" + $change.change.before.tags.Release))
+        and ($after_evidence_uris[0] | endswith("/" + $change.change.after.tags.Release))
+        and ($before_evidence_uris[0] | split("/deployment-evidence/")[0])
+          == ($after_evidence_uris[0] | split("/deployment-evidence/")[0])
+      )
+    )
+    and ($before_containers | containers_without_release_revision($change.address))
+      == ($after_containers | containers_without_release_revision($change.address));
   [
     "aws_db_instance", "aws_db_cluster", "aws_rds_cluster", "aws_rds_cluster_instance", "aws_msk_cluster", "aws_msk_serverless_cluster",
     "aws_nat_gateway", "aws_vpc_endpoint", "aws_lb", "aws_lb_listener", "aws_lb_target_group", "aws_vpn_gateway",
@@ -49,7 +139,10 @@ violations="$(jq -c --arg requested_phase "${requested_phase}" --arg current_pha
    | select(.change.actions != ["no-op"] and .change.actions != ["read"])
    | . as $change
    | select(
-       (.change.actions | index("delete")) != null
+       (
+         ((.change.actions | index("delete")) != null)
+         and (($change | safe_task_definition_release_revision) | not)
+       )
        or (
          (.change.actions | index("forget")) != null
          and ((
@@ -83,4 +176,4 @@ if [[ "${requested_phase}" == 'registry' ]]; then
   }
 fi
 
-echo "상태: Pass - ${current_phase} -> ${requested_phase} plan은 monotonic, zero-destroy, 제한된 state forget, budget allowlist 경계를 충족합니다."
+echo "상태: Pass - ${current_phase} -> ${requested_phase} plan은 monotonic, 보존형 task revision 외 zero-destroy, 제한된 state forget, budget allowlist 경계를 충족합니다."

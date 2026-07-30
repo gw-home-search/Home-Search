@@ -14,16 +14,16 @@ override_resource {
   target          = aws_s3_bucket.terraform_state
   override_during = plan
   values = {
-    arn = "arn:aws:s3:::home-search-state-fixture"
+    arn = "arn:aws:s3:::home-search-state-fixture-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
   }
 }
 
 run "budget_roles_are_separated_and_state_isolated" {
   command = plan
   variables {
-    state_bucket_name                = "home-search-state-fixture"
+    state_bucket_name                = "home-search-state-fixture-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     github_repository                = "example/home-search"
-    budget_production_hosted_zone_id = "Z0123456789ABCDEFG"
+    budget_production_hosted_zone_id = "ZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
   }
 
   assert {
@@ -179,25 +179,41 @@ run "budget_roles_are_separated_and_state_isolated" {
         for statement in jsondecode(aws_iam_role_policy.github_budget_apply.policy).Statement :
         statement.Sid == "ManageBudgetHostedZoneRecords"
         && statement.Action == ["route53:ChangeResourceRecordSets"]
-        && statement.Resource == ["arn:aws:route53:::hostedzone/Z0123456789ABCDEFG"]
+        && statement.Resource == ["arn:aws:route53:::hostedzone/ZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"]
         && !contains(keys(statement), "Condition")
       ])
+    )
+    error_message = "Budgets, Cost Explorer, and Route53 must use explicit global-service statements without a regional condition."
+  }
+
+  assert {
+    condition = alltrue([
+      for statement in jsondecode(aws_iam_role_policy.github_budget_apply.policy).Statement :
+      !contains(["CreateBudgetsServiceLinkedRole", "CreateCloudWatchEventsServiceLinkedRole"], statement.Sid)
+    ])
+    error_message = "Service-linked role permissions must leave the aggregate inline policy budget with safe headroom."
+  }
+
+  assert {
+    condition = (
+      length(jsondecode(aws_iam_policy.github_budget_apply_service_linked_roles.policy).Statement) == 2
       && anytrue([
-        for statement in jsondecode(aws_iam_role_policy.github_budget_apply.policy).Statement :
+        for statement in jsondecode(aws_iam_policy.github_budget_apply_service_linked_roles.policy).Statement :
         statement.Sid == "CreateBudgetsServiceLinkedRole"
         && statement.Action == ["iam:CreateServiceLinkedRole"]
         && statement.Resource == ["arn:aws:iam::123456789012:role/aws-service-role/budgets.amazonaws.com/AWSServiceRoleForBudgets"]
         && statement.Condition.StringEquals["iam:AWSServiceName"] == "budgets.amazonaws.com"
       ])
       && anytrue([
-        for statement in jsondecode(aws_iam_role_policy.github_budget_apply.policy).Statement :
+        for statement in jsondecode(aws_iam_policy.github_budget_apply_service_linked_roles.policy).Statement :
         statement.Sid == "CreateCloudWatchEventsServiceLinkedRole"
         && statement.Action == ["iam:CreateServiceLinkedRole"]
         && statement.Resource == ["arn:aws:iam::123456789012:role/aws-service-role/events.amazonaws.com/AWSServiceRoleForCloudWatchEvents*"]
         && statement.Condition.StringLike["iam:AWSServiceName"] == "events.amazonaws.com"
       ])
+      && aws_iam_role_policy_attachment.github_budget_apply_service_linked_roles.role == aws_iam_role.github_budget_production_apply.name
     )
-    error_message = "Budgets, Cost Explorer, Route53, and the exact CloudWatch Events service-linked role must use explicit global-service statements without a regional condition."
+    error_message = "The budget apply role must receive only the exact approved service-linked role permissions through its dedicated managed policy."
   }
 
   assert {
@@ -320,8 +336,9 @@ run "budget_roles_are_separated_and_state_isolated" {
   assert {
     condition = (
       length(aws_iam_role_policy.github_budget_apply.policy)
-      + length(aws_iam_role_policy.github_budget_state["apply"].policy) <= 10240
+      + length(aws_iam_role_policy.github_budget_state["apply"].policy) <= 10000
       && length(aws_iam_policy.github_budget_apply_regional.policy) <= 6144
+      && length(aws_iam_policy.github_budget_apply_service_linked_roles.policy) <= 6144
       && aws_iam_role_policy_attachment.github_budget_apply_regional.role == aws_iam_role.github_budget_production_apply.name
       && one(jsondecode(aws_iam_policy.github_budget_apply_regional.policy).Statement).Sid == "ManageTaggedBudgetResources"
       && one(jsondecode(aws_iam_policy.github_budget_apply_regional.policy).Statement).Action == local.budget_apply_actions

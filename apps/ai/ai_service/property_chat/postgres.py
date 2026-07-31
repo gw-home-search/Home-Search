@@ -92,14 +92,65 @@ class PostgresPropertyFactRepository:
             raise ValueError("complex name is outside the supported range")
         if not 1 <= limit <= 6:
             raise ValueError("complex lookup limit is outside the supported range")
+        literal_name_pattern = f"%{_escape_like(normalized_name)}%"
+        compact_name_pattern = f"%{_escape_like(re.sub(r'\s+', '', normalized_name))}%"
+        region_pattern = (
+            f"%{_escape_like(region_name.strip())}%" if region_name is not None else None
+        )
+        with self._pool.connection() as connection:
+            literal_rows = connection.execute(
+                """
+                SELECT complex_id, display_name, region_code, region_name, address,
+                       latitude, longitude, marker_safe, data_updated_at,
+                       unit_count, use_date
+                FROM ai_read.complex_fact
+                WHERE (
+                    display_name ILIKE %s ESCAPE '\\'
+                    OR name ILIKE %s ESCAPE '\\'
+                    OR trade_name ILIKE %s ESCAPE '\\'
+                    OR regexp_replace(display_name, '[[:space:]]+', '', 'g')
+                        ILIKE %s ESCAPE '\\'
+                    OR regexp_replace(name, '[[:space:]]+', '', 'g')
+                        ILIKE %s ESCAPE '\\'
+                    OR regexp_replace(trade_name, '[[:space:]]+', '', 'g')
+                        ILIKE %s ESCAPE '\\'
+                )
+                  AND (%s::text IS NULL OR region_name ILIKE %s ESCAPE '\\'
+                       OR address ILIKE %s ESCAPE '\\')
+                ORDER BY
+                    CASE
+                        WHEN lower(display_name) = lower(%s)
+                          OR lower(name) = lower(%s)
+                          OR lower(trade_name) = lower(%s) THEN 0
+                        ELSE 1
+                    END,
+                    display_name,
+                    complex_id
+                LIMIT %s
+                """,
+                (
+                    literal_name_pattern,
+                    literal_name_pattern,
+                    literal_name_pattern,
+                    compact_name_pattern,
+                    compact_name_pattern,
+                    compact_name_pattern,
+                    region_pattern,
+                    region_pattern,
+                    region_pattern,
+                    normalized_name,
+                    normalized_name,
+                    normalized_name,
+                    limit,
+                ),
+            ).fetchall()
+        if literal_rows:
+            return [_complex_record(row) for row in literal_rows]
+
         search_tokens = _complex_search_tokens(normalized_name)
         if not search_tokens:
             return []
         requires_literal_name_match = "%" in normalized_name or "_" in normalized_name
-        literal_name_pattern = f"%{_escape_like(normalized_name)}%"
-        region_pattern = (
-            f"%{_escape_like(region_name.strip())}%" if region_name is not None else None
-        )
         with self._pool.connection() as connection:
             rows = connection.execute(
                 """

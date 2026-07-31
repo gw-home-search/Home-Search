@@ -27,6 +27,7 @@ locals {
   ])
   external_runtime_parameter_names = toset([
     "property/kakao-rest-api-key",
+    "property/apt-service-key",
     "user/oauth/kakao-client-id",
     "user/oauth/kakao-client-secret",
     "user/oauth/google-client-id",

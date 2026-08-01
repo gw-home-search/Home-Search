@@ -67,6 +67,16 @@ grep -Fq 'partial-resources' "${pin_selector}"
 [[ -x "${taint_recovery}" ]]
 [[ -x "${retained_ssm_import}" ]]
 [[ -x "${budget_notification_reconciler}" ]]
+state_recovery_line="$(grep -nF 'name: Clear only verified partial-create tainted state' "${workflow}" | cut -d: -f1)"
+[[ "${state_recovery_line}" =~ ^[0-9]+$ ]]
+state_recovery_block="$(sed -n "${state_recovery_line},$((state_recovery_line + 40))p" "${workflow}")"
+grep -Fq 'HOSTED_ZONE_ID: "${{ vars.BUDGET_PRODUCTION_HOSTED_ZONE_ID }}"' <<<"${state_recovery_block}"
+grep -Fq 'ALARM_EMAIL: "${{ vars.BUDGET_PRODUCTION_ALARM_EMAIL }}"' <<<"${state_recovery_block}"
+grep -Fq 'TF_VAR_ami_id="$(terraform -chdir=infra/terraform/budget-production output -raw ami_id)"' <<<"${state_recovery_block}"
+grep -Fq 'TF_VAR_availability_zone="$(terraform -chdir=infra/terraform/budget-production output -raw availability_zone)"' <<<"${state_recovery_block}"
+grep -Fq 'TF_VAR_hosted_zone_id="${HOSTED_ZONE_ID}"' <<<"${state_recovery_block}"
+grep -Fq 'TF_VAR_alarm_email="${ALARM_EMAIL}"' <<<"${state_recovery_block}"
+grep -Fq 'export TF_VAR_ami_id TF_VAR_availability_zone TF_VAR_hosted_zone_id TF_VAR_alarm_email' <<<"${state_recovery_block}"
 grep -Fq 'output "ami_id" {' "${budget_outputs}"
 grep -Fq 'output "availability_zone" {' "${budget_outputs}"
 [[ "$(grep -Ec '^[[:space:]]+environment: budget-production-plan$' "${workflow}")" -eq 2 ]]

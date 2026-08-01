@@ -1,4 +1,21 @@
 locals {
+  market_news_common_environment = [
+    { name = "SPRING_PROFILES_ACTIVE", value = "prod" },
+    { name = "DB_JDBC_URL", value = "jdbc:postgresql://${local.host_gateway}:15432/home_search?sslmode=require" },
+    { name = "DB_USERNAME", value = "home_search_property_runtime" },
+    { name = "SPRING_DATA_REDIS_HOST", value = local.host_gateway },
+    { name = "SPRING_DATA_REDIS_PORT", value = "16379" },
+    { name = "SPRING_DATA_REDIS_USERNAME", value = "property" },
+    { name = "SPRING_DATA_REDIS_SSL_ENABLED", value = "false" },
+    { name = "HOME_NEWS_NAVER_ENABLED", value = "true" },
+    { name = "HOME_NEWS_NAVER_PROVIDER_MODE", value = "API_HUB" },
+    { name = "HOME_NEWS_CACHE_ENABLED", value = "true" },
+    { name = "HOME_NEWS_DAILY_CALL_BUDGET", value = "4000" },
+    { name = "HOME_NEWS_CACHE_TTL", value = "31d" },
+    { name = "HOME_NEWS_CONNECT_TIMEOUT", value = "2s" },
+    { name = "HOME_NEWS_READ_TIMEOUT", value = "5s" },
+  ]
+
   one_shot_specs = {
     secret-bootstrap = {
       image_key  = "ops-bootstrap"
@@ -128,6 +145,62 @@ locals {
         { name = "HOME_INGEST_RTMS_ALLOW_COORDINATE_PENDING_ONLY", value = "true" },
         { name = "HOME_INSIGHT_TRADE_ENABLED", value = "true" },
       ]
+    }
+    market-news-general = {
+      image_key  = "property-batch"
+      command    = []
+      entrypoint = []
+      environment = concat(local.market_news_common_environment, [
+        { name = "SPRING_BATCH_JOB_NAME", value = "marketNewsGeneralJob" },
+      ])
+    }
+    market-news-morning = {
+      image_key  = "property-batch"
+      command    = []
+      entrypoint = []
+      environment = concat(local.market_news_common_environment, [
+        { name = "SPRING_BATCH_JOB_NAME", value = "marketNewsMorningJob" },
+      ])
+    }
+    market-news-major-complex = {
+      image_key  = "property-batch"
+      command    = []
+      entrypoint = []
+      environment = concat(local.market_news_common_environment, [
+        { name = "SPRING_BATCH_JOB_NAME", value = "marketNewsMajorComplexJob" },
+      ])
+    }
+    market-news-major-selection = {
+      image_key  = "property-batch"
+      command    = []
+      entrypoint = []
+      environment = concat(local.market_news_common_environment, [
+        { name = "SPRING_BATCH_JOB_NAME", value = "marketNewsMajorSelectionJob" },
+      ])
+    }
+    market-news-retention = {
+      image_key  = "property-batch"
+      command    = []
+      entrypoint = []
+      environment = concat(local.market_news_common_environment, [
+        { name = "SPRING_BATCH_JOB_NAME", value = "marketNewsRetentionJob" },
+      ])
+    }
+    market-news-quality-sample = {
+      image_key  = "property-batch"
+      command    = []
+      entrypoint = []
+      environment = concat(local.market_news_common_environment, [
+        { name = "SPRING_BATCH_JOB_NAME", value = "marketNewsQualitySampleJob" },
+      ])
+    }
+    market-news-withdrawal = {
+      image_key  = "property-batch"
+      command    = []
+      entrypoint = []
+      environment = concat(local.market_news_common_environment, [
+        { name = "SPRING_BATCH_JOB_NAME", value = "marketNewsWithdrawalJob" },
+      ])
     }
     runtime-grants = {
       image_key  = "ops-bootstrap"

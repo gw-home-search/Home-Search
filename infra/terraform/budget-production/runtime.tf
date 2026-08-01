@@ -72,6 +72,7 @@ locals {
         { name = "SPRING_DATA_REDIS_SSL_ENABLED", value = "false" },
         { name = "HOME_MAP_MARKER_CACHE_ENABLED", value = "true" },
         { name = "HOME_PLACE_KAKAO_ENABLED", value = "true" },
+        { name = "HOME_NEWS_PUBLIC_ENABLED", value = tostring(var.market_news_public_enabled) },
         { name = "HOME_PREDICTION_ENABLED", value = "false" },
         { name = "HOME_ADMIN_INTERNAL_ENABLED", value = "true" },
         { name = "HOME_ADMIN_INTERNAL_ISSUER", value = "admin-service" },

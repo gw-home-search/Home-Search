@@ -28,6 +28,8 @@ locals {
   external_runtime_parameter_names = toset([
     "property/kakao-rest-api-key",
     "property/apt-service-key",
+    "property/news/naver-client-id",
+    "property/news/naver-client-secret",
     "user/oauth/kakao-client-id",
     "user/oauth/kakao-client-secret",
     "user/oauth/google-client-id",

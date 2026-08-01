@@ -74,6 +74,20 @@ check "backup_schedules_are_post_cutover_only" {
   }
 }
 
+check "market_news_schedules_are_post_cutover_only" {
+  assert {
+    condition     = !var.market_news_schedules_enabled || (local.public_enabled && var.data_services_enabled)
+    error_message = "market_news_schedules_enabled requires the public phase and enabled data services."
+  }
+}
+
+check "rtms_refresh_schedule_is_post_cutover_only" {
+  assert {
+    condition     = !var.rtms_refresh_schedule_enabled || (local.public_enabled && var.data_services_enabled)
+    error_message = "rtms_refresh_schedule_enabled requires the public phase and enabled data services."
+  }
+}
+
 check "data_phase_requires_platform_release" {
   assert {
     condition     = !local.data_enabled || (length(var.platform_image_uris) == 2 && length(var.image_uris) == 17)

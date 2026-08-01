@@ -1,4 +1,11 @@
 locals {
+  market_news_secret_parameters = {
+    DB_PASSWORD                   = "postgres/property-runtime-password"
+    SPRING_DATA_REDIS_PASSWORD    = "valkey/property-password"
+    HOME_NEWS_NAVER_CLIENT_ID     = "property/news/naver-client-id"
+    HOME_NEWS_NAVER_CLIENT_SECRET = "property/news/naver-client-secret"
+  }
+
   platform_secret_parameters = {
     budget-postgres = {
       POSTGRES_PASSWORD              = "postgres/superuser-password"
@@ -97,6 +104,13 @@ locals {
       DB_PASSWORD     = "postgres/property-runtime-password"
       APT_SERVICE_KEY = "property/apt-service-key"
     }
+    market-news-general         = local.market_news_secret_parameters
+    market-news-morning         = local.market_news_secret_parameters
+    market-news-major-complex   = local.market_news_secret_parameters
+    market-news-major-selection = local.market_news_secret_parameters
+    market-news-retention       = local.market_news_secret_parameters
+    market-news-quality-sample  = local.market_news_secret_parameters
+    market-news-withdrawal      = local.market_news_secret_parameters
     runtime-grants = {
       PROPERTY_MIGRATOR_DB_PASSWORD = "postgres/property-migrator-password"
       USER_MIGRATOR_DB_PASSWORD     = "postgres/user-migrator-password"
@@ -106,18 +120,25 @@ locals {
   }
 
   one_shot_image_keys = {
-    secret-bootstrap      = "ops-bootstrap"
-    secret-readiness      = "ops-bootstrap"
-    property-flyway       = "property-flyway"
-    user-flyway           = "user-flyway"
-    admin-migration       = "admin-migration"
-    ai-migration          = "ai"
-    importer-grants       = "ops-bootstrap"
-    scheduled-backup      = "backup"
-    data-import-reconcile = "backup"
-    map-marker-projection = "property-batch"
-    rtms-daily-refresh    = "property-batch"
-    runtime-grants        = "ops-bootstrap"
+    secret-bootstrap            = "ops-bootstrap"
+    secret-readiness            = "ops-bootstrap"
+    property-flyway             = "property-flyway"
+    user-flyway                 = "user-flyway"
+    admin-migration             = "admin-migration"
+    ai-migration                = "ai"
+    importer-grants             = "ops-bootstrap"
+    scheduled-backup            = "backup"
+    data-import-reconcile       = "backup"
+    map-marker-projection       = "property-batch"
+    rtms-daily-refresh          = "property-batch"
+    market-news-general         = "property-batch"
+    market-news-morning         = "property-batch"
+    market-news-major-complex   = "property-batch"
+    market-news-major-selection = "property-batch"
+    market-news-retention       = "property-batch"
+    market-news-quality-sample  = "property-batch"
+    market-news-withdrawal      = "property-batch"
+    runtime-grants              = "ops-bootstrap"
   }
 
   execution_parameter_sets = merge(
@@ -140,7 +161,7 @@ locals {
 
 resource "aws_iam_role" "task_execution" {
   for_each = local.execution_parameter_sets
-  name     = "${local.name}-${each.key}-execution"
+  name     = substr("${local.name}-${each.key}-execution", 0, 64)
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -193,7 +214,7 @@ resource "aws_iam_role_policy" "task_execution" {
 
 resource "aws_iam_role" "task_runtime" {
   for_each = local.execution_parameter_sets
-  name     = "${local.name}-${each.key}-runtime"
+  name     = substr("${local.name}-${each.key}-runtime", 0, 64)
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{

@@ -187,7 +187,7 @@ resource "aws_scheduler_schedule" "rtms_daily_refresh" {
   group_name                   = aws_scheduler_schedule_group.data_refresh[0].name
   schedule_expression          = "cron(30 7 * * ? *)"
   schedule_expression_timezone = "Asia/Seoul"
-  state                        = var.backup_schedules_enabled ? "ENABLED" : "DISABLED"
+  state                        = var.rtms_refresh_schedule_enabled ? "ENABLED" : "DISABLED"
   flexible_time_window { mode = "OFF" }
   target {
     arn      = aws_ecs_cluster.this[0].arn

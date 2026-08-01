@@ -79,6 +79,24 @@ variable "backup_schedules_enabled" {
   description = "Enables daily DLM and logical backup schedules only after the approved DNS cutover."
 }
 
+variable "market_news_public_enabled" {
+  type        = bool
+  default     = false
+  description = "Exposes the read-only market-news API after bootstrap and quality gates pass."
+}
+
+variable "market_news_schedules_enabled" {
+  type        = bool
+  default     = false
+  description = "Enables the four reviewed market-news Scheduler targets independently from backups."
+}
+
+variable "rtms_refresh_schedule_enabled" {
+  type        = bool
+  default     = false
+  description = "Enables the 07:30 KST RTMS refresh independently from backup schedules."
+}
+
 variable "alarm_email" {
   type        = string
   description = "Operator email subscribed to the budget-production SNS topic."

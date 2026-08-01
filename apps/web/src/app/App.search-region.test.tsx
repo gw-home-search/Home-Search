@@ -42,7 +42,7 @@ describe('App 검색과 지역', () => {
     unmount(root);
   });
 
-  it('단지 검색 입력은 debounce 후 검색 목록 모드로 전환한다', async () => {
+  it('단지 입력은 debounce suggestion만 호출하고 submit 후 검색 목록 모드로 전환한다', async () => {
     const fetchMock = vi.fn((url: RequestInfo | URL) => {
       const requestUrl = String(url);
 
@@ -84,6 +84,18 @@ describe('App 검색과 지역', () => {
       }
     });
     await waitForMillis(350);
+    await flushAsyncState();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/search/complexes/suggestions?q=Sample'),
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(fetchMock.mock.calls.some(([url]) => (
+      String(url) === resolveApiUrl('/api/v1/search/complexes?q=Sample')
+    ))).toBe(false);
+
+    const searchForm = rootElement.querySelector<HTMLFormElement>('form[aria-label="단지 검색"]');
+    await act(async () => submitForm(searchForm));
     await flushAsyncState();
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -727,6 +739,7 @@ describe('App 검색과 지역', () => {
         searchInput.dispatchEvent(new Event('input', { bubbles: true }));
       }
     });
+    await waitForMillis(350);
     await flushAsyncState();
 
     expect(fetchMock).toHaveBeenCalledWith(

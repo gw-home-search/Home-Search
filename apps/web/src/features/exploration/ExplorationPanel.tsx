@@ -47,9 +47,11 @@ type ExplorationPanelProps = {
   regionState: PanelRequestState;
   regionTrail: RegionTrailItem[];
   rootRegions: RegionSummary[];
+  queryGuidance: string | null;
   searchError: RequestFailure | null;
   searchResults: ComplexSearchResult[];
   searchState: PanelRequestState;
+  suggestionState: PanelRequestState;
   selectedComplex: ComplexSelection | null;
   sidebarMode: SidebarMode;
   tradeRows: TradeItem[];
@@ -153,9 +155,11 @@ export function ExplorationPanel(props: ExplorationPanelProps) {
         onResultSelect={props.onSearchResultSelect}
         onRetry={props.onRetrySearch}
         onSuggestionSelect={props.onSuggestionSelect}
+        queryGuidance={props.queryGuidance}
         searchError={props.searchError}
         searchResults={props.searchResults}
         searchState={props.searchState}
+        suggestionState={props.suggestionState}
       />
       <RegionExplorerSection
         hidden={sidebarMode !== 'region'}

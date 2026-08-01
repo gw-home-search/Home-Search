@@ -28,24 +28,26 @@ export function useComplexSearch({
   const [searchResults, setSearchResults] = useState<ComplexSearchResult[]>([]);
   const [complexSuggestions, setComplexSuggestions] = useState<ComplexSuggestion[]>([]);
   const [searchState, setSearchState] = useState<PanelRequestState>('idle');
+  const [suggestionState, setSuggestionState] = useState<PanelRequestState>('idle');
+  const [queryGuidance, setQueryGuidance] = useState<string | null>(null);
   const [searchError, setSearchError] = useState<RequestFailure | null>(null);
   const searchRequestSeq = useRef(0);
   const suggestionRequestSeq = useRef(0);
-  const searchDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suggestionDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchAbortController = useRef<AbortController | null>(null);
   const suggestionAbortController = useRef<AbortController | null>(null);
   const lastSearchQuery = useRef('');
 
   useEffect(() => () => {
-    clearSearchDebounceTimer();
+    clearSuggestionDebounceTimer();
     searchAbortController.current?.abort();
     suggestionAbortController.current?.abort();
   }, []);
 
-  function clearSearchDebounceTimer() {
-    if (searchDebounceTimer.current != null) {
-      clearTimeout(searchDebounceTimer.current);
-      searchDebounceTimer.current = null;
+  function clearSuggestionDebounceTimer() {
+    if (suggestionDebounceTimer.current != null) {
+      clearTimeout(suggestionDebounceTimer.current);
+      suggestionDebounceTimer.current = null;
     }
   }
 
@@ -55,15 +57,17 @@ export function useComplexSearch({
     searchRequestSeq.current = requestSeq;
     setSearchError(null);
 
-    if (query.length === 0) {
+    if (codePointLength(query) < 2) {
       setSearchResults([]);
       setSearchState('idle');
+      setQueryGuidance(query.length === 0 ? null : '두 글자 이상 입력해 주세요');
       return;
     }
 
     const controller = new AbortController();
     searchAbortController.current = controller;
     lastSearchQuery.current = query;
+    setQueryGuidance(null);
     setSearchState('loading');
     fetchComplexSearchResults(query, controller.signal)
       .then((nextResults) => {
@@ -91,51 +95,63 @@ export function useComplexSearch({
     event.preventDefault();
     const value = new FormData(event.currentTarget).get('q');
     const query = typeof value === 'string' ? value.trim() : '';
-    clearSearchDebounceTimer();
+    clearSuggestionDebounceTimer();
+    suggestionRequestSeq.current += 1;
+    suggestionAbortController.current?.abort();
+    setComplexSuggestions([]);
+    setSuggestionState('idle');
     runComplexSearch(query);
   }
 
   function handleSearchInputChange(value: string) {
-    clearSearchDebounceTimer();
+    clearSuggestionDebounceTimer();
     const requestSeq = suggestionRequestSeq.current + 1;
     suggestionRequestSeq.current = requestSeq;
     suggestionAbortController.current?.abort();
+    searchRequestSeq.current += 1;
+    searchAbortController.current?.abort();
     const query = value.trim();
 
+    setComplexSuggestions([]);
+    setSuggestionState('idle');
+    setSearchResults([]);
+    setSearchState('idle');
+    setSearchError(null);
+
     if (query.length === 0) {
-      setComplexSuggestions([]);
-      setSearchResults([]);
-      setSearchState('idle');
-      setSearchError(null);
-      searchRequestSeq.current += 1;
-      searchAbortController.current?.abort();
+      setQueryGuidance(null);
       return;
     }
 
-    const suggestionController = new AbortController();
-    suggestionAbortController.current = suggestionController;
-    setSearchState('loading');
-    setSearchError(null);
-    fetchComplexSuggestions(query, suggestionController.signal)
-      .then((nextSuggestions) => {
-        if (requestSeq === suggestionRequestSeq.current) {
-          setComplexSuggestions(nextSuggestions);
-        }
-      })
-      .catch(() => {
-        if (requestSeq === suggestionRequestSeq.current) {
-          setComplexSuggestions([]);
-        }
-      });
+    if (codePointLength(query) < 2) {
+      setQueryGuidance('두 글자 이상 입력해 주세요');
+      return;
+    }
 
-    searchDebounceTimer.current = setTimeout(() => {
-      searchDebounceTimer.current = null;
-      runComplexSearch(query);
+    setQueryGuidance(null);
+    setSuggestionState('loading');
+    suggestionDebounceTimer.current = setTimeout(() => {
+      suggestionDebounceTimer.current = null;
+      const suggestionController = new AbortController();
+      suggestionAbortController.current = suggestionController;
+      fetchComplexSuggestions(query, suggestionController.signal)
+        .then((nextSuggestions) => {
+          if (requestSeq === suggestionRequestSeq.current) {
+            setComplexSuggestions(nextSuggestions);
+            setSuggestionState(nextSuggestions.length === 0 ? 'empty' : 'ready');
+          }
+        })
+        .catch(() => {
+          if (requestSeq === suggestionRequestSeq.current) {
+            setComplexSuggestions([]);
+            setSuggestionState('empty');
+          }
+        });
     }, SEARCH_DEBOUNCE_MILLIS);
   }
 
   function handleSearchResultSelect(result: ComplexSearchResult) {
-    clearSearchDebounceTimer();
+    clearSuggestionDebounceTimer();
     selectComplex({ parcelId: result.parcelId, complexId: result.complexId });
     if (hasDisplayCoordinate(result)) {
       focusMap(result.latitude, result.longitude, 4, SEARCH_FOCUS_DELTA);
@@ -143,9 +159,10 @@ export function useComplexSearch({
   }
 
   function handleSuggestionSelect(suggestion: ComplexSuggestion) {
-    clearSearchDebounceTimer();
+    clearSuggestionDebounceTimer();
     selectComplex({ parcelId: suggestion.parcelId, complexId: suggestion.complexId });
     setComplexSuggestions([]);
+    setSuggestionState('idle');
   }
 
   return {
@@ -155,12 +172,22 @@ export function useComplexSearch({
     handleSearchSubmit,
     handleSuggestionSelect,
     isSearchPanelActive:
-      searchState !== 'idle' || searchResults.length > 0 || complexSuggestions.length > 0,
+      queryGuidance != null
+      || suggestionState !== 'idle'
+      || searchState !== 'idle'
+      || searchResults.length > 0
+      || complexSuggestions.length > 0,
+    queryGuidance,
     retrySearch: () => runComplexSearch(lastSearchQuery.current),
     searchError,
     searchResults,
     searchState,
+    suggestionState,
   };
+}
+
+function codePointLength(value: string): number {
+  return Array.from(value).length;
 }
 
 type DisplayCoordinateCandidate = {

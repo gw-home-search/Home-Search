@@ -533,29 +533,46 @@ class JdbcReadCapabilityReadersTest extends JdbcPostgresTestSupport {
     }
 
     @Test
-    @DisplayName("search API는 exact, prefix, alias, address match 순서로 관련도를 우선한다")
-    void searchComplexesRanksExactPrefixAliasBeforeAddressMatches() {
+    @DisplayName("search API는 exact 결과가 있으면 prefix와 contains로 확장하지 않는다")
+    void searchComplexesStopsAfterExactMatches() {
         seedSearchRankingData();
         ReadCapabilityReaders repository = new ReadCapabilityReaders(jdbcClient);
 
         assertThat(repository.searchComplexes("river"))
                 .extracting("complexId", "complexName")
-                .containsExactly(
-                        tuple(801L, "River"),
-                        tuple(802L, "River Heights"),
-                        tuple(803L, "ZZZ Alias Display"),
-                        tuple(804L, "AAA Address Only"));
+                .containsExactly(tuple(801L, "River"));
     }
 
     @Test
-    @DisplayName("suggestion API는 search ranking과 같은 관련도 순서를 사용하고 limit을 지킨다")
-    void suggestComplexesUsesSearchRankingAndLimit() {
+    @DisplayName("suggestion API도 exact 결과가 있으면 하위 단계로 확장하지 않는다")
+    void suggestComplexesStopsAfterExactMatches() {
         seedSearchRankingData();
         ReadCapabilityReaders repository = new ReadCapabilityReaders(jdbcClient);
 
         assertThat(repository.suggestComplexes("river", 3))
                 .extracting("complexId", "complexName")
-                .containsExactly(tuple(801L, "River"), tuple(802L, "River Heights"), tuple(803L, "ZZZ Alias Display"));
+                .containsExactly(tuple(801L, "River"));
+    }
+
+    @Test
+    @DisplayName("2글자 주소는 prefix로만 검색하고 bounded contains 범위에는 포함하지 않는다")
+    void twoCharacterAddressSearchUsesPrefixWithoutAddressInfixFallback() {
+        jdbcClient.sql("""
+			INSERT INTO region (id, code, name, region_type)
+			VALUES (29, '1144010100', '아현동', 'eup-myeon-dong')
+			""").update();
+        jdbcClient.sql("""
+			INSERT INTO parcel (id, region_id, pnu, address, latitude, longitude)
+			VALUES (98, 29, '1144010100100980000', '서울 마포구 아현동 98', 37.5500, 126.9500)
+			""").update();
+        jdbcClient.sql("""
+			INSERT INTO complex (id, parcel_id, region_id, complex_pk, apt_seq, name, trade_name)
+			VALUES (4678, 98, 29, 'RTMS:11440-29', '11440-29', '푸른아파트', '푸른아파트')
+			""").update();
+        ReadCapabilityReaders repository = new ReadCapabilityReaders(jdbcClient);
+
+        assertThat(repository.searchComplexes("마포")).extracting("complexId").containsExactly(4678L);
+        assertThat(repository.searchComplexes("포구")).isEmpty();
     }
 
     @Test

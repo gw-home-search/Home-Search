@@ -24,12 +24,16 @@ public class ComplexSearchService {
 
     public List<SearchComplexResult> searchComplexes(String query) {
         String normalized = normalizeQuery(query);
-        return normalized.isEmpty() ? List.of() : reader.searchComplexes(normalized);
+        return isTooShort(normalized) ? List.of() : reader.searchComplexes(normalized);
     }
 
     public List<ComplexSuggestionResult> suggestComplexes(String query) {
         String normalized = normalizeQuery(query);
-        return normalized.isEmpty() ? List.of() : reader.suggestComplexes(normalized, SUGGESTION_LIMIT);
+        return isTooShort(normalized) ? List.of() : reader.suggestComplexes(normalized, SUGGESTION_LIMIT);
+    }
+
+    private boolean isTooShort(String query) {
+        return query.codePointCount(0, query.length()) < 2;
     }
 
     private String normalizeQuery(String query) {

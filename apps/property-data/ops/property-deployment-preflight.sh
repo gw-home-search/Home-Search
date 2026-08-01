@@ -57,11 +57,11 @@ info_rows(){
 
 verify_info(){
   local phase="$1" target="$2" json="$3" expected rows versions
-  [[ "$(catalog | paste -sd, -)" == '1,2,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39' && "$(catalog | tail -1)" == "${target}" ]] || policy_error 'resolved SQL catalog 또는 target이 예상과 다릅니다.'
+  [[ "$(catalog | paste -sd, -)" == '1,2,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40' && "$(catalog | tail -1)" == "${target}" ]] || policy_error 'resolved SQL catalog 또는 target이 예상과 다릅니다.'
   expected=$([[ "${phase}" == before ]] && printf Pending || printf Success)
   [[ "$(printf '%s' "${json}" | tr -d '[:space:]')" != *'"category":"Repeatable"'* ]] || policy_error 'repeatable migration은 허용되지 않습니다.'
   rows="$(info_rows "${json}")"; versions="$(printf '%s\n' "${rows}" | cut -d'|' -f1 | paste -sd, -)"
-  [[ "${versions}" == '1,2,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39' ]] || policy_error 'resolved version set이 예상과 다릅니다.'
+  [[ "${versions}" == '1,2,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40' ]] || policy_error 'resolved version set이 예상과 다릅니다.'
   while IFS='|' read -r version type state; do [[ "${type}" == SQL && "${state}" == "${expected}" ]] || policy_error "version ${version} state/type이 허용되지 않습니다."; done <<< "${rows}"
 }
 
@@ -83,7 +83,7 @@ main(){
   fi
   [[ "${history}" =~ ^(t|true)$ ]] || policy_error 'Flyway history가 없습니다.'
   rows="$(run_psql "SELECT /* preflight_history_rows */ COALESCE(version,'<null>')||'|'||type||'|'||CASE WHEN success THEN 't' ELSE 'f' END FROM public.flyway_schema_history ORDER BY installed_rank;")" || runtime_error 'history query 실패'
-  expected=$'<null>|SCHEMA|t\n1|SQL|t\n2|SQL|t\n4|SQL|t\n5|SQL|t\n6|SQL|t\n7|SQL|t\n8|SQL|t\n9|SQL|t\n10|SQL|t\n11|SQL|t\n12|SQL|t\n13|SQL|t\n14|SQL|t\n15|SQL|t\n16|SQL|t\n17|SQL|t\n18|SQL|t\n19|SQL|t\n20|SQL|t\n21|SQL|t\n22|SQL|t\n23|SQL|t\n24|SQL|t\n25|SQL|t\n26|SQL|t\n27|SQL|t\n28|SQL|t\n29|SQL|t\n30|SQL|t\n31|SQL|t\n32|SQL|t\n33|SQL|t\n34|SQL|t\n35|SQL|t\n36|SQL|t\n37|SQL|t\n38|SQL|t\n39|SQL|t'
+  expected=$'<null>|SCHEMA|t\n1|SQL|t\n2|SQL|t\n4|SQL|t\n5|SQL|t\n6|SQL|t\n7|SQL|t\n8|SQL|t\n9|SQL|t\n10|SQL|t\n11|SQL|t\n12|SQL|t\n13|SQL|t\n14|SQL|t\n15|SQL|t\n16|SQL|t\n17|SQL|t\n18|SQL|t\n19|SQL|t\n20|SQL|t\n21|SQL|t\n22|SQL|t\n23|SQL|t\n24|SQL|t\n25|SQL|t\n26|SQL|t\n27|SQL|t\n28|SQL|t\n29|SQL|t\n30|SQL|t\n31|SQL|t\n32|SQL|t\n33|SQL|t\n34|SQL|t\n35|SQL|t\n36|SQL|t\n37|SQL|t\n38|SQL|t\n39|SQL|t\n40|SQL|t'
   rows="$(printf '%s' "${rows}" | sed '/^[[:space:]]*$/d')"
   [[ "${rows}" == "${expected}" ]] || policy_error "exact SQL/Success history가 아닙니다: ${rows}"
   verify_validate

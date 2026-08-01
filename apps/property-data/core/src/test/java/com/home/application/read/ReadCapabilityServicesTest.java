@@ -77,6 +77,10 @@ class ReadCapabilityServicesTest {
         assertThat(service.searchComplexes(null)).isEmpty();
         assertThat(service.suggestComplexes(" ")).isEmpty();
         assertThat(service.suggestComplexes(null)).isEmpty();
+        assertThat(service.searchComplexes("마")).isEmpty();
+        assertThat(service.suggestComplexes("마")).isEmpty();
+        assertThat(readers.searchCalls).isZero();
+        assertThat(readers.suggestionCalls).isZero();
         assertThat(service.searchComplexes("가".repeat(100))).hasSize(1);
         assertThat(service.searchComplexes("가 나 다 라 마 바 사 아")).hasSize(1);
 
@@ -195,6 +199,8 @@ class ReadCapabilityServicesTest {
 
         private String searchQuery;
         private String suggestionQuery;
+        private int searchCalls;
+        private int suggestionCalls;
         private int suggestionLimit;
         private int regionComplexLimit;
         private int regionComplexOffset;
@@ -204,6 +210,7 @@ class ReadCapabilityServicesTest {
 
         @Override
         public List<SearchComplexResult> searchComplexes(String query) {
+            searchCalls++;
             searchQuery = query;
             return List.of(
                     new SearchComplexResult(501L, "Sample Apartment", 1001L, 37.5123, 127.0456, "Sample address"));
@@ -211,6 +218,7 @@ class ReadCapabilityServicesTest {
 
         @Override
         public List<ComplexSuggestionResult> suggestComplexes(String query, int limit) {
+            suggestionCalls++;
             suggestionQuery = query;
             suggestionLimit = limit;
             return List.of(new ComplexSuggestionResult(501L, "Sample Apartment", 1001L, "Sample address"));

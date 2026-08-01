@@ -38,6 +38,29 @@ class BatchJobArgumentsTest {
     }
 
     @Test
+    @DisplayName("RTMS daily schedule은 AWS execution id를 namespaced canonical UUID로 변환한다")
+    void rtmsDailyScheduleUsesNamespacedExecutionIdentity() {
+        BatchJobArguments first = BatchJobArguments.from(
+                "rtmsDailyRefreshJob", Map.of("schedulerExecutionId", "d32c5kddcf5bb8c3"), clock);
+        BatchJobArguments repeated = BatchJobArguments.from(
+                "rtmsDailyRefreshJob", Map.of("schedulerExecutionId", "d32c5kddcf5bb8c3"), clock);
+
+        assertThat(first.jobParameters().getString("runDate")).isEqualTo("2026-07-07");
+        assertThat(first.jobParameters().getString("requestId"))
+                .matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+                .isEqualTo(repeated.jobParameters().getString("requestId"))
+                .isNotEqualTo(BatchJobArguments.from(
+                                "propertyEventRelayJob", Map.of("schedulerExecutionId", "d32c5kddcf5bb8c3"), clock)
+                        .jobParameters()
+                        .getString("requestId"));
+
+        assertThatThrownBy(() -> BatchJobArguments.from(
+                        "rtmsDailyRefreshJob", Map.of("schedulerExecutionId", "../unsafe"), clock))
+                .isInstanceOf(BatchExitCodeException.class)
+                .hasMessageContaining("schedulerExecutionId");
+    }
+
+    @Test
     @DisplayName("rolling insight job은 daily와 같은 runDate 및 requestId 식별 계약을 사용한다")
     void rollingInsightJobUsesOperationalRunDate() {
         BatchJobArguments arguments = BatchJobArguments.from(

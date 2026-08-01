@@ -192,6 +192,7 @@ run "data_phase_keeps_platform_services_dark_before_secret_bootstrap" {
         "scheduled-backup",
         "data-import-reconcile",
         "map-marker-projection",
+        "rtms-daily-refresh",
         "runtime-grants",
       ])
       && length(aws_ecs_task_definition.application) == 0
@@ -212,6 +213,30 @@ run "data_phase_keeps_platform_services_dark_before_secret_bootstrap" {
         for item in local.one_shot_specs["secret-readiness"].environment :
         item.value if item.name == "HOME_USER_OAUTH_ENABLED_PROVIDERS"
       ]) == "kakao"
+      && contains(local.external_runtime_parameter_names, "property/apt-service-key")
+      && toset(keys(local.one_shot_secret_parameters["rtms-daily-refresh"])) == toset([
+        "DB_PASSWORD",
+        "APT_SERVICE_KEY",
+      ])
+      && one([
+        for item in local.one_shot_specs["rtms-daily-refresh"].environment :
+        item.value if item.name == "SPRING_BATCH_JOB_NAME"
+      ]) == "rtmsDailyRefreshJob"
+      && one([
+        for item in local.one_shot_specs["rtms-daily-refresh"].environment :
+        item.value if item.name == "HOME_INGEST_RTMS_ALLOW_COORDINATE_PENDING_ONLY"
+      ]) == "true"
+      && one([
+        for item in local.one_shot_specs["rtms-daily-refresh"].environment :
+        item.value if item.name == "HOME_INSIGHT_TRADE_ENABLED"
+      ]) == "true"
+      && length(aws_scheduler_schedule.rtms_daily_refresh) == 1
+      && aws_scheduler_schedule.rtms_daily_refresh[0].schedule_expression == "cron(30 7 * * ? *)"
+      && aws_scheduler_schedule.rtms_daily_refresh[0].schedule_expression_timezone == "Asia/Seoul"
+      && aws_scheduler_schedule.rtms_daily_refresh[0].state == "DISABLED"
+      && jsondecode(aws_scheduler_schedule.rtms_daily_refresh[0].target[0].input).containerOverrides[0].command == [
+        "schedulerExecutionId=<aws.scheduler.execution-id>",
+      ]
     )
     error_message = "Data phase must define digest-pinned platform tasks but keep them stopped before secret bootstrap."
   }
@@ -254,6 +279,7 @@ run "post_cutover_enables_backup_and_public_alarms" {
       length(aws_route53_record.public) == 1
       && aws_dlm_lifecycle_policy.data[0].state == "ENABLED"
       && aws_scheduler_schedule.logical_backup[0].state == "ENABLED"
+      && aws_scheduler_schedule.rtms_daily_refresh[0].state == "ENABLED"
       && length(aws_cloudwatch_metric_alarm.ecs_running) == 1
       && length(aws_cloudwatch_metric_alarm.backup_age) == 1
       && length(aws_cloudwatch_metric_alarm.map_p95) == 1
@@ -293,6 +319,14 @@ run "private_phase_uses_fixed_bridge_ports_and_least_privilege_roles" {
         for item in local.application_specs["user-api"].environment :
         item.value if item.name == "HOME_USER_OAUTH_ENABLED_PROVIDERS"
       ]) == "kakao"
+      && one([
+        for item in local.application_specs["ai"].environment :
+        item.value if item.name == "HOME_AI_SUPERVISOR_GRAPH_MODE"
+      ]) == "off"
+      && one([
+        for item in local.application_specs["ai"].environment :
+        item.value if item.name == "HOME_AI_SUPERVISOR_GRAPH_CANARY_PERCENT"
+      ]) == "0"
       && toset(keys(local.application_secret_parameters["user-api"])) == toset([
         "USER_DB_PASSWORD",
         "KAKAO_OAUTH_CLIENT_ID",

@@ -3,6 +3,12 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 nginx_image="${NGINX_IMAGE:-nginx:1.27-alpine}"
+nginx_config="${script_dir}/chainguard-nginx.conf"
+grep -Fq 'log_format home_search_json escape=json' "${nginx_config}"
+grep -Fq '"uri":"$uri"' "${nginx_config}"
+grep -Fq 'access_log /dev/stdout home_search_json;' "${nginx_config}"
+! grep -Fq '$request_uri' "${nginx_config}"
+! grep -Fq '"request":"$request"' "${nginx_config}"
 suffix="${RANDOM}-$$"
 network="home-search-public-gateway-test-${suffix}"
 property_upstream="home-search-property-upstream-${suffix}"

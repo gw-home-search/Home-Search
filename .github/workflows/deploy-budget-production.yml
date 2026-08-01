@@ -31,7 +31,7 @@ on:
         default: false
         type: boolean
       recover_tainted_ssm_state:
-        description: "One-time protected recovery for verified budget-production partial-create taints"
+        description: "One-time protected recovery for verified taints or retained SSM parameters missing from state"
         required: true
         default: false
         type: boolean
@@ -69,6 +69,8 @@ jobs:
             -backend-config="use_lockfile=true"
           infra/deploy/recover-budget-production-tainted-ssm.sh \
             infra/terraform/budget-production "${AWS_REGION}"
+          infra/deploy/import-budget-production-retained-ssm.sh \
+            infra/terraform/budget-production "${AWS_REGION}" property/apt-service-key
 
   plan:
     name: budget-production-read-only-plan

@@ -93,6 +93,10 @@ locals {
       HOME_MIGRATION_REFERENCE_TARGET_PASSWORD = "postgres/ai-importer-password"
     }
     map-marker-projection = { DB_PASSWORD = "postgres/property-runtime-password" }
+    rtms-daily-refresh = {
+      DB_PASSWORD     = "postgres/property-runtime-password"
+      APT_SERVICE_KEY = "property/apt-service-key"
+    }
     runtime-grants = {
       PROPERTY_MIGRATOR_DB_PASSWORD = "postgres/property-migrator-password"
       USER_MIGRATOR_DB_PASSWORD     = "postgres/user-migrator-password"
@@ -112,6 +116,7 @@ locals {
     scheduled-backup      = "backup"
     data-import-reconcile = "backup"
     map-marker-projection = "property-batch"
+    rtms-daily-refresh    = "property-batch"
     runtime-grants        = "ops-bootstrap"
   }
 

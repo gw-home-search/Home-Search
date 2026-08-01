@@ -597,7 +597,12 @@ REVOKE ALL ON SCHEMA public, batch FROM home_search_ai_reader;
 REVOKE ALL ON ALL TABLES IN SCHEMA ai_read FROM PUBLIC, home_search_ai_reader;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA ai_read FROM PUBLIC, home_search_ai_reader;
 GRANT USAGE ON SCHEMA ai_read TO home_search_ai_reader;
-GRANT SELECT ON ai_read.complex_fact, ai_read.trade_fact TO home_search_ai_reader;
+GRANT SELECT ON ai_read.complex_fact,
+                ai_read.trade_fact,
+                ai_read.region_fact,
+                ai_read.complex_search_fact,
+                ai_read.complex_profile_fact
+TO home_search_ai_reader;
 SQL
         ;;
       admin) cat >"${sql}" <<'SQL'
@@ -641,7 +646,7 @@ materialize_keys() {
   fi
   if [[ -n "${PUBLIC_KEY_PEM:-}" ]]; then
     printf '%s' "${PUBLIC_KEY_PEM}" >"${KEY_OUTPUT_DIRECTORY}/public.pem"
-    chmod 0600 "${KEY_OUTPUT_DIRECTORY}/public.pem"
+    chmod 0644 "${KEY_OUTPUT_DIRECTORY}/public.pem"
   fi
 }
 

@@ -259,6 +259,7 @@ jobs:
           terraform -chdir=infra/terraform/budget-production show -json rollout.tfplan >deployment-evidence/rollout-plan.json
           bash infra/deploy/verify-budget-production-rollout-plan.sh deployment-evidence/rollout-plan.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
         with:
           name: "budget-production-incremental-plan-${{ inputs.release_tag }}"
           path: |

@@ -249,7 +249,10 @@ jobs:
           set -Eeuo pipefail
           terraform -chdir=infra/terraform/budget-production fmt -check
           terraform -chdir=infra/terraform/budget-production validate
-          terraform -chdir=infra/terraform/budget-production test
+          (
+            unset TF_VAR_deployment_phase TF_VAR_data_services_enabled TF_VAR_public_dns_enabled TF_VAR_backup_schedules_enabled
+            terraform -chdir=infra/terraform/budget-production test
+          )
           code=0
           terraform -chdir=infra/terraform/budget-production plan -out=rollout.tfplan -detailed-exitcode || code=$?
           [[ "${code}" == 2 ]]

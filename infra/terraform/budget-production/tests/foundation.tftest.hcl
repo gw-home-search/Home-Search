@@ -343,9 +343,9 @@ run "private_phase_uses_fixed_bridge_ports_and_least_privilege_roles" {
 run "incremental_rollout_preserves_live_operational_settings" {
   command = plan
   variables {
-    deployment_phase      = "private"
-    data_services_enabled = true
-    ai_supervisor_graph_mode = "active"
+    deployment_phase                   = "private"
+    data_services_enabled              = true
+    ai_supervisor_graph_mode           = "active"
     ai_supervisor_graph_canary_percent = 100
     application_deployment_maximum_percents = {
       property-api = 200

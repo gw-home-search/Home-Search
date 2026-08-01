@@ -8,6 +8,7 @@ budget_backend="${root}/infra/terraform/budget-production/backend.tf"
 budget_outputs="${root}/infra/terraform/budget-production/outputs.tf"
 pin_selector="${root}/infra/deploy/select-budget-production-foundation-pins.sh"
 taint_recovery="${root}/infra/deploy/recover-budget-production-tainted-ssm.sh"
+retained_ssm_import="${root}/infra/deploy/import-budget-production-retained-ssm.sh"
 budget_notification_reconciler="${root}/infra/deploy/reconcile-budget-production-budget-notifications.sh"
 for required in \
   'name: Deploy budget production' \
@@ -22,6 +23,7 @@ for required in \
   'recover_tainted_ssm_state:' \
   'budget-production-foundation-state-recovery' \
   'infra/deploy/recover-budget-production-tainted-ssm.sh' \
+  'infra/deploy/import-budget-production-retained-ssm.sh' \
   'infra/deploy/reconcile-budget-production-budget-notifications.sh' \
   "needs: state_recovery" \
   "needs.state_recovery.result == 'success' || needs.state_recovery.result == 'skipped'" \
@@ -63,6 +65,7 @@ grep -Fq 'Name=tag:Name,Values=${name}-data' "${pin_selector}"
 grep -Fq 'Name=tag:Environment,Values=budget-production' "${pin_selector}"
 grep -Fq 'partial-resources' "${pin_selector}"
 [[ -x "${taint_recovery}" ]]
+[[ -x "${retained_ssm_import}" ]]
 [[ -x "${budget_notification_reconciler}" ]]
 grep -Fq 'output "ami_id" {' "${budget_outputs}"
 grep -Fq 'output "availability_zone" {' "${budget_outputs}"
@@ -102,6 +105,7 @@ done
 "${root}/infra/deploy/test-read-budget-production-phase.sh"
 "${root}/infra/deploy/test-select-budget-production-foundation-pins.sh"
 "${root}/infra/deploy/test-recover-budget-production-tainted-ssm.sh"
+"${root}/infra/deploy/test-import-budget-production-retained-ssm.sh"
 "${root}/infra/deploy/test-reconcile-budget-production-budget-notifications.sh"
 "${root}/infra/bootstrap/test-normalize-budget-generated-values.sh"
 "${root}/infra/deploy/test-run-budget-generated-value-normalization.sh"

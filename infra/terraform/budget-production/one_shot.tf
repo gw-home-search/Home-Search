@@ -113,6 +113,22 @@ locals {
         { name = "DB_USERNAME", value = "home_search_property_runtime" },
       ]
     }
+    rtms-daily-refresh = {
+      image_key  = "property-batch"
+      command    = []
+      entrypoint = []
+      environment = [
+        { name = "SPRING_PROFILES_ACTIVE", value = "prod" },
+        { name = "SPRING_BATCH_JOB_NAME", value = "rtmsDailyRefreshJob" },
+        { name = "DB_JDBC_URL", value = "jdbc:postgresql://${local.host_gateway}:15432/home_search?sslmode=require" },
+        { name = "DB_USERNAME", value = "home_search_property_runtime" },
+        { name = "HOME_INGEST_RTMS_DAILY_ENABLED", value = "true" },
+        { name = "HOME_INGEST_RTMS_DAILY_LAWD_CDS", value = "" },
+        { name = "HOME_INGEST_RTMS_DAILY_LOOKBACK_MONTHS", value = "2" },
+        { name = "HOME_INGEST_RTMS_ALLOW_COORDINATE_PENDING_ONLY", value = "true" },
+        { name = "HOME_INSIGHT_TRADE_ENABLED", value = "true" },
+      ]
+    }
     runtime-grants = {
       image_key  = "ops-bootstrap"
       command    = ["runtime-grants"]

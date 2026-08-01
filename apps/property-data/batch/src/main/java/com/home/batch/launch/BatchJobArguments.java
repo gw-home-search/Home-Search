@@ -47,7 +47,7 @@ public record BatchJobArguments(String jobName, JobParameters jobParameters) {
         String normalizedJobName = requireText(jobName, "SPRING_BATCH_JOB_NAME is required");
         Map<String, String> params = arguments == null ? Map.of() : Map.copyOf(arguments);
         return switch (normalizedJobName) {
-            case DAILY_JOB -> daily(normalizedJobName, params, clock);
+            case DAILY_JOB -> rtmsDaily(normalizedJobName, params, clock);
             case INSIGHT_DAILY_JOB -> daily(normalizedJobName, params, clock);
             case INSIGHT_ROLLING_7D_JOB -> daily(normalizedJobName, params, clock);
             case "marketNewsGeneralJob" -> newsGeneral(normalizedJobName, params, clock);
@@ -303,6 +303,20 @@ public record BatchJobArguments(String jobName, JobParameters jobParameters) {
 
     private static BatchJobArguments daily(String jobName, Map<String, String> arguments, Clock clock) {
         return daily(jobName, arguments, clock, canonicalRequestId(arguments.get("requestId")));
+    }
+
+    private static BatchJobArguments rtmsDaily(String jobName, Map<String, String> arguments, Clock clock) {
+        String schedulerExecutionId = text(arguments.get("schedulerExecutionId"));
+        if (schedulerExecutionId == null) {
+            return daily(jobName, arguments, clock);
+        }
+        if (schedulerExecutionId.length() > 128 || !schedulerExecutionId.matches("[A-Za-z0-9_-]+")) {
+            throw invalid("schedulerExecutionId must use 1-128 URL-safe identifier characters");
+        }
+        String requestId = UUID.nameUUIDFromBytes(
+                        ("rtms-daily-refresh:" + schedulerExecutionId).getBytes(StandardCharsets.UTF_8))
+                .toString();
+        return daily(jobName, arguments, clock, requestId);
     }
 
     private static BatchJobArguments newsGeneral(String jobName, Map<String, String> arguments, Clock clock) {

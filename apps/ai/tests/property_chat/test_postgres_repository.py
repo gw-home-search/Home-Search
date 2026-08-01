@@ -58,6 +58,51 @@ def test_property_pool_checks_connection_health_before_checkout(
     assert captured["check"] is FakePool.check_connection
 
 
+def test_complex_lookup_uses_literal_fact_path_before_alias_projection() -> None:
+    executed_queries: list[str] = []
+    executed_parameters: list[object] = []
+    row = {
+        "complex_id": 7774,
+        "display_name": "아현동 마포래미안푸르지오 1단지",
+        "region_code": "11440101",
+        "region_name": "아현동",
+        "address": "서울 마포구 아현동",
+        "latitude": 37.55,
+        "longitude": 126.95,
+        "marker_safe": True,
+        "data_updated_at": "2026-07-31T00:00:00+00:00",
+        "unit_count": 3885,
+        "use_date": date(2014, 9, 26),
+    }
+
+    class FakeResult:
+        def fetchall(self) -> list[dict[str, object]]:
+            return [row]
+
+    class FakeConnection:
+        def execute(self, query: str, parameters: object) -> FakeResult:
+            executed_queries.append(query)
+            executed_parameters.append(parameters)
+            return FakeResult()
+
+    class FakePool:
+        @contextmanager
+        def connection(self):
+            yield FakeConnection()
+
+    repository = object.__new__(PostgresPropertyFactRepository)
+    repository._pool = FakePool()  # type: ignore[attr-defined]
+
+    records = repository.find_complexes("마포래미안푸르지오 1단지", None, 6)
+
+    assert [record.complex_id for record in records] == [7774]
+    assert len(executed_queries) == 1
+    assert "FROM ai_read.complex_fact" in executed_queries[0]
+    assert "regexp_replace(display_name" in executed_queries[0]
+    assert "complex_search_fact" not in executed_queries[0]
+    assert "%마포래미안푸르지오1단지%" in executed_parameters[0]
+
+
 def test_complex_lookup_escapes_like_wildcards_and_applies_region(
     property_postgres_dsn: str,
 ) -> None:

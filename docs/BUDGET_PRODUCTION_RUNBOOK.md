@@ -16,6 +16,11 @@ Repository/Environment variables:
 - `BUDGET_PRODUCTION_HOSTED_ZONE_ID`, `BUDGET_PRODUCTION_ALARM_EMAIL`
 - `BUDGET_PRODUCTION_ACCEPTANCE_EVIDENCE_S3_URI`
 
+Release Environment의 `KAKAO_MAP_APP_KEY`에는 Kakao Developers의 browser 공개
+식별자인 **JavaScript key**를 넣는다. OAuth REST API key나 Native app key를 넣으면
+SDK가 `401`을 반환해 지도가 렌더링되지 않는다. Kakao Web 플랫폼에는
+`https://homesearch.world`를 등록한다.
+
 Acceptance URI는 `s3://home-search-budget-production-backup-<account-id>/budget-production/acceptance/<release-tag>`
 형식으로 고정한다. 그 prefix에는 `acceptance.json`, `security.json`,
 `observability.json`, `release-exceptions.json`이 있어야 하고 각 파일의
@@ -40,6 +45,9 @@ secret, user ID, JWT, prompt/query/answer, private key는 evidence에 넣지 않
    월간 비용이 발생하며 public DNS와 data/application service는 아직 비활성이다.
 5. foundation output의 backup/reference bucket, SSM parameter, instance/EBS/EIP를
    기록한다. SSM의 외부 credential parameter를 채우되 Terraform에는 값을 전달하지 않는다.
+   전국 RTMS daily refresh에는 Systems Manager Parameter Store의
+   `/home-search/budget-production/property/apt-service-key`에 공공데이터포털
+   `APT_SERVICE_KEY`를 SecureString으로 넣는다. local `.env`는 운영 ECS가 읽지 않는다.
    foundation apply는 Terraform state만 신뢰하지 않고 AWS Budgets API에서 actual `$50`,
    forecast `$80/$100` 알림과 승인 email subscriber를 exact 검증한다. provider create가
    중간 취소되어 budget만 남은 경우에는 누락 알림만 보정하고, 예상 밖 threshold나
@@ -61,6 +69,8 @@ secret, user ID, JWT, prompt/query/answer, private key는 evidence에 넣지 않
    동일 bucket release evidence suffix를 검증하며 이전 ECS revision은 보존한다.
 9. workflow가 secret bootstrap/readiness, Postgres/Valkey, Flyway, data-only import,
    reconcile, marker projection, logical backup을 순서대로 실행한다.
+   post-cutover schedule이 활성화되면 전국 RTMS daily refresh는 매일 07:30 KST에
+   실행되고 그 실행의 daily/rolling insight와 marker projection을 함께 갱신한다.
 10. import 동안만 Unlimited를 사용한다. 실패 여부와 무관하게 다음 step에서
    `standard`를 재설정하는지 확인한다. rollout job timeout까지 대비한 별도
    `budget-production-credit-cleanup` protected job도 host를 다시 찾아 Standard를
@@ -98,6 +108,11 @@ security group 이름/설명/무인바운드를 전부 확인한 뒤 state taint
 다른 taint나 live metadata 불일치가 하나라도 있으면 아무 state도 바꾸지 않고
 중단한다. parameter 값과 live resource는 읽거나 갱신하지 않으며 정상 복구 후 다음
 실행부터 입력은 다시 `false`로 둔다.
+
+운영 복구 중 `/home-search/budget-production/property/apt-service-key` 컨테이너를
+먼저 만들었다면 같은 입력으로 workflow를 한 번 실행한다. 복구 step은 exact 이름,
+`SecureString`, 보호 태그를 확인한 뒤 값은 읽지 않고 해당 resource만 Terraform
+state에 import한다. 다른 parameter key나 메타데이터 불일치는 fail closed한다.
 
 초기 data service 기동 전에 생성된 64자 hex parameter에 단일 LF가 포함됐다는
 Valkey URL-safe 오류가 확인되면 import를 시작하지 않는다. 먼저 exact Terraform

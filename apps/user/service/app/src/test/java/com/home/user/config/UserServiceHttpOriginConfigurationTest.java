@@ -17,6 +17,8 @@ class UserServiceHttpOriginConfigurationTest {
         assertThat(properties.getProperty("server.forward-headers-strategy")).isEqualTo("framework");
         assertThat(properties.getProperty("spring.security.oauth2.client.registration.kakao.redirect-uri"))
                 .isEqualTo("{baseUrl}/login/oauth2/code/{registrationId}");
+        assertThat(properties.getProperty("spring.security.oauth2.client.registration.kakao.scope"))
+                .isEqualTo("profile_nickname,profile_image");
         assertThat(properties.getProperty("home.oauth.enabled-providers"))
                 .isEqualTo("${HOME_USER_OAUTH_ENABLED_PROVIDERS:google,kakao,naver}");
         assertThat(properties.getProperty("spring.security.oauth2.client.registration.google.client-id"))

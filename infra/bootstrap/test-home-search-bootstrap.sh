@@ -436,6 +436,11 @@ grep -Fq 'GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public, batch TO 
 grep -Fq 'REVOKE DELETE ON ALL TABLES IN SCHEMA public, batch FROM home_search_property_runtime;' "${script}"
 grep -Fq 'GRANT DELETE ON TABLE market_news_collection_execution,' "${script}"
 grep -Fq 'market_news_quality_review_snapshot,' "${script}"
+grep -Fq 'GRANT SELECT ON ai_read.complex_fact,' "${script}"
+grep -Fq '                ai_read.trade_fact,' "${script}"
+grep -Fq '                ai_read.region_fact,' "${script}"
+grep -Fq '                ai_read.complex_search_fact,' "${script}"
+grep -Fq '                ai_read.complex_profile_fact' "${script}"
 ! grep -Fq 'ALTER DEFAULT PRIVILEGES IN SCHEMA public, batch GRANT SELECT, INSERT, UPDATE, DELETE' "${script}"
 ! grep -Fq 'GRANT USAGE ON SCHEMA reference, reference_read' "${script}"
 
@@ -457,6 +462,7 @@ grep -Fq 'GRANT USAGE, CREATE ON SCHEMA home_migration TO home_search_property_i
 PRIVATE_KEY_PEM='PRIVATE_SENTINEL' PUBLIC_KEY_PEM='PUBLIC_SENTINEL' \
 KEY_OUTPUT_DIRECTORY="${tmp_dir}/keys" "${script}" materialize-keys
 [[ "$(stat -c '%a' "${tmp_dir}/keys/private.pem" 2>/dev/null || stat -f '%Lp' "${tmp_dir}/keys/private.pem")" == '600' ]]
+[[ "$(stat -c '%a' "${tmp_dir}/keys/public.pem" 2>/dev/null || stat -f '%Lp' "${tmp_dir}/keys/public.pem")" == '644' ]]
 [[ "$(cat "${tmp_dir}/keys/private.pem")" == 'PRIVATE_SENTINEL' ]]
 [[ "$(cat "${tmp_dir}/keys/public.pem")" == 'PUBLIC_SENTINEL' ]]
 

@@ -7,6 +7,7 @@ from datetime import date, timedelta
 from typing import Protocol
 
 from .academy_locations import AcademyLocationSearchResult
+from .candidate_selection import CandidateMatch, DeterministicCandidateSelector
 from .capability_handlers import CapabilityResult, EvidenceFactBuilders
 from .childcare_centers import ChildcareSearchResult
 from .comparison import (
@@ -98,6 +99,7 @@ class ComparisonHandler:
         childcare_repository: ComparisonChildcareRepository | None,
         builders: EvidenceFactBuilders,
         today: Callable[[], date],
+        answer_first_enabled: bool = False,
     ) -> None:
         self._repository = repository
         self._rail_repository = rail_repository
@@ -107,6 +109,7 @@ class ComparisonHandler:
         self._childcare_repository = childcare_repository
         self._builders = builders
         self._today = today
+        self._answer_first_enabled = answer_first_enabled
 
     async def observe(self, plan: QueryPlan) -> CapabilityResult:
         if plan.capability != "comparison":
@@ -117,7 +120,14 @@ class ComparisonHandler:
             plan.region_name,
             6,
         )
-        unresolved = [name for name in plan.complex_names if len(matches.get(name, ())) != 1]
+        unresolved = [
+            name for name in plan.complex_names
+            if (
+                not matches.get(name, ())
+                if self._answer_first_enabled
+                else len(matches.get(name, ())) != 1
+            )
+        ]
         if unresolved:
             candidate_facts = [
                 self._builders.complex_fact(record)
@@ -132,7 +142,31 @@ class ComparisonHandler:
                 ],
                 "partial" if candidate_facts else "unavailable",
             )
-        complexes = tuple(matches[name][0] for name in plan.complex_names)
+        selected = tuple(
+            DeterministicCandidateSelector().select(tuple(
+                CandidateMatch(
+                    complex=record,
+                    search_ordinal=index,
+                    match_tier=record.match_tier,
+                    explicit_region_match=bool(plan.region_name),
+                )
+                for index, record in enumerate(matches[name])
+            )).primary.complex
+            for name in plan.complex_names
+        )
+        complexes = (
+            tuple(sorted(
+                selected,
+                key=lambda record: (
+                    not record.marker_safe,
+                    record.unit_count is None,
+                    -(record.unit_count or 0),
+                    record.complex_id,
+                ),
+            )[:2])
+            if self._answer_first_enabled and len(selected) > 2
+            else selected
+        )
         if len({record.complex_id for record in complexes}) != len(complexes):
             return CapabilityResult(
                 _deduplicate_facts([
@@ -289,6 +323,17 @@ class ComparisonHandler:
             exclusive_area_square_meters=plan.exclusive_area_square_meters,
         ).to_public_dict()
         artifact_fact_ids = tuple(dict.fromkeys(_fact_ids(artifact)))
+        selected_ids = {record.complex_id for record in complexes}
+        excluded_records = tuple({
+            record.complex_id: record
+            for records in matches.values()
+            for record in records
+            if record.complex_id not in selected_ids
+        }.values())[:5]
+        excluded_facts = _deduplicate_facts([
+            self._builders.complex_fact(record) for record in excluded_records
+        ])
+        alternative_artifact = _excluded_candidate_artifact(excluded_facts)
         all_facts = _deduplicate_facts([
             *complex_facts.values(),
             *basis_facts.values(),
@@ -296,6 +341,7 @@ class ComparisonHandler:
             *retail_facts.values(),
             *student_facts.values(),
             *childcare_facts.values(),
+            *excluded_facts,
         ])
         has_unavailable = any(
             cell.availability == "unavailable" for row in rows for cell in row.cells
@@ -315,8 +361,11 @@ class ComparisonHandler:
                 "조건별 관찰값을 나란히 보여드리며, 중요하게 보는 조건에 따라 선택이 달라질 수 있습니다.",
             ],
             "partial" if has_unavailable else "supported",
-            artifacts=(artifact,),
-            artifact_fact_ids=artifact_fact_ids,
+            artifacts=(artifact, *((alternative_artifact,) if alternative_artifact else ())),
+            artifact_fact_ids=tuple(dict.fromkeys((
+                *artifact_fact_ids,
+                *(fact.fact_id for fact in excluded_facts),
+            ))),
         )
 
     async def _rail(
@@ -390,6 +439,38 @@ def _trade_basis_fact(basis: RecentThreeTradeBasis) -> EvidenceFact:
         data_as_of=basis.cutoff,
         payload=payload,
     )
+
+
+def _excluded_candidate_artifact(
+    facts: list[EvidenceFact],
+) -> dict[str, object] | None:
+    if not facts:
+        return None
+    return {
+        "type": "factList",
+        "version": 1,
+        "artifactId": "comparison-alternative-complexes",
+        "title": "추가로 확인된 후보",
+        "items": [
+            {
+                "label": str(fact.payload.get("displayName")),
+                "value": _candidate_location_value(fact),
+                "factIds": [fact.fact_id],
+            }
+            for fact in facts[:5]
+        ],
+    }
+
+
+def _candidate_location_value(fact: EvidenceFact) -> str:
+    location = str(
+        fact.payload.get("regionName")
+        or fact.payload.get("address")
+        or "지역 정보 없음"
+    )
+    if fact.payload.get("markerSafe") is not True:
+        return f"{location} · 지도 위치 확인 불가"
+    return location
 
 
 def _rows(

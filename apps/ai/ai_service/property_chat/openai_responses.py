@@ -207,6 +207,29 @@ class OpenAIResponsesLanguageModel:
         except Exception:
             raise OpenAIResponsesError() from None
 
+    async def select_complex_candidates(
+        self,
+        *,
+        candidates: list[dict[str, object]],
+        comparison: bool,
+    ) -> object:
+        del comparison
+        return await self._structured_response(
+            name="grounded_complex_selection",
+            schema=_CANDIDATE_SELECTION_SCHEMA,
+            max_output_tokens=300,
+            reasoning_effort="low",
+            developer_prompt=(
+                "Select exactly one representative apartment complex using only the supplied "
+                "candidate facts. Prefer a candidate with exact observations for the requested "
+                "conditions. Do not select a zero-observation candidate when any candidate has "
+                "exact observations. Otherwise use region match, marker safety, public household "
+                "count, recency, and stable complex ID only as supported by the payload. Return "
+                "only supplied complex and fact IDs, and do not invent a reason or value."
+            ),
+            user_payload={"candidates": candidates},
+        )
+
     async def draft_answer(
         self,
         *,
@@ -786,6 +809,33 @@ _PLAN_ITEM_SCHEMA: dict[str, object] = {
         "stationName": {"type": ["string", "null"], "pattern": r"^.{1,100}$"},
     },
 }
+
+_CANDIDATE_SELECTION_SCHEMA: dict[str, object] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["selectedComplexIds", "reasonFactIds", "reasonCode"],
+    "properties": {
+        "selectedComplexIds": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1,
+            "uniqueItems": True,
+            "items": {"type": "integer", "minimum": 1},
+        },
+        "reasonFactIds": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 10,
+            "uniqueItems": True,
+            "items": {"type": "string", "pattern": r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"},
+        },
+        "reasonCode": {
+            "type": "string",
+            "pattern": r"^[A-Z][A-Z0-9_]{0,99}$",
+        },
+    },
+}
+
 
 _PLAN_SCHEMA: dict[str, object] = {
     "type": "object",

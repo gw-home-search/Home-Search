@@ -71,9 +71,10 @@ jobs:
             -backend-config="use_lockfile=true"
           TF_VAR_ami_id="$(terraform -chdir=infra/terraform/budget-production output -raw ami_id)"
           TF_VAR_availability_zone="$(terraform -chdir=infra/terraform/budget-production output -raw availability_zone)"
+          TF_VAR_deployment_phase=foundation
           TF_VAR_hosted_zone_id="${HOSTED_ZONE_ID}"
           TF_VAR_alarm_email="${ALARM_EMAIL}"
-          export TF_VAR_ami_id TF_VAR_availability_zone TF_VAR_hosted_zone_id TF_VAR_alarm_email
+          export TF_VAR_ami_id TF_VAR_availability_zone TF_VAR_deployment_phase TF_VAR_hosted_zone_id TF_VAR_alarm_email
           infra/deploy/recover-budget-production-tainted-ssm.sh \
             infra/terraform/budget-production "${AWS_REGION}"
           infra/deploy/import-budget-production-retained-ssm.sh \

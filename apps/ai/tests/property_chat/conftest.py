@@ -25,6 +25,7 @@ def property_postgres_dsn() -> Iterator[str]:
                 );
                 CREATE TABLE ai_read.complex_fact (
                     complex_id bigint PRIMARY KEY,
+                    parcel_id bigint NOT NULL,
                     display_name text NOT NULL,
                     name text,
                     trade_name text,
@@ -64,11 +65,11 @@ def property_postgres_dsn() -> Iterator[str]:
                     floor integer
                 );
                 INSERT INTO ai_read.complex_fact VALUES
-                    (1, '잠실동 잠실엘스', '잠실엘스', '잠실엘스', '11710101', '잠실동',
+                    (1, 101, '잠실동 잠실엘스', '잠실엘스', '잠실엘스', '11710101', '잠실동',
                      '서울 송파구 잠실동 19', 37.513, 127.082, true, '2026-07-16T00:00:00Z', 5678, '2008-09-30'),
-                    (2, '강남동 A_타워', 'A_타워', 'A_타워', '11680101', '강남동',
+                    (2, 102, '강남동 A_타워', 'A_타워', 'A_타워', '11680101', '강남동',
                      '서울 강남구 강남동 1', 37.50, 127.03, true, '2026-07-16T00:00:00Z', 100, '2010-01-01'),
-                    (3, '강남동 AB타워', 'AB타워', 'AB타워', '11680101', '강남동',
+                    (3, 103, '강남동 AB타워', 'AB타워', 'AB타워', '11680101', '강남동',
                      '서울 강남구 강남동 2', 37.51, 127.04, true, '2026-07-16T00:00:00Z', 200, '2011-01-01');
                 INSERT INTO ai_read.complex_search_fact VALUES
                     (1, '잠실동 잠실엘스', '잠실엘스', '잠실엘스', '잠실엘스', '{}', '{}',

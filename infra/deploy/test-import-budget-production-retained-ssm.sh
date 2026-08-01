@@ -63,9 +63,9 @@ present_state='{
   "resources":[{
     "mode":"managed",
     "type":"aws_ssm_parameter",
-    "name":"runtime",
+    "name":"retained_apt_service_key",
     "instances":[{
-      "index_key":"property/apt-service-key",
+      "index_key":0,
       "attributes":{
         "name":"/home-search/budget-production/property/apt-service-key",
         "value_wo_version":1
@@ -89,7 +89,7 @@ run_import() {
 }
 
 run_import success missing >"${temp_dir}/success.out"
-[[ "$(sed -n '1p' "${temp_dir}/calls")" == 'aws_ssm_parameter.runtime["property/apt-service-key"]' ]]
+[[ "$(sed -n '1p' "${temp_dir}/calls")" == 'aws_ssm_parameter.retained_apt_service_key[0]' ]]
 [[ "$(sed -n '2p' "${temp_dir}/calls")" == '/home-search/budget-production/property/apt-service-key' ]]
 grep -Fq '값을 읽지 않고' "${temp_dir}/success.out"
 jq -e '
@@ -106,6 +106,17 @@ jq -e '.resources[0].instances[0].attributes.value_wo_version == 1' \
 run_import success present >"${temp_dir}/present.out"
 [[ ! -s "${temp_dir}/calls" ]]
 grep -Fq '이미 Terraform state에 있습니다' "${temp_dir}/present.out"
+
+legacy_state="$(jq '.resources[0].name="runtime" | .resources[0].instances[0].index_key="property/apt-service-key"' <<<"${present_state}")"
+: >"${temp_dir}/calls"
+: >"${temp_dir}/pushed-state.json"
+IMPORT_SCENARIO=success IMPORT_STATE_MODE=present IMPORT_PRESENT_STATE_JSON="${legacy_state}" \
+  IMPORT_AFTER_STATE_JSON="${imported_state}" IMPORT_CALLS_FILE="${temp_dir}/calls" \
+  IMPORT_PUSHED_STATE_FILE="${temp_dir}/pushed-state.json" PATH="${temp_dir}/bin:${PATH}" \
+  "${script}" "${root}/infra/terraform/budget-production" ap-northeast-2 property/apt-service-key \
+  >"${temp_dir}/legacy.out"
+[[ ! -s "${temp_dir}/calls" ]]
+grep -Fq 'moved block' "${temp_dir}/legacy.out"
 
 bad_version_state="$(jq '.resources[0].instances[0].attributes.value_wo_version = 2' <<<"${present_state}")"
 : >"${temp_dir}/calls"

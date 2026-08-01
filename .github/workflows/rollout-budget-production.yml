@@ -168,14 +168,58 @@ jobs:
             '{ami_id:$ami,availability_zone:$az,hosted_zone_id:$zone,alarm_email:$email,cost_anomaly_monitor_arn:$cost_monitor}' \
             >infra/terraform/budget-production/foundation.auto.tfvars.json
           live_platform='{}'
+          platform_release_tag=''
           for service in budget-postgres budget-valkey; do
             task_definition="$(aws ecs describe-services --cluster "${cluster}" --services "${service}" \
               --query 'services[0].taskDefinition' --output text)"
-            image="$(aws ecs describe-task-definition --task-definition "${task_definition}" \
-              --query 'taskDefinition.containerDefinitions[0].image' --output text)"
+            definition="$(aws ecs describe-task-definition --task-definition "${task_definition}" --include TAGS --output json)"
+            image="$(jq -er '.taskDefinition.containerDefinitions[0].image' <<<"${definition}")"
             [[ "${image}" =~ /home-search/${service}@sha256:[0-9a-f]{64}$ ]]
+            candidate_release_tag="$(jq -er '
+              [.tags[] | select(.key == "Release") | .value]
+              | unique
+              | if length == 1 then .[0] else error("expected one Release tag") end
+            ' <<<"${definition}")"
+            [[ "${candidate_release_tag}" =~ ^v[0-9]+[.][0-9]+[.][0-9]+$ ]]
+            if [[ -z "${platform_release_tag}" ]]; then
+              platform_release_tag="${candidate_release_tag}"
+            else
+              [[ "${platform_release_tag}" == "${candidate_release_tag}" ]]
+            fi
             live_platform="$(jq --arg service "${service}" --arg image "${image}" '. + {($service):$image}' <<<"${live_platform}")"
           done
+          live_application_maximum_percents='{}'
+          ai_supervisor_graph_mode=''
+          ai_supervisor_graph_canary_percent=''
+          property_place_kakao_enabled=''
+          for service in admin-api admin-gateway ai chat-bff ml property-api public-gateway user-api; do
+            service_state="$(aws ecs describe-services --cluster "${cluster}" --services "${service}" --output json)"
+            jq -e '(.failures | length) == 0 and (.services | length) == 1' <<<"${service_state}" >/dev/null
+            maximum_percent="$(jq -er '.services[0].deploymentConfiguration.maximumPercent' <<<"${service_state}")"
+            [[ "${maximum_percent}" == 100 || "${maximum_percent}" == 200 ]]
+            live_application_maximum_percents="$(jq --arg service "${service}" --argjson value "${maximum_percent}" \
+              '. + {($service):$value}' <<<"${live_application_maximum_percents}")"
+            if [[ "${service}" == ai || "${service}" == property-api ]]; then
+              task_definition="$(jq -er '.services[0].taskDefinition' <<<"${service_state}")"
+              definition="$(aws ecs describe-task-definition --task-definition "${task_definition}" --query taskDefinition --output json)"
+            fi
+            if [[ "${service}" == ai ]]; then
+              ai_supervisor_graph_mode="$(jq -er '
+                [.containerDefinitions[] | select(.name == "ai") | .environment[]? | select(.name == "HOME_AI_SUPERVISOR_GRAPH_MODE") | .value]
+                | if length == 1 then .[0] else error("expected one AI graph mode") end
+              ' <<<"${definition}")"
+              ai_supervisor_graph_canary_percent="$(jq -er '
+                [.containerDefinitions[] | select(.name == "ai") | .environment[]? | select(.name == "HOME_AI_SUPERVISOR_GRAPH_CANARY_PERCENT") | .value]
+                | if length == 1 then .[0] else error("expected one AI graph canary percentage") end
+              ' <<<"${definition}")"
+              case "${ai_supervisor_graph_mode}" in off | shadow | canary | active) ;; *) exit 1 ;; esac
+              [[ "${ai_supervisor_graph_canary_percent}" =~ ^([0-9]|[1-9][0-9]|100)$ ]]
+            elif [[ "${service}" == property-api ]]; then
+              property_place_kakao_enabled="$(jq -r '[.containerDefinitions[] | select(.name == "property-api") | .environment[]? | select(.name == "HOME_PLACE_KAKAO_ENABLED") | .value][0] // "missing"' <<<"${definition}")"
+              case "${property_place_kakao_enabled}" in missing | false | true) ;; *) exit 1 ;; esac
+            fi
+          done
+          [[ -n "${platform_release_tag}" && -n "${ai_supervisor_graph_mode}" && -n "${ai_supervisor_graph_canary_percent}" ]]
           migration_uri=''; migration_sha=''
           while IFS= read -r task_definition; do
             definition="$(aws ecs describe-task-definition --task-definition "${task_definition}" --query taskDefinition --output json)"
@@ -189,12 +233,30 @@ jobs:
           infra/deploy/release-manifest-to-budget-tfvars.sh \
             deployment-evidence/release-manifest.json "${migration_uri}" "${migration_sha}" \
             deployment-evidence/release-candidate.tfvars.json
-          jq --argjson platform "${live_platform}" --argjson target "${PROPERTY_MIGRATION_TARGET}" '
-            .platform_image_uris=$platform | .property_migration_target=$target
+          jq --argjson platform "${live_platform}" --argjson target "${PROPERTY_MIGRATION_TARGET}" \
+            --arg platform_release_tag "${platform_release_tag}" \
+            --argjson maximums "${live_application_maximum_percents}" \
+            --arg ai_mode "${ai_supervisor_graph_mode}" \
+            --argjson ai_percent "${ai_supervisor_graph_canary_percent}" '
+            .platform_image_uris=$platform
+            | .platform_deployment_release_tag=$platform_release_tag
+            | .application_deployment_maximum_percents=$maximums
+            | .ai_supervisor_graph_mode=$ai_mode
+            | .ai_supervisor_graph_canary_percent=$ai_percent
+            | .property_migration_target=$target
           ' deployment-evidence/release-candidate.tfvars.json \
             >infra/terraform/budget-production/release.auto.tfvars.json
-          jq -n --argjson platform "${live_platform}" '{platform_image_uris:$platform}' \
+          jq -n --argjson platform "${live_platform}" --arg release_tag "${platform_release_tag}" \
+            '{platform_image_uris:$platform,platform_deployment_release_tag:$release_tag}' \
             >deployment-evidence/live-platform-images.json
+          jq -n --argjson maximums "${live_application_maximum_percents}" \
+            --arg ai_mode "${ai_supervisor_graph_mode}" \
+            --argjson ai_percent "${ai_supervisor_graph_canary_percent}" \
+            --arg property_place_kakao_enabled "${property_place_kakao_enabled}" \
+            '{application_deployment_maximum_percents:$maximums,
+              ai_supervisor_graph_mode:$ai_mode,ai_supervisor_graph_canary_percent:$ai_percent,
+              property_place_kakao_enabled_before_rollout:$property_place_kakao_enabled}' \
+            >deployment-evidence/live-application-settings.json
       - name: Require backup and disk headroom
         run: |
           set -Eeuo pipefail
@@ -242,7 +304,10 @@ jobs:
       - name: Preserve live PostgreSQL and Valkey digests
         run: |
           set -Eeuo pipefail
-          jq -e --slurp '.[0].platform_image_uris == .[1].platform_image_uris' \
+          jq -e --slurp '
+            .[0].platform_image_uris == .[1].platform_image_uris
+            and .[0].platform_deployment_release_tag == .[1].platform_deployment_release_tag
+          ' \
             deployment-evidence/live-platform-images.json infra/terraform/budget-production/release.auto.tfvars.json >/dev/null
       - name: Verify incremental Terraform allowlist
         run: |

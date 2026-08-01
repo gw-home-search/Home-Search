@@ -189,6 +189,55 @@ variable "deployment_release_tag" {
   }
 }
 
+variable "platform_deployment_release_tag" {
+  type        = string
+  default     = ""
+  description = "Optional live platform release tag preserved during an application-only incremental rollout."
+  validation {
+    condition     = var.platform_deployment_release_tag == "" || can(regex("^v[0-9]+[.][0-9]+[.][0-9]+$", var.platform_deployment_release_tag))
+    error_message = "platform_deployment_release_tag must be empty or a canonical vMAJOR.MINOR.PATCH tag."
+  }
+}
+
+variable "application_deployment_maximum_percents" {
+  type        = map(number)
+  default     = {}
+  description = "Optional exact live ECS deployment maximum percentages preserved by incremental rollout."
+  validation {
+    condition = (
+      length(setsubtract(toset(keys(var.application_deployment_maximum_percents)), toset([
+        "admin-api", "admin-gateway", "ai", "chat-bff", "ml", "property-api", "public-gateway", "user-api",
+      ]))) == 0
+      && alltrue([for value in values(var.application_deployment_maximum_percents) : contains([100, 200], value)])
+    )
+    error_message = "application_deployment_maximum_percents may contain only known application services with values 100 or 200."
+  }
+}
+
+variable "ai_supervisor_graph_mode" {
+  type        = string
+  default     = "off"
+  description = "Exact live AI supervisor graph mode preserved during incremental rollout."
+  validation {
+    condition     = contains(["off", "shadow", "canary", "active"], var.ai_supervisor_graph_mode)
+    error_message = "ai_supervisor_graph_mode must be off|shadow|canary|active."
+  }
+}
+
+variable "ai_supervisor_graph_canary_percent" {
+  type        = number
+  default     = 0
+  description = "Exact live AI supervisor graph canary percentage preserved during incremental rollout."
+  validation {
+    condition = (
+      var.ai_supervisor_graph_canary_percent >= 0
+      && var.ai_supervisor_graph_canary_percent <= 100
+      && floor(var.ai_supervisor_graph_canary_percent) == var.ai_supervisor_graph_canary_percent
+    )
+    error_message = "ai_supervisor_graph_canary_percent must be an integer from 0 through 100."
+  }
+}
+
 variable "property_migration_target" {
   type        = number
   default     = 40

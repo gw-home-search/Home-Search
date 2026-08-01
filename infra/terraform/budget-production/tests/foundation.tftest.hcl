@@ -2,6 +2,8 @@ mock_provider "aws" {
   mock_data "aws_caller_identity" { defaults = { account_id = "123456789012" } }
 }
 
+mock_provider "aws" { alias = "retained_ssm" }
+
 variables {
   ami_id                   = "ami-0123456789abcdef0"
   availability_zone        = "ap-northeast-2a"
@@ -149,6 +151,7 @@ run "foundation_is_single_az_single_instance_and_data_safe" {
         for parameter in aws_ssm_parameter.runtime :
         parameter.value_wo_version == 1
       ])
+      && aws_ssm_parameter.retained_apt_service_key[0].value_wo_version == 1
       && strcontains(file("ssm_parameter_containers.tf"), "value_wo")
       && !strcontains(file("ssm_parameter_containers.tf"), "value       = \"UNSET\"")
       && !strcontains(file("ssm_parameter_containers.tf"), "ignore_changes")
@@ -328,6 +331,7 @@ run "private_phase_uses_fixed_bridge_ports_and_least_privilege_roles" {
         for item in local.application_specs["ai"].environment :
         item.value if item.name == "HOME_AI_SUPERVISOR_GRAPH_CANARY_PERCENT"
       ]) == "0"
+      && strcontains(file("ssm_parameter_containers.tf"), "retained_apt_service_key")
       && toset(keys(local.application_secret_parameters["user-api"])) == toset([
         "USER_DB_PASSWORD",
         "KAKAO_OAUTH_CLIENT_ID",
@@ -335,5 +339,39 @@ run "private_phase_uses_fixed_bridge_ports_and_least_privilege_roles" {
       ])
     )
     error_message = "Private phase must use fixed bridge ports, keep the gateway dark, and separate execution roles."
+  }
+}
+
+run "incremental_rollout_preserves_live_operational_settings" {
+  command = plan
+  variables {
+    deployment_phase                   = "private"
+    data_services_enabled              = true
+    ai_supervisor_graph_mode           = "active"
+    ai_supervisor_graph_canary_percent = 100
+    application_deployment_maximum_percents = {
+      property-api = 200
+      chat-bff     = 200
+    }
+    platform_deployment_release_tag = "v1.0.10"
+  }
+
+  assert {
+    condition = (
+      aws_ecs_service.application["property-api"].deployment_maximum_percent == 200
+      && aws_ecs_service.application["chat-bff"].deployment_maximum_percent == 200
+      && aws_ecs_service.application["user-api"].deployment_maximum_percent == 100
+      && one([
+        for item in local.application_specs["ai"].environment :
+        item.value if item.name == "HOME_AI_SUPERVISOR_GRAPH_MODE"
+      ]) == "active"
+      && one([
+        for item in local.application_specs["ai"].environment :
+        item.value if item.name == "HOME_AI_SUPERVISOR_GRAPH_CANARY_PERCENT"
+      ]) == "100"
+      && aws_ecs_task_definition.platform["budget-postgres"].tags.Release == "v1.0.10"
+      && aws_ecs_task_definition.platform["budget-valkey"].tags.Release == "v1.0.10"
+    )
+    error_message = "Incremental rollout must preserve live AI, service deployment, and platform release settings."
   }
 }

@@ -9,9 +9,13 @@ trap cleanup EXIT
 
 jq -n --arg before_image '123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/property-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' \
   --arg after_image '123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/property-api@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' '{resource_changes:[
-  {mode:"managed",address:"aws_ecs_task_definition.application[\"property-api\"]",type:"aws_ecs_task_definition",change:{actions:["delete","create"],before:{skip_destroy:true,container_definitions:([{name:"property-api",image:$before_image,environment:[]}]|tojson),tags:{Release:"v1.0.10"},tags_all:{Release:"v1.0.10"}},after:{skip_destroy:true,container_definitions:([{name:"property-api",image:$after_image,environment:[]}]|tojson),tags:{Release:"v1.0.11"},tags_all:{Release:"v1.0.11"}}}},
+  {mode:"managed",address:"aws_ecs_task_definition.application[\"property-api\"]",type:"aws_ecs_task_definition",change:{actions:["delete","create"],before:{skip_destroy:true,ipc_mode:"",pid_mode:"",container_definitions:([{name:"property-api",image:$before_image,environment:[]}]|tojson),tags:{Release:"v1.0.10"},tags_all:{Release:"v1.0.10"}},after:{skip_destroy:true,ipc_mode:null,pid_mode:null,container_definitions:([{name:"property-api",image:$after_image,environment:[],dependsOn:[]}]|tojson),tags:{Release:"v1.0.11"},tags_all:{Release:"v1.0.11"}}}},
   {mode:"managed",address:"aws_ecs_service.application[\"property-api\"]",type:"aws_ecs_service",change:{actions:["update"],before:{task_definition:"revision-39"},after:{task_definition:"revision-40"}}},
-  {mode:"managed",address:"aws_scheduler_schedule.rtms_daily_refresh[0]",type:"aws_scheduler_schedule",change:{actions:["create"],after:{name:"home-search-budget-production-rtms-daily-refresh"}}}
+  {mode:"managed",address:"aws_scheduler_schedule.rtms_daily_refresh[0]",type:"aws_scheduler_schedule",change:{actions:["create"],after:{name:"home-search-budget-production-rtms-daily-refresh"}}},
+  {mode:"managed",address:"aws_iam_role_policy.backup_scheduler[0]",type:"aws_iam_role_policy",change:{actions:["update"],before:{policy:"old-task-revision"},after:{policy:"new-task-revision"}}},
+  {mode:"managed",address:"aws_iam_role_policy.secret_readiness[0]",type:"aws_iam_role_policy",change:{actions:["update"],before:{policy:"without-retained-parameter"},after:{policy:"with-retained-parameter"}}},
+  {mode:"managed",address:"aws_iam_role_policy.task_execution[\"map-marker-projection\"]",type:"aws_iam_role_policy",change:{actions:["update"],before:{policy:"legacy-extra-parameter"},after:{policy:"least-privilege"}}},
+  {mode:"managed",address:"aws_scheduler_schedule.logical_backup[0]",type:"aws_scheduler_schedule",change:{actions:["update"],before:{target:[{task_definition_arn:"revision-39"}]},after:{target:[{task_definition_arn:"revision-40"}]}}}
 ]}' >"${tmp_dir}/allowed.json"
 bash "${script}" "${tmp_dir}/allowed.json" >/dev/null
 
@@ -31,13 +35,14 @@ if bash "${script}" "${tmp_dir}/property-flyway-clean.json" >/dev/null 2>&1; the
   exit 1
 fi
 
-for fixture in platform dns ebs destroy import; do
+for fixture in platform dns ebs destroy import iam; do
   case "${fixture}" in
     platform) address='aws_ecs_service.platform["budget-postgres"]'; type=aws_ecs_service; actions='["update"]' ;;
     dns) address='aws_route53_record.public[0]'; type=aws_route53_record; actions='["update"]' ;;
     ebs) address='aws_ebs_volume.data[0]'; type=aws_ebs_volume; actions='["update"]' ;;
     destroy) address='aws_ecs_service.application["property-api"]'; type=aws_ecs_service; actions='["delete"]' ;;
     import) address='aws_ecs_task_definition.data_import'; type=aws_ecs_task_definition; actions='["create"]' ;;
+    iam) address='aws_iam_role_policy.unrelated'; type=aws_iam_role_policy; actions='["update"]' ;;
   esac
   jq -n --arg address "${address}" --arg type "${type}" --argjson actions "${actions}" \
     '{resource_changes:[{mode:"managed",address:$address,type:$type,change:{actions:$actions,before:{skip_destroy:false},after:{skip_destroy:false}}}]}' \

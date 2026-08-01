@@ -180,7 +180,7 @@ resource "aws_ecs_task_definition" "one_shot" {
     environment = each.value.environment
     secrets = [for name, parameter in local.one_shot_secret_parameters[each.key] : {
       name      = name
-      valueFrom = aws_ssm_parameter.runtime[parameter].arn
+      valueFrom = local.runtime_parameter_arns[parameter]
     }]
     mountPoints = contains(["data-import-reconcile", "scheduled-backup"], each.key) ? [{
       sourceVolume  = "task-work"

@@ -17,7 +17,7 @@ fail() {
   fail "허용되지 않은 retained SSM parameter key입니다: ${parameter_key}"
 
 parameter_name="${parameter_prefix}${parameter_key}"
-resource_address="aws_ssm_parameter.runtime[\"${parameter_key}\"]"
+resource_address='aws_ssm_parameter.retained_apt_service_key[0]'
 patched_state=""
 
 cleanup() {
@@ -35,16 +35,29 @@ parameter_state_status() {
         | select(
             .mode == "managed"
             and .type == "aws_ssm_parameter"
-            and .name == "runtime"
+            and .name == "retained_apt_service_key"
           )
         | .instances[]?
-        | select(.index_key == $key)
-      ] as $matches
-      | if ($matches | length) == 0 then "missing"
-        elif ($matches | length) != 1 then "invalid"
-        elif $matches[0].attributes.name != $name then "invalid"
-        elif $matches[0].attributes.value_wo_version == 1 then "ready"
-        elif $matches[0].attributes.value_wo_version == null then "version-missing"
+        | select(.index_key == 0)
+      ] as $current
+      | [
+          .resources[]?
+          | select(
+              .mode == "managed"
+              and .type == "aws_ssm_parameter"
+              and .name == "runtime"
+            )
+          | .instances[]?
+          | select(.index_key == $key)
+        ] as $legacy
+      | if (($current | length) + ($legacy | length)) == 0 then "missing"
+        elif (($current | length) + ($legacy | length)) != 1 then "invalid"
+        elif ($current | length) == 1 and $current[0].attributes.name != $name then "invalid"
+        elif ($legacy | length) == 1 and $legacy[0].attributes.name != $name then "invalid"
+        elif ($current | length) == 1 and $current[0].attributes.value_wo_version == 1 then "ready"
+        elif ($current | length) == 1 and $current[0].attributes.value_wo_version == null then "version-missing"
+        elif ($legacy | length) == 1 and $legacy[0].attributes.value_wo_version == 1 then "legacy-ready"
+        elif ($legacy | length) == 1 and $legacy[0].attributes.value_wo_version == null then "legacy-version-missing"
         else "invalid"
         end
     '
@@ -60,11 +73,14 @@ patch_imported_write_only_version() {
         | select(
             .value.mode == "managed"
             and .value.type == "aws_ssm_parameter"
-            and .value.name == "runtime"
+            and (.value.name == "runtime" or .value.name == "retained_apt_service_key")
           ) as $resource
         | $resource.value.instances
         | to_entries[]
-        | select(.value.index_key == $key)
+        | select(
+            ($resource.value.name == "runtime" and .value.index_key == $key)
+            or ($resource.value.name == "retained_apt_service_key" and .value.index_key == 0)
+          )
         | {
             resource_index: $resource.key,
             instance_index: .key,
@@ -94,6 +110,17 @@ patch_imported_write_only_version() {
 initial_state_status="$(parameter_state_status)"
 if [[ "${initial_state_status}" == ready ]]; then
   echo "상태: Pass - retained SSM parameter가 이미 Terraform state에 있습니다: ${parameter_key}"
+  exit 0
+fi
+if [[ "${initial_state_status}" == legacy-ready ]]; then
+  echo "상태: Pass - retained SSM parameter의 legacy state는 Terraform moved block이 이전합니다: ${parameter_key}"
+  exit 0
+fi
+if [[ "${initial_state_status}" == legacy-version-missing ]]; then
+  patch_imported_write_only_version
+  [[ "$(parameter_state_status)" == legacy-ready ]] ||
+    fail "legacy retained SSM parameter의 value_wo_version 보정에 실패했습니다: ${parameter_key}"
+  echo "상태: Pass - retained SSM parameter의 legacy state metadata를 보정했고 moved block이 이전합니다: ${parameter_key}"
   exit 0
 fi
 [[ "${initial_state_status}" == missing || "${initial_state_status}" == version-missing ]] ||

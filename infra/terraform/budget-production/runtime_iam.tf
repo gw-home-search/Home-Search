@@ -186,7 +186,7 @@ resource "aws_iam_role_policy" "task_execution" {
         Sid      = "ReadOwnParameters"
         Effect   = "Allow"
         Action   = ["ssm:GetParameter", "ssm:GetParameters"]
-        Resource = [for parameter in distinct(values(each.value)) : aws_ssm_parameter.runtime[parameter].arn]
+        Resource = [for parameter in distinct(values(each.value)) : local.runtime_parameter_arns[parameter]]
     }] : [])
   })
 }
@@ -218,7 +218,7 @@ resource "aws_iam_role_policy" "secret_bootstrap" {
     Statement = [{
       Effect   = "Allow"
       Action   = ["ssm:GetParameter", "ssm:PutParameter"]
-      Resource = [for name in local.generated_runtime_parameter_names : aws_ssm_parameter.runtime[name].arn]
+      Resource = [for name in local.generated_runtime_parameter_names : local.runtime_parameter_arns[name]]
     }]
   })
 }
@@ -232,7 +232,7 @@ resource "aws_iam_role_policy" "secret_readiness" {
     Statement = [{
       Effect   = "Allow"
       Action   = ["ssm:GetParameter"]
-      Resource = [for name in local.runtime_parameter_names : aws_ssm_parameter.runtime[name].arn]
+      Resource = [for name in local.runtime_parameter_names : local.runtime_parameter_arns[name]]
     }]
   })
 }

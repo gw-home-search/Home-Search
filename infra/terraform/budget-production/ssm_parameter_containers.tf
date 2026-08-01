@@ -42,10 +42,12 @@ locals {
     local.generated_runtime_parameter_names,
     local.external_runtime_parameter_names,
   )
+  retained_runtime_parameter_name = "property/apt-service-key"
+  managed_runtime_parameter_names = setsubtract(local.runtime_parameter_names, toset([local.retained_runtime_parameter_name]))
 }
 
 resource "aws_ssm_parameter" "runtime" {
-  for_each         = local.foundation_enabled ? local.runtime_parameter_names : toset([])
+  for_each         = local.foundation_enabled ? local.managed_runtime_parameter_names : toset([])
   name             = "/home-search/budget-production/${each.value}"
   description      = "Budget production protected value container; populated out-of-band after foundation apply."
   type             = "SecureString"
@@ -57,4 +59,34 @@ resource "aws_ssm_parameter" "runtime" {
   }
 
   tags = { DataClass = "secret", ParameterStatus = "out-of-band" }
+}
+
+resource "aws_ssm_parameter" "retained_apt_service_key" {
+  provider         = aws.retained_ssm
+  count            = local.foundation_enabled ? 1 : 0
+  name             = "/home-search/budget-production/${local.retained_runtime_parameter_name}"
+  description      = "Budget production RTMS provider key; populated out-of-band."
+  type             = "SecureString"
+  value_wo         = "UNSET"
+  value_wo_version = 1
+
+  lifecycle {
+    prevent_destroy = true
+  }
+
+  tags = { DataClass = "secret", ParameterStatus = "out-of-band" }
+}
+
+moved {
+  from = aws_ssm_parameter.runtime["property/apt-service-key"]
+  to   = aws_ssm_parameter.retained_apt_service_key[0]
+}
+
+locals {
+  runtime_parameter_arns = merge(
+    { for name, parameter in aws_ssm_parameter.runtime : name => parameter.arn },
+    local.foundation_enabled ? {
+      (local.retained_runtime_parameter_name) = aws_ssm_parameter.retained_apt_service_key[0].arn
+    } : {},
+  )
 }

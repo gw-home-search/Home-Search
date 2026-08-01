@@ -70,6 +70,7 @@ jobs:
           [[ "$(find release-evidence -type f -name '*.spdx.json' | wc -l | tr -d ' ')" == 19 ]]
           ! LC_ALL=C grep -R -a -Fq 'staging.homesearch.world' release-evidence
           baseline=''
+          baseline_source=live-recovery
           while IFS= read -r baseline_run; do
             candidate_dir="baseline-evidence/${baseline_run}"
             if gh run download "${baseline_run}" --repo "${GITHUB_REPOSITORY}" \
@@ -79,9 +80,13 @@ jobs:
             fi
           done < <(gh run list --repo "${GITHUB_REPOSITORY}" --workflow deploy-budget-production.yml \
             --status success --limit 20 --json databaseId --jq '.[].databaseId')
-          [[ -n "${baseline}" ]]
-          jq -e '.status == "BUDGET_PRODUCTION_READY" and (.artifacts | length) > 0' "${baseline}" >/dev/null
-          cp "${baseline}" deployment-evidence/baseline-ready.json
+          if [[ -n "${baseline}" ]]; then
+            jq -e '.status == "BUDGET_PRODUCTION_READY" and (.artifacts | length) > 0' "${baseline}" >/dev/null
+            cp "${baseline}" deployment-evidence/baseline-ready.json
+            baseline_source=historical
+          fi
+          jq -n --arg source "${baseline_source}" '{source:$source}' \
+            >deployment-evidence/baseline-source.json
       - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
         with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_PLAN_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
@@ -105,13 +110,6 @@ jobs:
             public)
               ;;
             data)
-              state_addresses="$(terraform -chdir=infra/terraform/budget-production state list)"
-              for required_address in \
-                'aws_route53_record.public[0]' \
-                'aws_ecs_service.application["public-gateway"]' \
-                'aws_ssm_association.configure_edge[0]'; do
-                grep -Fxq "${required_address}" <<<"${state_addresses}"
-              done
               phase_reconciled=true
               ;;
             *)
@@ -119,6 +117,13 @@ jobs:
               exit 1
               ;;
           esac
+          state_addresses="$(terraform -chdir=infra/terraform/budget-production state list)"
+          for required_address in \
+            'aws_route53_record.public[0]' \
+            'aws_ecs_service.application["public-gateway"]' \
+            'aws_ssm_association.configure_edge[0]'; do
+            grep -Fxq "${required_address}" <<<"${state_addresses}"
+          done
           [[ "$(terraform -chdir=infra/terraform/budget-production output -raw public_dns_enabled)" == true ]]
           [[ "$(terraform -chdir=infra/terraform/budget-production output -raw data_services_enabled)" == true ]]
           cluster="$(terraform -chdir=infra/terraform/budget-production output -raw ecs_cluster_name)"
@@ -132,6 +137,17 @@ jobs:
             and .services[0].runningCount == .services[0].desiredCount
             and .services[0].pendingCount == 0
           ' <<<"${public_gateway_state}" >/dev/null
+          public_body="$(mktemp)"
+          trap 'unlink "${public_body}"' EXIT
+          public_status="$(curl --silent --show-error --get --output "${public_body}" --write-out '%{http_code}' \
+            --data-urlencode 'q=마포래미안푸르지오' https://homesearch.world/api/v1/search/complexes)"
+          [[ "${public_status}" == 200 ]]
+          jq -e 'type == "array"' "${public_body}" >/dev/null
+          jq -n --argjson status "${public_status}" \
+            '{status:"pass",http_status:$status,response_is_array:true,dns_mutated:false}' \
+            >deployment-evidence/baseline-public-smoke.json
+          unlink "${public_body}"
+          trap - EXIT
           jq -n --arg recorded_phase "${recorded_phase}" --argjson phase_reconciled "${phase_reconciled}" \
             '{recorded_phase:$recorded_phase,phase_reconciled:$phase_reconciled}' \
             >deployment-evidence/public-phase.json
@@ -195,6 +211,26 @@ jobs:
             '$phase[0] + {status:"pass",current_phase:"public",dns_unchanged:true,platform_healthy:true,
               backup_age_seconds:$backup,root_free_bytes:$root,data_free_bytes:$data,platform_digest_preserved:true}' \
             >deployment-evidence/rollout-preflight.json
+          baseline_source="$(jq -er '.source' deployment-evidence/baseline-source.json)"
+          case "${baseline_source}" in
+            historical)
+              jq -e '.status == "BUDGET_PRODUCTION_READY" and (.artifacts | length) > 0' \
+                deployment-evidence/baseline-ready.json >/dev/null
+              ;;
+            live-recovery)
+              jq -n \
+                --slurpfile phase deployment-evidence/public-phase.json \
+                --slurpfile smoke deployment-evidence/baseline-public-smoke.json \
+                --slurpfile preflight deployment-evidence/rollout-preflight.json \
+                '{status:"BUDGET_PRODUCTION_READY",source:"live-recovery",
+                  artifacts:{public_phase:$phase[0],public_search:$smoke[0],rollout_preflight:$preflight[0]}}' \
+                >deployment-evidence/baseline-ready.json
+              ;;
+            *)
+              printf 'Unsupported budget-production baseline source: %s\n' "${baseline_source}" >&2
+              exit 1
+              ;;
+          esac
       - name: Preserve live PostgreSQL and Valkey digests
         run: |
           set -Eeuo pipefail

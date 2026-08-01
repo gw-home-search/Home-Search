@@ -597,12 +597,44 @@ LLM이 artifact의 값, 점수, 순서 또는 `factIds`를 만들지 않는다. 
 
 ### 지도 UI action 계약
 
-`uiActions`는 서버가 검증된 단지 좌표 fact에서 만든 one-shot 명령이다. response당
-최대 4개, 전체 JSON 직렬화 크기는 UTF-8 기준 최대 16,384 bytes다. AI와 BFF는
-Kakao 장소 검색을 실행하지 않고, 사용자가 버튼을 누른 뒤 web이 기존 viewport
-주변시설 endpoint를 호출한다.
+`uiActions`는 서버가 검증된 단지 좌표 fact에서 만든 명령이다. response당
+`focusComplex` 최대 6개, `showNearbyCategory` 최대 4개, 전체 최대 10개이며 전체
+JSON 직렬화 크기는 UTF-8 기준 최대 16,384 bytes다. 동일 `actionId`와 동일
+`focusComplex.complexId`는 중복할 수 없고, `autoRun=true`는 response당 최대 하나다.
+AI와 BFF는 Kakao 장소 검색을 실행하지 않는다.
 
-허용 action은 `showNearbyCategory/v1` 하나뿐이다.
+허용 action은 `focusComplex/v1`과 `showNearbyCategory/v1`이다. 알 수 없는 future
+action을 받은 client는 해당 action만 무시하고 `answer`와 다른 표시 모델을 유지한다.
+
+```json
+{
+  "type": "focusComplex",
+  "version": 1,
+  "actionId": "action-b8f12b67-0369-4e4a-bf5f-ce8af0315386-focus-complex-7756",
+  "label": "마포래미안푸르지오4단지 지도에서 보기",
+  "parcelId": 8015,
+  "complexId": 7756,
+  "center": { "lat": 37.5555141, "lng": 126.9537536 },
+  "level": 4,
+  "openDetail": true,
+  "autoRun": true,
+  "factIds": ["property-complex-7756"]
+}
+```
+
+- exact key set만 허용한다.
+- `parcelId`, `complexId`는 boolean이 아닌 positive safe integer다.
+- `center`는 `ai_read.complex_fact.marker_safe`와 같은 WGS84 대한민국 범위
+  (`33<=lat<=39`, `124<=lng<=132`)의 finite number다.
+- `level`은 정확히 `4`, `openDetail`은 정확히 `true`, `autoRun`은 boolean이다.
+- `factIds`는 1..10개의 unique identifier이며 실제 response fact에 존재해야 한다.
+- action의 `parcelId`, `complexId`, 좌표는 연결된 marker-safe complex fact와 모두
+  일치해야 하며 하나라도 다르면 action을 폐기한다.
+- `actionId`는 request ID와 `complexId`에서 결정론적으로 만든다.
+- 새 최종 단지 답변의 대표 action 하나만 `autoRun=true`다. Web은 최종 assistant
+  message를 IndexedDB에 저장한 뒤 한 번만 실행하며 과거 대화 restore에는 실행하지 않는다.
+- `focusComplex`는 사용자 클릭으로 반복 실행할 수 있다. 같은 좌표의 다른 complex도
+  `GET /api/v1/detail/{parcelId}?complexId={complexId}`로 다시 선택한다.
 
 ```json
 {
@@ -620,7 +652,7 @@ Kakao 장소 검색을 실행하지 않고, 사용자가 버튼을 누른 뒤 we
 - `category`는 이 기능에서 `HOSPITAL|DAYCARE_KINDERGARTEN`만 허용한다.
 - `center`는 WGS84 유한 좌표이고 `level`은 정확히 `4`다.
 - `factIds`는 marker-safe 단지 좌표를 증명하는 id를 하나 이상 포함해야 한다.
-- 같은 `actionId`는 한 web session에서 한 번만 소비한다.
+- `showNearbyCategory`의 같은 `actionId`는 한 web session에서 한 번만 소비한다.
 - action 실행 실패는 chat message를 실패시키거나 panel을 닫지 않는다.
 - Kakao 장소 응답, 전화, URL은 chat message, server DB, IndexedDB archive에 저장하지 않는다.
 

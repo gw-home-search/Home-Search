@@ -74,9 +74,10 @@ Use a map-first layout:
   errors. The answer renders first, followed only when present by at most three
   applied assumptions and the omitted items. A retry action is reserved for a
   hard transient HTTP error.
-- Decision reports render in this order: direct result, applied basis, primary
-  table, two grounded candidate differences, candidate details, actions, and
-  sources. A successful scope or method statement is not repeated as a warning.
+- Decision reports render in this order: direct result, representative map
+  action, primary table, applied basis, grounded candidate differences, other
+  candidates, follow-up, and sources. `uiReport` does not suppress a verified
+  `uiSummary.followUp`, and applied criteria are not repeated as warnings.
 - Recommendation and comparison data use native tables. Vertical rules and
   nested card surfaces are avoided; only data rows use subtle horizontal rules.
 - Candidate detail uses native `details`; rank one starts open and later rows

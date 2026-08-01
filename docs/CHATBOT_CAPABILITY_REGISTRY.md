@@ -49,7 +49,7 @@ Slice 0 종료 시점에는 챗봇 runtime이 없으므로 `지원` Capability�
 
 | Capability | 대표 질문 | 상태 | 필수 데이터셋 | 최소 등급 | 허용 주장 | 금지 주장 | 신선도 | 대체 답변 |
 |---|---|---|---|---|---|---|---|---|
-| `complex_identity` | “잠실엘스 어디야?” | 지원 | `home_search.ai_read` 단지·지역·marker-safe 좌표 | A | 식별된 단지명, 주소, 공개 좌표 | 동명 단지를 임의 선택 | Slice 3 감사 통과 active view | 후보를 나열하고 지역 등 추가 조건 요청 |
+| `complex_identity` | “잠실엘스 어디야?” | 지원 | `home_search.ai_read` 단지·지역·marker-safe 좌표 | A | 검증된 대표 단지명·주소와 다른 동명 후보 | 후보 fact 밖의 인지도·좌표를 임의 생성 | Slice 3 감사 통과 active view | 대표 기본정보를 먼저 답하고 다른 후보를 분리 표시 |
 | `recent_trade_lookup` | “전용 84㎡ 최근 실거래 5건” | 지원 | `ai_read` 정상 거래·단지 | A | 실제 거래일, 전용면적, 금액, 층 | 호가·시세로 재해석, 미래 가격 | 최신 거래일과 coverage를 응답에 표시 | 조회 기간과 조건에서 거래 없음 안내 |
 | `price_trend` | “최근 1년 가격 흐름” | 지원 | `ai_read` 정상 거래 | A | 동일 조건의 월별 집계와 거래량 | 미래 추세 단정, 표본 부족 은폐 | 요청 종료일 이하 active data | 계산 불가 기간과 최소 표본 부족 설명 |
 | `comparison` | “A와 B 가격·세대수 비교” | 제한 지원 | 부동산 A, 철도 A, 좌표 확인 대규모점포 A, 명시 시 학교 A·학원 B | A | 같은 기간·단위로 계산 가능한 항목과 항목별 차이 | 기준일·평형이 다른 수치의 직접 비교, overall winner, unavailable을 열세로 해석 | 사용한 항목의 freshness·coverage 통과 | 비교 가능한 항목만 답하고 누락을 분리 |

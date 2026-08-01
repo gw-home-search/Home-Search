@@ -179,6 +179,8 @@ grep -Fq 'platform_deployment_release_tag' "${rollout_workflow}"
 grep -Fq 'deployment-evidence/live-application-settings.json' "${rollout_workflow}"
 ! grep -Fq '| one' "${rollout_workflow}"
 grep -Fq 'infra/deploy/verify-budget-production-rollout-plan.sh' "${rollout_workflow}"
+[[ "$(grep -Fc 'deployment-evidence/rollout-plan.json deployment-evidence/live-application-settings.json' "${rollout_workflow}")" -eq 1 ]]
+[[ "$(grep -Fc 'deployment-evidence/remaining-plan.json deployment-evidence/live-application-settings.json' "${rollout_workflow}")" -eq 1 ]]
 grep -Fq 'unset TF_VAR_deployment_phase TF_VAR_data_services_enabled TF_VAR_public_dns_enabled TF_VAR_backup_schedules_enabled' "${rollout_workflow}"
 rollout_plan_artifact_line="$(grep -nF 'name: "budget-production-incremental-plan-${{ inputs.release_tag }}"' "${rollout_workflow}" | head -1 | cut -d: -f1)"
 [[ "${rollout_plan_artifact_line}" =~ ^[0-9]+$ ]]

@@ -3,6 +3,17 @@ provider "aws" {
   default_tags { tags = local.tags }
 }
 
+provider "aws" {
+  alias  = "retained_ssm"
+  region = var.aws_region
+  default_tags {
+    tags = {
+      Project     = "home-search"
+      Environment = "budget-production"
+    }
+  }
+}
+
 data "aws_caller_identity" "current" {}
 
 locals {

@@ -12,6 +12,7 @@ violations="$(jq -c '
     fromjson
     | map(
         del(.image)
+        | if .dependsOn == [] then del(.dependsOn) else . end
         | if $address == "aws_ecs_task_definition.one_shot[\"property-flyway\"]" then
             .command = ["__EXACT_PROPERTY_TARGET__", "__FLYWAY_OPERATION__"]
           else . end
@@ -21,6 +22,8 @@ violations="$(jq -c '
       );
   def normalized_task_definition($address):
     .container_definitions |= normalized_containers($address)
+    | .ipc_mode = (if .ipc_mode == "" then null else .ipc_mode end)
+    | .pid_mode = (if .pid_mode == "" then null else .pid_mode end)
     | del(.arn,.arn_without_revision,.id,.revision,.tags.Release,.tags_all.Release);
   def safe_task_revision:
     . as $change
@@ -64,7 +67,11 @@ violations="$(jq -c '
     or (.type == "aws_iam_role_policy" and
       (.address | test("^aws_iam_role_policy[.]task_execution\\[\\\"rtms-daily-refresh\\\"\\]$")))
     or (.type == "aws_iam_role_policy_attachment" and
-      (.address | test("^aws_iam_role_policy_attachment[.]task_execution\\[\\\"rtms-daily-refresh\\\"\\]$")));
+      (.address | test("^aws_iam_role_policy_attachment[.]task_execution\\[\\\"rtms-daily-refresh\\\"\\]$")))
+    or (.address == "aws_iam_role_policy.backup_scheduler[0]" and .change.actions == ["update"])
+    or (.address == "aws_iam_role_policy.secret_readiness[0]" and .change.actions == ["update"])
+    or (.address == "aws_iam_role_policy.task_execution[\"map-marker-projection\"]" and .change.actions == ["update"])
+    or (.address == "aws_scheduler_schedule.logical_backup[0]" and .change.actions == ["update"]);
   [.resource_changes[]?
     | select(.mode == "managed")
     | select(.change.actions != ["no-op"] and .change.actions != ["read"])

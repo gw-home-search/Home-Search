@@ -1,5 +1,10 @@
 locals {
   host_gateway = "172.31.255.1"
+  platform_release_tag = (
+    var.platform_deployment_release_tag == ""
+    ? var.deployment_release_tag
+    : var.platform_deployment_release_tag
+  )
   awslogs = {
     for name, group in aws_cloudwatch_log_group.runtime : name => {
       logDriver = "awslogs"
@@ -141,8 +146,8 @@ locals {
         { name = "HOME_AI_OPENAI_TIMEOUT_SECONDS", value = "30" },
         { name = "HOME_AI_QUERY_TIMEOUT_SECONDS", value = "60" },
         { name = "HOME_AI_DEPLOYMENT_TIER", value = "production" },
-        { name = "HOME_AI_SUPERVISOR_GRAPH_MODE", value = "off" },
-        { name = "HOME_AI_SUPERVISOR_GRAPH_CANARY_PERCENT", value = "0" },
+        { name = "HOME_AI_SUPERVISOR_GRAPH_MODE", value = var.ai_supervisor_graph_mode },
+        { name = "HOME_AI_SUPERVISOR_GRAPH_CANARY_PERCENT", value = tostring(var.ai_supervisor_graph_canary_percent) },
         { name = "HOME_AI_AGENTIC_ORCHESTRATION_ENABLED", value = "true" },
         { name = "HOME_AI_OFFICIAL_WEB_SEARCH_ENABLED", value = "false" },
         { name = "HOME_AI_ENABLED_PROPERTY_CAPABILITIES", value = "complex_identity,recent_trade_lookup,price_trend,recommendation,comparison" },
@@ -264,7 +269,7 @@ resource "aws_ecs_task_definition" "platform" {
     environment = each.value.environment
     secrets = [for name, parameter in local.platform_secret_parameters[each.key] : {
       name      = name
-      valueFrom = aws_ssm_parameter.runtime[parameter].arn
+      valueFrom = local.runtime_parameter_arns[parameter]
     }]
     mountPoints = [for name, volume in each.value.volumes : {
       sourceVolume  = name
@@ -290,7 +295,7 @@ resource "aws_ecs_task_definition" "platform" {
     logConfiguration = local.awslogs[each.key]
   }])
 
-  tags = { Service = each.key, Release = var.deployment_release_tag }
+  tags = { Service = each.key, Release = local.platform_release_tag }
 }
 
 resource "aws_ecs_service" "platform" {
@@ -360,7 +365,7 @@ resource "aws_ecs_task_definition" "application" {
       environment = each.value.environment
       secrets = [for name, parameter in local.application_secret_parameters[each.key] : {
         name      = name
-        valueFrom = aws_ssm_parameter.runtime[parameter].arn
+        valueFrom = local.runtime_parameter_arns[parameter]
       }]
       mountPoints = concat(
         length(local.application_key_parameters[each.key]) > 0 ? [{ sourceVolume = "keys", containerPath = "/run/keys", readOnly = true }] : [],
@@ -391,7 +396,7 @@ resource "aws_ecs_task_definition" "application" {
       essential              = false
       command                = ["materialize-keys"]
       environment            = [{ name = "KEY_OUTPUT_DIRECTORY", value = "/run/keys" }]
-      secrets                = [for name, parameter in local.application_key_parameters[each.key] : { name = name, valueFrom = aws_ssm_parameter.runtime[parameter].arn }]
+      secrets                = [for name, parameter in local.application_key_parameters[each.key] : { name = name, valueFrom = local.runtime_parameter_arns[parameter] }]
       mountPoints            = [{ sourceVolume = "keys", containerPath = "/run/keys", readOnly = false }]
       portMappings           = []
       systemControls         = []
@@ -418,9 +423,13 @@ resource "aws_ecs_service" "application" {
   launch_type                        = "EC2"
   scheduling_strategy                = "REPLICA"
   deployment_minimum_healthy_percent = 0
-  deployment_maximum_percent         = 100
-  enable_execute_command             = false
-  wait_for_steady_state              = false
+  deployment_maximum_percent = lookup(
+    var.application_deployment_maximum_percents,
+    each.key,
+    100,
+  )
+  enable_execute_command = false
+  wait_for_steady_state  = false
   deployment_circuit_breaker {
     enable   = true
     rollback = true

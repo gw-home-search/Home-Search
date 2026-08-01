@@ -3,6 +3,11 @@ set -Eeuo pipefail
 set +x
 umask 077
 
+if [[ "${1:-}" == 'property-search-audit' ]]; then
+  shift
+  exec /usr/local/bin/run-budget-property-search-audit "$@"
+fi
+
 readonly STAGING_ROOT="${HOME_BUDGET_BACKUP_STAGING_ROOT:-/backup-staging}"
 completed=false
 report_failure() {

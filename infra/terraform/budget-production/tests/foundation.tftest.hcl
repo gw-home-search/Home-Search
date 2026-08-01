@@ -213,6 +213,7 @@ run "data_phase_keeps_platform_services_dark_before_secret_bootstrap" {
         for item in local.one_shot_specs["secret-readiness"].environment :
         item.value if item.name == "HOME_USER_OAUTH_ENABLED_PROVIDERS"
       ]) == "kakao"
+      && local.one_shot_specs["property-flyway"].command == ["-target=40", "migrate"]
       && contains(local.external_runtime_parameter_names, "property/apt-service-key")
       && toset(keys(local.one_shot_secret_parameters["rtms-daily-refresh"])) == toset([
         "DB_PASSWORD",

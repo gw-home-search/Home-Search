@@ -63,7 +63,14 @@ run "budget_roles_are_separated_and_state_isolated" {
     condition = (
       one(local.github_budget_plan_oidc_string_equals["token.actions.githubusercontent.com:environment"]) == "budget-production-plan"
       && one(local.github_budget_apply_oidc_string_equals["token.actions.githubusercontent.com:environment"]) == "budget-production"
-      && one(local.github_budget_plan_oidc_string_equals["token.actions.githubusercontent.com:workflow"]) == "Deploy budget production"
+      && toset(local.github_budget_plan_oidc_string_equals["token.actions.githubusercontent.com:workflow"]) == toset([
+        "Deploy budget production",
+        "Rollout budget production",
+      ])
+      && toset(local.github_budget_apply_oidc_string_equals["token.actions.githubusercontent.com:workflow"]) == toset([
+        "Deploy budget production",
+        "Rollout budget production",
+      ])
     )
     error_message = "Budget OIDC trust must bind the exact plan/apply environments and workflow."
   }

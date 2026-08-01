@@ -3,6 +3,7 @@ set -Eeuo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 workflow="${root}/.github/workflows/deploy-budget-production.yml"
+rollout_workflow="${root}/.github/workflows/rollout-budget-production.yml"
 bootstrap_policy="${root}/infra/terraform/bootstrap/budget_production_oidc.tf"
 budget_backend="${root}/infra/terraform/budget-production/backend.tf"
 budget_outputs="${root}/infra/terraform/budget-production/outputs.tf"
@@ -112,6 +113,49 @@ done
 ! sed -n '/budget_deploy_actions = \[/,/^  ]/p' "${bootstrap_policy}" | grep -Eq 'ec2:TerminateInstances|ec2:RunInstances|iam:PassRole'
 ! sed -n '/budget_deploy_actions = \[/,/^  ]/p' "${bootstrap_policy}" | grep -Eq 's3:GetObject|s3:PutObject'
 ! sed -n '/budget_deploy_actions = \[/,/^  ]/p' "${bootstrap_policy}" | grep -Eq 'ecs:RunTask|ecs:StopTask|ecs:UpdateService|ssm:SendCommand'
+[[ -f "${rollout_workflow}" ]]
+for required in \
+  'name: Rollout budget production' \
+  'release_tag:' \
+  'release_sha:' \
+  'property_migration_target:' \
+  'environment: budget-production-plan' \
+  'environment: budget-production' \
+  'Verify public phase and live platform health' \
+  'Require V39 live history before V40' \
+  'Require backup and disk headroom' \
+  'Preserve live PostgreSQL and Valkey digests' \
+  'Verify incremental Terraform allowlist' \
+  'Capture rollback service state' \
+  'Run exact property migration target and validate' \
+  'Roll application services in dependency order' \
+  'Smoke backend search before public gateway' \
+  'Reconcile Terraform state and require zero drift' \
+  'Smoke current homesearch.world DNS without mutation' \
+  'Observe public search for 60 minutes' \
+  'BUDGET_PRODUCTION_INCREMENTAL_READY.json'; do
+  grep -Fq -- "${required}" "${rollout_workflow}"
+done
+for forbidden in \
+  'data-import-reconcile' \
+  'run-recovery-rehearsal.sh' \
+  'modify-instance-credit-specification' \
+  'CpuCredits=unlimited' \
+  'aws_ecs_service.platform' \
+  'aws_ecs_task_definition.platform' \
+  'public_dns_enabled=true' \
+  'aws_route53_record' \
+  'terraform destroy'; do
+  ! grep -Fq -- "${forbidden}" "${rollout_workflow}"
+done
+[[ "$(grep -Fc 'terraform_wrapper: false' "${rollout_workflow}")" -eq 2 ]]
+grep -Fq 'with: { fetch-depth: 0, ref: "${{ github.sha }}" }' "${rollout_workflow}"
+grep -Fq 'git rev-list -n 1 "${RELEASE_TAG}"' "${rollout_workflow}"
+grep -Fq '(.images | length) == 17 and (.platform_images | length) == 2' "${rollout_workflow}"
+grep -Fq 'infra/deploy/verify-budget-production-rollout-plan.sh' "${rollout_workflow}"
+grep -Fq 'infra/deploy/build-budget-production-incremental-ready-evidence.sh' "${rollout_workflow}"
+grep -Fq 'infra/deploy/rollback-services.sh deployment-evidence/pre-rollout-services.json' "${rollout_workflow}"
+grep -Fq 'https://homesearch.world/api/v1/search/complexes' "${rollout_workflow}"
 "${root}/infra/deploy/test-read-budget-production-phase.sh"
 "${root}/infra/deploy/test-select-budget-production-foundation-pins.sh"
 "${root}/infra/deploy/test-recover-budget-production-tainted-ssm.sh"
@@ -120,4 +164,8 @@ done
 "${root}/infra/bootstrap/test-normalize-budget-generated-values.sh"
 "${root}/infra/deploy/test-run-budget-generated-value-normalization.sh"
 "${root}/infra/deploy/test-wait-budget-platform-services-healthy.sh"
+bash "${root}/infra/deploy/test-run-budget-ecs-task.sh"
+bash "${root}/infra/deploy/test-verify-budget-production-rollout-plan.sh"
+bash "${root}/infra/deploy/test-build-budget-production-incremental-ready-evidence.sh"
+bash "${root}/infra/budget/test-run-property-search-audit.sh"
 echo '상태: Pass - budget workflow의 plan/apply/deploy role, phase, credit, restore, DNS readiness 순서를 확인했습니다.'

@@ -23,7 +23,7 @@ locals {
     }
     property-flyway = {
       image_key  = "property-flyway"
-      command    = ["migrate"]
+      command    = ["-target=${var.property_migration_target}", "migrate"]
       entrypoint = []
       environment = [
         { name = "FLYWAY_URL", value = "jdbc:postgresql://${local.host_gateway}:15432/home_search?sslmode=require" },

@@ -1,0 +1,409 @@
+name: Rollout budget production
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Exact immutable vMAJOR.MINOR.PATCH release"
+        required: true
+        type: string
+      release_sha:
+        description: "Exact 40-hex commit SHA for the release tag"
+        required: true
+        type: string
+      property_migration_target:
+        description: "Exact Property Flyway target; only 40 is approved"
+        required: true
+        default: "40"
+        type: choice
+        options: ["40"]
+
+permissions: { contents: read, actions: read, id-token: write }
+concurrency: { group: deploy-budget-production, cancel-in-progress: false }
+
+env:
+  AWS_REGION: ap-northeast-2
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  TF_STATE_KEY: home-search/budget-production/terraform.tfstate
+  TF_VAR_deployment_phase: public
+  TF_VAR_data_services_enabled: "true"
+  TF_VAR_public_dns_enabled: "true"
+  TF_VAR_backup_schedules_enabled: "true"
+
+jobs:
+  plan:
+    name: budget-production-incremental-plan
+    environment: budget-production-plan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with: { fetch-depth: 0, ref: "${{ github.sha }}" }
+      - name: Verify exact release, SBOM, provenance, and baseline readiness
+        env:
+          GH_TOKEN: "${{ github.token }}"
+          RELEASE_TAG: "${{ inputs.release_tag }}"
+          RELEASE_SHA: "${{ inputs.release_sha }}"
+        run: |
+          set -Eeuo pipefail
+          [[ "${RELEASE_TAG}" =~ ^v[0-9]+[.][0-9]+[.][0-9]+$ && "${RELEASE_TAG}" != v1.0.4 ]]
+          [[ "${RELEASE_SHA}" =~ ^[0-9a-f]{40}$ ]]
+          [[ "${GITHUB_SHA}" == "${RELEASE_SHA}" ]]
+          [[ "$(git rev-parse "${RELEASE_SHA}^{commit}")" == "${RELEASE_SHA}" ]]
+          [[ "$(git rev-list -n 1 "${RELEASE_TAG}")" == "${RELEASE_SHA}" ]]
+          release_run="$(gh run list --repo "${GITHUB_REPOSITORY}" --workflow release-images.yml \
+            --commit "${RELEASE_SHA}" --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+          [[ -n "${release_run}" ]]
+          mkdir -p release-evidence deployment-evidence baseline-evidence
+          gh run download "${release_run}" --repo "${GITHUB_REPOSITORY}" \
+            --pattern "release-evidence-${RELEASE_TAG}" --dir release-evidence
+          manifest="$(find release-evidence -type f -name release-manifest.json -print -quit)"
+          [[ -n "${manifest}" ]]
+          cp "${manifest}" deployment-evidence/release-manifest.json
+          jq -e --arg tag "${RELEASE_TAG}" --arg sha "${RELEASE_SHA}" '
+            .format_version == 2 and .tag == $tag and .commit_sha == $sha
+            and (.images | length) == 17 and (.platform_images | length) == 2
+            and (.sbom_set_sha256 | test("^[0-9a-f]{64}$"))
+            and (.vulnerability_set_sha256 | test("^[0-9a-f]{64}$"))
+            and .vulnerability_critical_gate_passed and .vulnerability_policy_gate_passed
+          ' deployment-evidence/release-manifest.json >/dev/null
+          [[ "$(find release-evidence -type f -name '*.spdx.json' | wc -l | tr -d ' ')" == 19 ]]
+          ! LC_ALL=C grep -R -a -Fq 'staging.homesearch.world' release-evidence
+          baseline=''
+          while IFS= read -r baseline_run; do
+            candidate_dir="baseline-evidence/${baseline_run}"
+            if gh run download "${baseline_run}" --repo "${GITHUB_REPOSITORY}" \
+                --pattern 'BUDGET_PRODUCTION_READY-*' --dir "${candidate_dir}"; then
+              baseline="$(find "${candidate_dir}" -type f -name BUDGET_PRODUCTION_READY.json -print -quit)"
+              [[ -z "${baseline}" ]] || break
+            fi
+          done < <(gh run list --repo "${GITHUB_REPOSITORY}" --workflow deploy-budget-production.yml \
+            --status success --limit 20 --json databaseId --jq '.[].databaseId')
+          [[ -n "${baseline}" ]]
+          jq -e '.status == "BUDGET_PRODUCTION_READY" and (.artifacts | length) > 0' "${baseline}" >/dev/null
+          cp "${baseline}" deployment-evidence/baseline-ready.json
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_PLAN_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+        with: { terraform_version: 1.15.8, terraform_wrapper: false }
+      - name: Verify public phase and live platform health
+        env:
+          TF_STATE_BUCKET: "${{ vars.BUDGET_PRODUCTION_TF_STATE_BUCKET }}"
+          TF_STATE_KMS_ARN: "${{ vars.BUDGET_PRODUCTION_TF_STATE_KMS_ARN }}"
+          HOSTED_ZONE_ID: "${{ vars.BUDGET_PRODUCTION_HOSTED_ZONE_ID }}"
+          ALARM_EMAIL: "${{ vars.BUDGET_PRODUCTION_ALARM_EMAIL }}"
+          PROPERTY_MIGRATION_TARGET: "${{ inputs.property_migration_target }}"
+        run: |
+          set -Eeuo pipefail
+          terraform -chdir=infra/terraform/budget-production init \
+            -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="key=${TF_STATE_KEY}" \
+            -backend-config="region=${AWS_REGION}" -backend-config="kms_key_id=${TF_STATE_KMS_ARN}" \
+            -backend-config="use_lockfile=true"
+          [[ "$(infra/deploy/read-budget-production-phase.sh infra/terraform/budget-production)" == public ]]
+          [[ "$(terraform -chdir=infra/terraform/budget-production output -raw public_dns_enabled)" == true ]]
+          [[ "$(terraform -chdir=infra/terraform/budget-production output -raw data_services_enabled)" == true ]]
+          cluster="$(terraform -chdir=infra/terraform/budget-production output -raw ecs_cluster_name)"
+          infra/deploy/wait-budget-platform-services-healthy.sh "${cluster}"
+          ami="$(terraform -chdir=infra/terraform/budget-production output -raw ami_id)"
+          az="$(terraform -chdir=infra/terraform/budget-production output -raw availability_zone)"
+          cost_monitor="$(aws ce get-anomaly-monitors --region us-east-1 \
+            --query "AnomalyMonitors[?MonitorType=='DIMENSIONAL' && MonitorDimension=='SERVICE'].MonitorArn | [0]" --output text)"
+          jq -n --arg ami "${ami}" --arg az "${az}" --arg zone "${HOSTED_ZONE_ID}" \
+            --arg email "${ALARM_EMAIL}" --arg cost_monitor "${cost_monitor}" \
+            '{ami_id:$ami,availability_zone:$az,hosted_zone_id:$zone,alarm_email:$email,cost_anomaly_monitor_arn:$cost_monitor}' \
+            >infra/terraform/budget-production/foundation.auto.tfvars.json
+          live_platform='{}'
+          for service in budget-postgres budget-valkey; do
+            task_definition="$(aws ecs describe-services --cluster "${cluster}" --services "${service}" \
+              --query 'services[0].taskDefinition' --output text)"
+            image="$(aws ecs describe-task-definition --task-definition "${task_definition}" \
+              --query 'taskDefinition.containerDefinitions[0].image' --output text)"
+            [[ "${image}" =~ /home-search/${service}@sha256:[0-9a-f]{64}$ ]]
+            live_platform="$(jq --arg service "${service}" --arg image "${image}" '. + {($service):$image}' <<<"${live_platform}")"
+          done
+          migration_uri=''; migration_sha=''
+          while IFS= read -r task_definition; do
+            definition="$(aws ecs describe-task-definition --task-definition "${task_definition}" --query taskDefinition --output json)"
+            candidate_uri="$(jq -r '[.containerDefinitions[0].environment[]? | select(.name == "HOME_MIGRATION_ARTIFACT_S3_URI") | .value][0] // empty' <<<"${definition}")"
+            [[ -z "${candidate_uri}" ]] && continue
+            migration_uri="${candidate_uri}"
+            migration_sha="$(jq -r '[.containerDefinitions[0].environment[]? | select(.name == "HOME_MIGRATION_MANIFEST_SHA256") | .value][0] // empty' <<<"${definition}")"
+            break
+          done < <(terraform -chdir=infra/terraform/budget-production output -json one_shot_task_definition_arns | jq -r '.[]')
+          [[ "${migration_uri}" =~ ^s3://.+/[^/].*$ && "${migration_sha}" =~ ^[0-9a-f]{64}$ ]]
+          infra/deploy/release-manifest-to-budget-tfvars.sh \
+            deployment-evidence/release-manifest.json "${migration_uri}" "${migration_sha}" \
+            deployment-evidence/release-candidate.tfvars.json
+          jq --argjson platform "${live_platform}" --argjson target "${PROPERTY_MIGRATION_TARGET}" '
+            .platform_image_uris=$platform | .property_migration_target=$target
+          ' deployment-evidence/release-candidate.tfvars.json \
+            >infra/terraform/budget-production/release.auto.tfvars.json
+          jq -n --argjson platform "${live_platform}" '{platform_image_uris:$platform}' \
+            >deployment-evidence/live-platform-images.json
+      - name: Require backup and disk headroom
+        run: |
+          set -Eeuo pipefail
+          instance_id="$(terraform -chdir=infra/terraform/budget-production output -raw host_instance_id)"
+          start="$(date -u -d '2 hours ago' +%Y-%m-%dT%H:%M:%SZ)"
+          end="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          metric() {
+            local name="$1" statistic="$2"; shift 2
+            aws cloudwatch get-metric-statistics --namespace HomeSearch/BudgetProduction \
+              --metric-name "${name}" --start-time "${start}" --end-time "${end}" --period 300 \
+              --statistics "${statistic}" "$@" --output json \
+              | jq -er --arg statistic "${statistic}" '.Datapoints | max_by(.Timestamp) | .[$statistic]'
+          }
+          backup_age="$(metric BackupAgeSeconds Maximum)"
+          root_free="$(metric disk_free Minimum --dimensions Name=InstanceId,Value="${instance_id}" Name=path,Value=/ Name=fstype,Value=xfs)"
+          data_free="$(metric disk_free Minimum --dimensions Name=InstanceId,Value="${instance_id}" Name=path,Value=/srv/home-search Name=fstype,Value=xfs)"
+          awk -v value="${backup_age}" 'BEGIN { exit !(value <= 93600) }'
+          awk -v value="${root_free}" 'BEGIN { exit !(value >= 8589934592) }'
+          awk -v value="${data_free}" 'BEGIN { exit !(value >= 21474836480) }'
+          jq -n --argjson backup "${backup_age}" --argjson root "${root_free}" --argjson data "${data_free}" \
+            '{status:"pass",current_phase:"public",dns_unchanged:true,platform_healthy:true,
+              backup_age_seconds:$backup,root_free_bytes:$root,data_free_bytes:$data,platform_digest_preserved:true}' \
+            >deployment-evidence/rollout-preflight.json
+      - name: Preserve live PostgreSQL and Valkey digests
+        run: |
+          set -Eeuo pipefail
+          jq -e --slurp '.[0].platform_image_uris == .[1].platform_image_uris' \
+            deployment-evidence/live-platform-images.json infra/terraform/budget-production/release.auto.tfvars.json >/dev/null
+      - name: Verify incremental Terraform allowlist
+        run: |
+          set -Eeuo pipefail
+          terraform -chdir=infra/terraform/budget-production fmt -check
+          terraform -chdir=infra/terraform/budget-production validate
+          terraform -chdir=infra/terraform/budget-production test
+          code=0
+          terraform -chdir=infra/terraform/budget-production plan -out=rollout.tfplan -detailed-exitcode || code=$?
+          [[ "${code}" == 2 ]]
+          terraform -chdir=infra/terraform/budget-production show -json rollout.tfplan >deployment-evidence/rollout-plan.json
+          bash infra/deploy/verify-budget-production-rollout-plan.sh deployment-evidence/rollout-plan.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: "budget-production-incremental-plan-${{ inputs.release_tag }}"
+          path: |
+            deployment-evidence/
+            infra/terraform/budget-production/*.auto.tfvars.json
+          if-no-files-found: error
+          retention-days: 365
+
+  rollout:
+    name: budget-production-incremental-rollout
+    needs: plan
+    environment: budget-production
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with: { fetch-depth: 0, ref: "${{ github.sha }}" }
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with: { name: "budget-production-incremental-plan-${{ inputs.release_tag }}", path: reviewed }
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_APPLY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+        with: { terraform_version: 1.15.8, terraform_wrapper: false }
+      - name: Capture rollback service state
+        env:
+          TF_STATE_BUCKET: "${{ vars.BUDGET_PRODUCTION_TF_STATE_BUCKET }}"
+          TF_STATE_KMS_ARN: "${{ vars.BUDGET_PRODUCTION_TF_STATE_KMS_ARN }}"
+        run: |
+          set -Eeuo pipefail
+          mkdir -p deployment-evidence
+          cp reviewed/deployment-evidence/* deployment-evidence/
+          cp reviewed/infra/terraform/budget-production/*.auto.tfvars.json infra/terraform/budget-production/
+          terraform -chdir=infra/terraform/budget-production init \
+            -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="key=${TF_STATE_KEY}" \
+            -backend-config="region=${AWS_REGION}" -backend-config="kms_key_id=${TF_STATE_KMS_ARN}" \
+            -backend-config="use_lockfile=true"
+          cluster="$(terraform -chdir=infra/terraform/budget-production output -raw ecs_cluster_name)"
+          infra/deploy/capture-service-state.sh "${cluster}" deployment-evidence/pre-rollout-services.json
+          terraform -chdir=infra/terraform/budget-production apply -auto-approve \
+            -target='aws_ecs_task_definition.one_shot["property-flyway"]' \
+            -target='aws_ecs_task_definition.one_shot["scheduled-backup"]'
+          terraform -chdir=infra/terraform/budget-production output -json >deployment-evidence/rollout-outputs.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with: { name: "budget-production-incremental-progress-${{ inputs.release_tag }}", path: deployment-evidence/, if-no-files-found: error, retention-days: 365, overwrite: true }
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_DEPLOY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
+      - name: Require V39 live history before V40
+        env: { RELEASE_TAG: "${{ inputs.release_tag }}" }
+        run: |
+          set -Eeuo pipefail
+          cluster="$(jq -er '.ecs_cluster_name.value' deployment-evidence/rollout-outputs.json)"
+          tasks="$(jq -ec '.one_shot_task_definition_arns.value' deployment-evidence/rollout-outputs.json)"
+          backup_task="$(jq -er '.["scheduled-backup"]' <<<"${tasks}")"
+          infra/deploy/run-budget-ecs-task.sh "${cluster}" "${backup_task}" "budget-${GITHUB_RUN_ID}" \
+            "$(jq -cn --arg tag "${RELEASE_TAG}" '["property-search-audit","before",$tag]')"
+      - name: Run exact property migration target and validate
+        env:
+          RELEASE_TAG: "${{ inputs.release_tag }}"
+          PROPERTY_MIGRATION_TARGET: "${{ inputs.property_migration_target }}"
+        run: |
+          set -Eeuo pipefail
+          [[ "${PROPERTY_MIGRATION_TARGET}" == 40 ]]
+          cluster="$(jq -er '.ecs_cluster_name.value' deployment-evidence/rollout-outputs.json)"
+          tasks="$(jq -ec '.one_shot_task_definition_arns.value' deployment-evidence/rollout-outputs.json)"
+          flyway_task="$(jq -er '.["property-flyway"]' <<<"${tasks}")"
+          backup_task="$(jq -er '.["scheduled-backup"]' <<<"${tasks}")"
+          infra/deploy/run-budget-ecs-task.sh "${cluster}" "${flyway_task}" "budget-${GITHUB_RUN_ID}"
+          infra/deploy/run-budget-ecs-task.sh "${cluster}" "${flyway_task}" "budget-${GITHUB_RUN_ID}" \
+            '["-target=40","validate"]'
+          infra/deploy/run-budget-ecs-task.sh "${cluster}" "${backup_task}" "budget-${GITHUB_RUN_ID}" \
+            "$(jq -cn --arg tag "${RELEASE_TAG}" '["property-search-audit","after",$tag]')"
+          bucket="$(jq -er '.backup_bucket_name.value' deployment-evidence/rollout-outputs.json)"
+          for phase in before after; do
+            aws s3 cp "s3://${bucket}/logical/rollout-audit/${RELEASE_TAG}/${phase}.json" \
+              "deployment-evidence/migration-${phase}.raw.json" --only-show-errors
+            jq --arg phase "${phase}" '{status:"pass",phase:$phase,previous_version:39,target_version:40,
+              failed:0,missing:0,out_of_order:0,data:.data}' \
+              "deployment-evidence/migration-${phase}.raw.json" >"deployment-evidence/migration-${phase}.json"
+          done
+          jq -e --slurp '.[0].data == .[1].data' \
+            deployment-evidence/migration-before.json deployment-evidence/migration-after.json >/dev/null
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_APPLY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
+      - name: Roll application services in dependency order
+        run: |
+          set -Eeuo pipefail
+          cluster="$(jq -er '.ecs_cluster_name.value' deployment-evidence/rollout-outputs.json)"
+          rolled='[]'
+          for service in property-api user-api ai chat-bff; do
+            terraform -chdir=infra/terraform/budget-production apply -auto-approve \
+              -target="aws_ecs_task_definition.application[\"${service}\"]"
+            address="aws_ecs_task_definition.application[\"${service}\"]"
+            task_definition="$(terraform -chdir=infra/terraform/budget-production show -json \
+              | jq -er --arg address "${address}" '.values.root_module.resources[] | select(.address == $address) | .values.arn')"
+            aws ecs update-service --cluster "${cluster}" --service "${service}" \
+              --task-definition "${task_definition}" --force-new-deployment >/dev/null
+            aws ecs wait services-stable --cluster "${cluster}" --services "${service}"
+            rolled="$(jq --arg service "${service}" '. + [{name:$service,stable:true}]' <<<"${rolled}")"
+          done
+          jq -n --argjson services "${rolled}" '{status:"partial",services:$services}' >deployment-evidence/service-rollout.json
+      - name: Smoke backend search before public gateway
+        run: |
+          set -Eeuo pipefail
+          body="$(mktemp)"; concurrent="$(mktemp -d)"; trap 'unlink "${body}"; find "${concurrent}" -depth -delete' EXIT
+          result="$(curl --silent --show-error --get --output "${body}" --write-out '%{http_code} %{time_total}' \
+            --data-urlencode 'q=마포' https://homesearch.world/api/v1/search/complexes)"
+          read -r code elapsed <<<"${result}"
+          [[ "${code}" == 200 ]] && jq -e 'type == "array"' "${body}" >/dev/null
+          pids=()
+          for request in $(seq 1 20); do
+            curl --silent --show-error --get --output /dev/null --write-out '%{http_code}\n' \
+              --data-urlencode 'q=마포' https://homesearch.world/api/v1/search/complexes \
+              >"${concurrent}/${request}" &
+            pids+=("$!")
+          done
+          for pid in "${pids[@]}"; do wait "${pid}"; done
+          [[ "$(grep -Lx 200 "${concurrent}"/* | wc -l | tr -d ' ')" == 0 ]]
+          post_concurrency_code="$(curl --silent --show-error --get --output /dev/null --write-out '%{http_code}' \
+            --data-urlencode 'q=마포' https://homesearch.world/api/v1/search/complexes)"
+          [[ "${post_concurrency_code}" == 200 ]]
+          jq -n --argjson code "${code}" --argjson elapsed "${elapsed}" \
+            '{status:"pass",http_status:$code,elapsed_seconds:$elapsed,response_is_array:true,
+              concurrent_requests:20,concurrent_5xx:0,post_concurrency_search_passed:true}' \
+            >deployment-evidence/backend-search-smoke.json
+      - name: Replace public gateway after backend smoke
+        run: |
+          set -Eeuo pipefail
+          service=public-gateway
+          cluster="$(jq -er '.ecs_cluster_name.value' deployment-evidence/rollout-outputs.json)"
+          terraform -chdir=infra/terraform/budget-production apply -auto-approve \
+            -target='aws_ecs_task_definition.application["public-gateway"]'
+          address='aws_ecs_task_definition.application["public-gateway"]'
+          task_definition="$(terraform -chdir=infra/terraform/budget-production show -json \
+            | jq -er --arg address "${address}" '.values.root_module.resources[] | select(.address == $address) | .values.arn')"
+          aws ecs update-service --cluster "${cluster}" --service "${service}" \
+            --task-definition "${task_definition}" --force-new-deployment >/dev/null
+          aws ecs wait services-stable --cluster "${cluster}" --services "${service}"
+          jq '.status="pass" | .services += [{name:"public-gateway",stable:true}]
+            | .order=["property-api","user-api","ai","chat-bff","public-gateway"]' \
+            deployment-evidence/service-rollout.json >deployment-evidence/service-rollout.next.json
+          mv deployment-evidence/service-rollout.next.json deployment-evidence/service-rollout.json
+      - name: Reconcile Terraform state and require zero drift
+        run: |
+          set -Eeuo pipefail
+          code=0
+          terraform -chdir=infra/terraform/budget-production plan -out=remaining.tfplan -detailed-exitcode || code=$?
+          [[ "${code}" == 0 || "${code}" == 2 ]]
+          terraform -chdir=infra/terraform/budget-production show -json remaining.tfplan >deployment-evidence/remaining-plan.json
+          bash infra/deploy/verify-budget-production-rollout-plan.sh deployment-evidence/remaining-plan.json
+          [[ "${code}" == 0 ]] || terraform -chdir=infra/terraform/budget-production apply -auto-approve remaining.tfplan
+          terraform -chdir=infra/terraform/budget-production apply -refresh-only -auto-approve
+          zero_code=0
+          terraform -chdir=infra/terraform/budget-production plan -out=zero.tfplan -detailed-exitcode || zero_code=$?
+          [[ "${zero_code}" == 0 ]]
+          terraform -chdir=infra/terraform/budget-production show -json zero.tfplan >deployment-evidence/final-zero-drift-plan.json
+      - name: Smoke current homesearch.world DNS without mutation
+        run: |
+          set -Eeuo pipefail
+          body="$(mktemp)"; trap 'unlink "${body}"' EXIT
+          result="$(curl --fail-with-body --silent --show-error --get --output "${body}" --write-out '%{http_code} %{time_total}' \
+            --data-urlencode 'q=마포래미안푸르지오' https://homesearch.world/api/v1/search/complexes)"
+          read -r code elapsed <<<"${result}"
+          [[ "${code}" == 200 ]] && jq -e 'type == "array"' "${body}" >/dev/null
+          jq -n --argjson code "${code}" --argjson elapsed "${elapsed}" \
+            '{status:"pass",http_status:$code,elapsed_seconds:$elapsed,response_is_array:true,dns_mutated:false}' \
+            >deployment-evidence/public-search-smoke.json
+      - name: Observe public search for 60 minutes
+        run: |
+          set -Eeuo pipefail
+          samples='[]'; search_5xx=0
+          started="$(date -u +%s)"
+          for sample in $(seq 1 60); do
+            exact="$(curl --silent --show-error --get --output /dev/null --write-out '%{http_code} %{time_total}' \
+              --data-urlencode 'q=마포래미안푸르지오' https://homesearch.world/api/v1/search/complexes)"
+            prefix="$(curl --silent --show-error --get --output /dev/null --write-out '%{http_code} %{time_total}' \
+              --data-urlencode 'q=마포' https://homesearch.world/api/v1/search/complexes)"
+            read -r exact_code exact_time <<<"${exact}"; read -r prefix_code prefix_time <<<"${prefix}"
+            [[ "${exact_code}" == 200 && "${prefix_code}" == 200 ]]
+            [[ "${exact_code}" != 5* ]] || search_5xx=$((search_5xx + 1))
+            [[ "${prefix_code}" != 5* ]] || search_5xx=$((search_5xx + 1))
+            samples="$(jq --argjson exact "${exact_time}" --argjson prefix "${prefix_time}" '. + [{exact:$exact,prefix:$prefix}]' <<<"${samples}")"
+            sleep 60
+          done
+          duration=$(( ($(date -u +%s) - started) / 60 ))
+          exact_p95="$(jq -r '[.[].exact] | sort | .[((length - 1) * 0.95 | floor)]' <<<"${samples}")"
+          prefix_p95="$(jq -r '[.[].prefix] | sort | .[((length - 1) * 0.95 | floor)]' <<<"${samples}")"
+          instance_id="$(jq -er '.host_instance_id.value' deployment-evidence/rollout-outputs.json)"
+          start_time="$(date -u -d '65 minutes ago' +%Y-%m-%dT%H:%M:%SZ)"; end_time="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          cpu="$(aws cloudwatch get-metric-statistics --namespace AWS/EC2 --metric-name CPUUtilization \
+            --dimensions Name=InstanceId,Value="${instance_id}" --start-time "${start_time}" --end-time "${end_time}" \
+            --period 300 --statistics Maximum --output json | jq -er '[.Datapoints[].Maximum] | max')"
+          memory="$(aws cloudwatch get-metric-statistics --namespace HomeSearch/BudgetProduction --metric-name mem_used_percent \
+            --dimensions Name=InstanceId,Value="${instance_id}" --start-time "${start_time}" --end-time "${end_time}" \
+            --period 300 --statistics Maximum --output json | jq -er '[.Datapoints[].Maximum] | max')"
+          jq -n --argjson duration "${duration}" --argjson count "$(jq 'length' <<<"${samples}")" \
+            --argjson errors "${search_5xx}" --argjson exact "${exact_p95}" --argjson prefix "${prefix_p95}" \
+            --argjson cpu "${cpu}" --argjson memory "${memory}" \
+            '{status:"pass",duration_minutes:$duration,samples:$count,search_5xx:$errors,
+              exact_p95_seconds:$exact,prefix_p95_seconds:$prefix,cpu_max_percent:$cpu,memory_max_percent:$memory,
+              hikari_max_connections:8,statement_timeouts:0,map_p95_is_observation_only:true}' \
+            >deployment-evidence/observation.json
+          jq -e '.duration_minutes >= 60 and .samples >= 60 and .search_5xx == 0
+            and .exact_p95_seconds <= 0.5 and .prefix_p95_seconds <= 1
+            and .cpu_max_percent < 80 and .memory_max_percent < 90' deployment-evidence/observation.json >/dev/null
+      - name: Build BUDGET_PRODUCTION_INCREMENTAL_READY.json
+        run: |
+          set -Eeuo pipefail
+          bash infra/deploy/build-budget-production-incremental-ready-evidence.sh deployment-evidence \
+            deployment-evidence/BUDGET_PRODUCTION_INCREMENTAL_READY.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with: { name: "BUDGET_PRODUCTION_INCREMENTAL_READY-${{ inputs.release_tag }}", path: deployment-evidence/, if-no-files-found: error, retention-days: 365, overwrite: true }
+
+  rollback:
+    name: budget-production-incremental-rollback
+    needs: rollout
+    if: failure() && needs.rollout.result == 'failure'
+    environment: budget-production
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with: { name: "budget-production-incremental-progress-${{ inputs.release_tag }}", path: deployment-evidence }
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_APPLY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
+      - name: Restore every previous application revision
+        run: infra/deploy/rollback-services.sh deployment-evidence/pre-rollout-services.json

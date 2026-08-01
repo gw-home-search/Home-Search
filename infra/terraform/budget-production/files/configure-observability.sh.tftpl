@@ -60,7 +60,7 @@ cat >/usr/local/sbin/home-search-publish-backup-age <<SCRIPT
 set -Eeuo pipefail
 set +x
 latest="\$(aws s3api list-objects-v2 --region '${aws_region}' --bucket '${backup_bucket}' --prefix logical/ \\
-  --query 'reverse(sort_by(Contents[?ends_with(Key, `.manifest.tsv`)], &LastModified))[0].LastModified' --output text)"
+  --query "reverse(sort_by(Contents[?ends_with(Key, '.manifest.tsv')], &LastModified))[0].LastModified" --output text)"
 if [[ "\$latest" == 'None' || -z "\$latest" ]]; then
   age=999999
 else

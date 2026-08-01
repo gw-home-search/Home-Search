@@ -128,11 +128,17 @@ if grep -Fq "${sentinel}" "${argv_log}" || grep -Fq "${sentinel}" "${test_dir}/s
   exit 1
 fi
 [[ "$(wc -l < "${aws_log}" | tr -d ' ')" == '16' ]]
-grep -Fq 's3://fixture-bucket/staging/property-20260716T010203Z.dump' "${aws_log}"
-grep -Fq 's3://fixture-bucket/staging/user-20260716T010203Z.manifest.tsv' "${aws_log}"
-grep -Fq 's3://fixture-bucket/staging/ai-20260716T010203Z.manifest.tsv' "${aws_log}"
+grep -Fq 's3api put-object' "${aws_log}"
+grep -Fq -- '--bucket fixture-bucket' "${aws_log}"
+grep -Fq -- '--key staging/property-20260716T010203Z.dump' "${aws_log}"
+grep -Fq -- '--key staging/user-20260716T010203Z.manifest.tsv' "${aws_log}"
+grep -Fq -- '--key staging/ai-20260716T010203Z.manifest.tsv' "${aws_log}"
 grep -Fq -- '--checksum-algorithm SHA256' "${aws_log}"
+grep -Fq -- '--checksum-sha256' "${aws_log}"
+grep -Fq -- '--server-side-encryption aws:kms' "${aws_log}"
+grep -Fq -- '--ssekms-key-id fixture-kms-key' "${aws_log}"
 grep -Fq -- 's3api head-object' "${aws_log}"
+! grep -Fq 's3 cp' "${aws_log}"
 if grep -Fq '/coordinate-' "${aws_log}"; then
   echo 'ERROR: default backup set must defer coordinate source data.' >&2
   exit 1

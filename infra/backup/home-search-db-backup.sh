@@ -179,9 +179,14 @@ print(base64.b64encode(bytes.fromhex(sys.argv[1])).decode("ascii"))
 PY
 )"
     content_length="$(wc -c <"${artifact}" | tr -d ' ')"
+    (( content_length <= 5368709120 )) || {
+      echo "ERROR: backup artifact exceeds the verified single-part upload limit: $(basename "${artifact}")" >&2
+      return 1
+    }
     key="${prefix}/$(basename "${artifact}")"
-    aws s3 cp "${artifact}" "s3://${bucket}/${key}" --only-show-errors \
-      --checksum-algorithm SHA256 --sse aws:kms --sse-kms-key-id "${kms_key_id}"
+    aws s3api put-object --bucket "${bucket}" --key "${key}" --body "${artifact}" \
+      --checksum-algorithm SHA256 --checksum-sha256 "${checksum_base64}" \
+      --server-side-encryption aws:kms --ssekms-key-id "${kms_key_id}" >/dev/null
     IFS=$'\t' read -r head_size head_checksum < <(
       aws s3api head-object --bucket "${bucket}" --key "${key}" --checksum-mode ENABLED \
         --query '[ContentLength,ChecksumSHA256]' --output text

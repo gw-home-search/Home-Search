@@ -105,6 +105,10 @@ locals {
     scheduled-backup = {
       HOME_BACKUP_PGPASSWORD = "postgres/backup-password"
     }
+    runtime-feature-audit = {
+      HOME_BACKUP_PGPASSWORD = "postgres/backup-password"
+    }
+    runtime-log-audit = {}
     data-import-reconcile = {
       HOME_MIGRATION_PROPERTY_TARGET_PASSWORD  = "postgres/property-importer-password"
       HOME_MIGRATION_REFERENCE_TARGET_PASSWORD = "postgres/ai-importer-password"
@@ -138,6 +142,8 @@ locals {
     ai-migration                = "ai"
     importer-grants             = "ops-bootstrap"
     scheduled-backup            = "backup"
+    runtime-feature-audit       = "backup"
+    runtime-log-audit           = "backup"
     data-import-reconcile       = "backup"
     map-marker-projection       = "property-batch"
     rtms-daily-refresh          = "property-batch"
@@ -326,6 +332,46 @@ resource "aws_iam_role_policy" "scheduled_backup" {
         Effect   = "Allow"
         Action   = ["s3:GetObject", "s3:PutObject"]
         Resource = ["${aws_s3_bucket.backup[0].arn}/logical/*"]
+      },
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "runtime_feature_audit" {
+  count = local.data_enabled ? 1 : 0
+  name  = "write-runtime-feature-audit-evidence"
+  role  = aws_iam_role.task_runtime["runtime-feature-audit"].id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid      = "WriteRuntimeAuditEvidence"
+      Effect   = "Allow"
+      Action   = ["s3:PutObject"]
+      Resource = ["${aws_s3_bucket.backup[0].arn}/deployment-evidence/runtime-audit/*"]
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "runtime_log_audit" {
+  count = local.data_enabled ? 1 : 0
+  name  = "read-runtime-logs-and-write-audit-evidence"
+  role  = aws_iam_role.task_runtime["runtime-log-audit"].id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ReadApplicationLogs"
+        Effect = "Allow"
+        Action = ["logs:FilterLogEvents"]
+        Resource = [for name in keys(local.application_specs) :
+          "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/home-search/budget-production/${name}:*"
+        ]
+      },
+      {
+        Sid      = "WriteRuntimeLogAuditEvidence"
+        Effect   = "Allow"
+        Action   = ["s3:PutObject"]
+        Resource = ["${aws_s3_bucket.backup[0].arn}/deployment-evidence/runtime-audit/*"]
       },
     ]
   })

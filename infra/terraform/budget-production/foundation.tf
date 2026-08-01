@@ -162,11 +162,14 @@ resource "aws_iam_role_policy" "host_operations" {
         } }
       },
       {
-        Sid       = "DecryptReviewedF37Model"
-        Effect    = "Allow"
-        Action    = ["kms:Decrypt"]
-        Resource  = ["arn:aws:kms:${var.aws_region}:${data.aws_caller_identity.current.account_id}:alias/aws/s3"]
-        Condition = { StringEquals = { "kms:ViaService" = "s3.${var.aws_region}.amazonaws.com" } }
+        Sid      = "DecryptReviewedF37Model"
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt"]
+        Resource = ["*"]
+        Condition = { StringEquals = {
+          "kms:ViaService"      = "s3.${var.aws_region}.amazonaws.com"
+          "kms:ResourceAliases" = "alias/aws/s3"
+        } }
       },
       {
         Sid      = "DescribeAttachedVolume"

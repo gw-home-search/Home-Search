@@ -127,6 +127,16 @@ run "budget_roles_are_separated_and_state_isolated" {
   }
 
   assert {
+    condition = anytrue([
+      for statement in jsondecode(aws_iam_role_policy.github_budget_plan.policy).Statement :
+      statement.Sid == "ReadReviewedBootstrapEvidence"
+      && statement.Action == ["s3:GetObject"]
+      && statement.Resource == ["arn:aws:s3:::home-search-budget-production-backup-123456789012/deployment-evidence/bootstrap/*/terraform-bootstrap-plan.json"]
+    ])
+    error_message = "Budget plan may read only reviewed bootstrap evidence from the exact release-scoped prefix."
+  }
+
+  assert {
     condition = (
       alltrue([
         for action in [
@@ -184,9 +194,32 @@ run "budget_roles_are_separated_and_state_isolated" {
         ])
         && statement.Resource == ["arn:aws:scheduler:ap-northeast-2:123456789012:schedule/home-search-budget-production-backup/home-search-budget-production-logical-backup"]
       ])
+      && anytrue([
+        for statement in jsondecode(aws_iam_policy.github_budget_apply_schedules.policy).Statement :
+        statement.Sid == "ManageBudgetRuntimeScheduleGroups"
+        && length(statement.Resource) == 2
+        && alltrue([for arn in statement.Resource : startswith(arn, "arn:aws:scheduler:ap-northeast-2:123456789012:schedule-group/home-search-budget-production-")])
+      ])
+      && anytrue([
+        for statement in jsondecode(aws_iam_policy.github_budget_apply_schedules.policy).Statement :
+        statement.Sid == "ManageBudgetRuntimeSchedules"
+        && length(statement.Resource) == 5
+        && alltrue([for arn in statement.Resource : startswith(arn, "arn:aws:scheduler:ap-northeast-2:123456789012:schedule/home-search-budget-production-")])
+      ])
       && aws_iam_role_policy_attachment.github_budget_apply_schedules.role == aws_iam_role.github_budget_production_apply.name
     )
-    error_message = "Budget apply must manage only the reviewed logical-backup schedule and its exact schedule group."
+    error_message = "Budget apply must manage only the reviewed backup, market-news, and RTMS schedules and their exact schedule groups."
+  }
+
+  assert {
+    condition = (
+      toset(keys(aws_ssm_parameter.budget_production_external)) == toset([
+        "property/news/naver-client-id",
+        "property/news/naver-client-secret",
+      ])
+      && alltrue([for parameter in values(aws_ssm_parameter.budget_production_external) : parameter.type == "SecureString"])
+    )
+    error_message = "Bootstrap must create only the two news provider SecureString containers needed before rollout."
   }
 
   assert {
@@ -252,6 +285,24 @@ run "budget_roles_are_separated_and_state_isolated" {
       && aws_iam_role_policy_attachment.github_budget_apply_service_linked_roles.role == aws_iam_role.github_budget_production_apply.name
     )
     error_message = "The budget apply role must receive only the exact approved service-linked role permissions through its dedicated managed policy."
+  }
+
+  assert {
+    condition = (
+      anytrue([
+        for statement in jsondecode(aws_iam_role_policy.github_budget_deploy.policy).Statement :
+        statement.Sid == "ReadBudgetAiCanaryLogs"
+        && statement.Action == ["logs:GetLogEvents"]
+        && statement.Resource == ["arn:aws:logs:ap-northeast-2:123456789012:log-group:/home-search/budget-production/ai:log-stream:*"]
+      ])
+      && anytrue([
+        for statement in jsondecode(aws_iam_role_policy.github_budget_deploy.policy).Statement :
+        statement.Sid == "InstallModelOnBudgetHostOnly"
+        && statement.Condition.StringEquals["ssm:resourceTag/Environment"] == "budget-production"
+        && statement.Condition.StringEquals["ssm:resourceTag/Service"] == "host"
+      ])
+    )
+    error_message = "Budget deploy must scope AI canary log reads and F37 installation to the exact approved runtime resources."
   }
 
   assert {

@@ -37,10 +37,25 @@ case "$*" in
     name="${task#arn:task/}"; name="${name%:7}"
     jq -n --arg name "${name}" '{containerDefinitions:[{name:$name,image:("registry/"+$name+"@sha256:"+("a"*64))}]}'
     ;;
+  *'ecs update-service'*) printf '%s\n' '{}' ;;
+  *'ecs wait services-stable'*) ;;
   *) exit 2 ;;
 esac
 FAKE_AWS
 chmod +x "${tmp_dir}/bin/aws"
+cat >"${tmp_dir}/bin/curl" <<'FAKE_CURL'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+output=''
+previous=''
+for argument in "$@"; do
+  [[ "${previous}" != '--output' ]] || output="${argument}"
+  previous="${argument}"
+done
+printf '%s\n' '[]' >"${output}"
+printf '200'
+FAKE_CURL
+chmod +x "${tmp_dir}/bin/curl"
 
 PATH="${tmp_dir}/bin:${PATH}" bash "${script}" fixture-cluster \
   "${tmp_dir}/applications.json" "${tmp_dir}/platform.json"
@@ -58,6 +73,16 @@ jq -e '(.services | keys | sort) == ["budget-postgres","budget-valkey"]' \
 if jq -e '.services | has("budget-postgres") or has("budget-valkey")' \
   "${tmp_dir}/applications.json" >/dev/null; then
   echo '상태: Fail - application rollback evidence에 platform service가 포함됐습니다.' >&2
+  exit 1
+fi
+PATH="${tmp_dir}/bin:${PATH}" bash "${root}/infra/deploy/rollback-services.sh" \
+  "${tmp_dir}/applications.json" "${tmp_dir}/rollback-progress.json" >/dev/null
+jq -e '.status == "pass" and (.services | length) == 8' "${tmp_dir}/rollback-progress.json" >/dev/null
+jq '.services["budget-postgres"]={task_definition:"arn:task/budget-postgres:7",desired_count:1}' \
+  "${tmp_dir}/applications.json" >"${tmp_dir}/unsafe-rollback.json"
+if PATH="${tmp_dir}/bin:${PATH}" bash "${root}/infra/deploy/rollback-services.sh" \
+  "${tmp_dir}/unsafe-rollback.json" "${tmp_dir}/unsafe-progress.json" >/dev/null 2>&1; then
+  echo '상태: Fail - rollback이 platform service key를 허용했습니다.' >&2
   exit 1
 fi
 echo '상태: Pass - application rollback과 platform read-only evidence를 분리했습니다.'

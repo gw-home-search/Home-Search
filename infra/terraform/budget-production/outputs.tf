@@ -73,6 +73,16 @@ output "one_shot_task_definition_arns" {
   description = "Reviewed EC2 bridge one-shot task definitions keyed by operation."
 }
 
+output "application_task_definition_arns" {
+  value       = { for name, task in aws_ecs_task_definition.application : name => task.arn }
+  description = "Release application task definitions keyed by the application-only rollout allowlist."
+}
+
+output "ml_model_install_document_name" {
+  value       = try(aws_ssm_document.install_ml_model[0].name, null)
+  description = "Validated custom SSM document used for the immutable F37 model installation."
+}
+
 output "application_service_names" {
   value       = sort(keys(aws_ecs_service.application))
   description = "Application ECS services present in the selected phase."

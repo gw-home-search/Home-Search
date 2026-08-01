@@ -26,6 +26,7 @@ jq -e --argjson applications "${expected_applications}" --argjson platform "${ex
   and .tag != "v1.0.4"
   and (.commit_sha | test("^[0-9a-f]{40}$"))
   and .build_architecture == "linux/amd64"
+  and .build_flags.market_news_enabled == true
   and .vulnerability_critical_gate_passed == true
   and .vulnerability_policy_gate_passed == true
   and ((.images | keys | sort) == $applications)
@@ -36,7 +37,7 @@ jq -e --argjson applications "${expected_applications}" --argjson platform "${ex
     and (.value.uri | test("^[0-9]{12}[.]dkr[.]ecr[.]ap-northeast-2[.]amazonaws[.]com/home-search/[a-z0-9-]+@sha256:[0-9a-f]{64}$"))
     and .value.uri == ((.value.uri | split("/")[0]) + "/" + .value.repository + "@" + .value.digest))
 ' "${manifest}" >/dev/null || {
-  echo '상태: Fail - budget-production release는 v1.0.4가 아닌 완전한 17+2 amd64 digest release여야 합니다.' >&2
+  echo '상태: Fail - budget-production release는 market news가 활성화된 완전한 17+2 amd64 digest release여야 합니다.' >&2
   exit 1
 }
 

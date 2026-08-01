@@ -12,27 +12,27 @@ variables {
   cost_anomaly_monitor_arn = "arn:aws:ce::123456789012:anomalymonitor/11111111-1111-1111-1111-111111111111"
   deployment_release_tag   = "v1.2.3"
   image_uris = {
-    property-api = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/property-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    property-batch = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/property-batch@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    property-flyway = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/property-flyway@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    admin-api = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/admin-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    admin-migration = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/admin-migration@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    admin-ops = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/admin-ops@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    user-api = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/user-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    user-insight-worker = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/user-insight-worker@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    user-flyway = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/user-flyway@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    property-api          = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/property-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    property-batch        = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/property-batch@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    property-flyway       = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/property-flyway@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    admin-api             = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/admin-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    admin-migration       = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/admin-migration@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    admin-ops             = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/admin-ops@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    user-api              = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/user-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    user-insight-worker   = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/user-insight-worker@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    user-flyway           = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/user-flyway@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     source-data-migration = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/source-data-migration@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    public-gateway = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/public-gateway@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    admin-gateway = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/admin-gateway@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    backup = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/backup@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    ops-bootstrap = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/ops-bootstrap@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    ml = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/ml@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    ai = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/ai@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    chat-bff = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/chat-bff@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    public-gateway        = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/public-gateway@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    admin-gateway         = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/admin-gateway@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    backup                = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/backup@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ops-bootstrap         = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/ops-bootstrap@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ml                    = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/ml@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ai                    = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/ai@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    chat-bff              = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/chat-bff@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
   }
   platform_image_uris = {
     budget-postgres = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/budget-postgres@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-    budget-valkey = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/budget-valkey@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    budget-valkey   = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/budget-valkey@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
   }
 }
 
@@ -43,18 +43,18 @@ run "prep_pins_every_application_service_without_activation" {
     data_services_enabled = true
     public_dns_enabled    = true
     application_service_task_definition_arns = {
-      property-api = "arn:aws:ecs:ap-northeast-2:123456789012:task-definition/property-api:7"
-      admin-api = "arn:aws:ecs:ap-northeast-2:123456789012:task-definition/admin-api:7"
-      user-api = "arn:aws:ecs:ap-northeast-2:123456789012:task-definition/user-api:7"
-      ai = "arn:aws:ecs:ap-northeast-2:123456789012:task-definition/ai:7"
-      chat-bff = "arn:aws:ecs:ap-northeast-2:123456789012:task-definition/chat-bff:7"
-      public-gateway = "arn:aws:ecs:ap-northeast-2:123456789012:task-definition/public-gateway:7"
-      admin-gateway = "arn:aws:ecs:ap-northeast-2:123456789012:task-definition/admin-gateway:7"
-      ml = "arn:aws:ecs:ap-northeast-2:123456789012:task-definition/ml:7"
+      property-api   = "arn:aws:ecs:ap-northeast-2:123456789012:task-definition/home-search-budget-production-property-api:7"
+      admin-api      = "arn:aws:ecs:ap-northeast-2:123456789012:task-definition/home-search-budget-production-admin-api:7"
+      user-api       = "arn:aws:ecs:ap-northeast-2:123456789012:task-definition/home-search-budget-production-user-api:7"
+      ai             = "arn:aws:ecs:ap-northeast-2:123456789012:task-definition/home-search-budget-production-ai:7"
+      chat-bff       = "arn:aws:ecs:ap-northeast-2:123456789012:task-definition/home-search-budget-production-chat-bff:7"
+      public-gateway = "arn:aws:ecs:ap-northeast-2:123456789012:task-definition/home-search-budget-production-public-gateway:7"
+      admin-gateway  = "arn:aws:ecs:ap-northeast-2:123456789012:task-definition/home-search-budget-production-admin-gateway:7"
+      ml             = "arn:aws:ecs:ap-northeast-2:123456789012:task-definition/home-search-budget-production-ml:7"
     }
     application_service_desired_counts = {
       property-api = 1, admin-api = 0, user-api = 1, ai = 1,
-      chat-bff = 1, public-gateway = 1, admin-gateway = 0, ml = 0
+      chat-bff     = 1, public-gateway = 1, admin-gateway = 0, ml = 0
     }
   }
 
@@ -66,6 +66,23 @@ run "prep_pins_every_application_service_without_activation" {
     ])
     error_message = "Prep plan must pin all eight application service task definitions and desired counts."
   }
+}
+
+run "prep_rejects_cross_family_application_pin" {
+  command = plan
+  variables {
+    application_service_task_definition_arns = {
+      property-api   = "arn:aws:ecs:ap-northeast-2:123456789012:task-definition/home-search-budget-production-property-api:7"
+      admin-api      = "arn:aws:ecs:ap-northeast-2:123456789012:task-definition/home-search-budget-production-admin-api:7"
+      user-api       = "arn:aws:ecs:ap-northeast-2:123456789012:task-definition/home-search-budget-production-user-api:7"
+      ai             = "arn:aws:ecs:ap-northeast-2:123456789012:task-definition/home-search-budget-production-property-api:7"
+      chat-bff       = "arn:aws:ecs:ap-northeast-2:123456789012:task-definition/home-search-budget-production-chat-bff:7"
+      public-gateway = "arn:aws:ecs:ap-northeast-2:123456789012:task-definition/home-search-budget-production-public-gateway:7"
+      admin-gateway  = "arn:aws:ecs:ap-northeast-2:123456789012:task-definition/home-search-budget-production-admin-gateway:7"
+      ml             = "arn:aws:ecs:ap-northeast-2:123456789012:task-definition/home-search-budget-production-ml:7"
+    }
+  }
+  expect_failures = [var.application_service_task_definition_arns]
 }
 
 run "runtime_restore_enables_only_approved_features" {
@@ -93,6 +110,11 @@ run "runtime_restore_enables_only_approved_features" {
       && toset(keys(local.application_secret_parameters["user-api"])) == toset([
         "USER_DB_PASSWORD", "GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET",
         "KAKAO_OAUTH_CLIENT_ID", "KAKAO_OAUTH_CLIENT_SECRET", "NAVER_OAUTH_CLIENT_ID", "NAVER_OAUTH_CLIENT_SECRET",
+      ])
+      && length(setintersection(local.managed_runtime_parameter_names, local.bootstrap_external_runtime_parameter_names)) == 0
+      && alltrue([
+        for name in local.bootstrap_external_runtime_parameter_names :
+        endswith(local.runtime_parameter_arns[name], "/home-search/budget-production/${name}")
       ])
     )
     error_message = "Property prediction/news, ML, and three-provider OAuth must be wired together."

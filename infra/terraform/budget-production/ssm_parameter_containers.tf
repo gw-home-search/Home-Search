@@ -45,7 +45,14 @@ locals {
     local.external_runtime_parameter_names,
   )
   retained_runtime_parameter_name = "property/apt-service-key"
-  managed_runtime_parameter_names = setsubtract(local.runtime_parameter_names, toset([local.retained_runtime_parameter_name]))
+  bootstrap_external_runtime_parameter_names = toset([
+    "property/news/naver-client-id",
+    "property/news/naver-client-secret",
+  ])
+  managed_runtime_parameter_names = setsubtract(
+    local.runtime_parameter_names,
+    setunion(toset([local.retained_runtime_parameter_name]), local.bootstrap_external_runtime_parameter_names),
+  )
 }
 
 resource "aws_ssm_parameter" "runtime" {
@@ -87,6 +94,9 @@ moved {
 locals {
   runtime_parameter_arns = merge(
     { for name, parameter in aws_ssm_parameter.runtime : name => parameter.arn },
+    { for name in local.bootstrap_external_runtime_parameter_names :
+      name => "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/home-search/budget-production/${name}"
+    },
     local.foundation_enabled ? {
       (local.retained_runtime_parameter_name) = aws_ssm_parameter.retained_apt_service_key[0].arn
     } : {},

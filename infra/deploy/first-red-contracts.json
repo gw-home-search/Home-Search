@@ -1,0 +1,17 @@
+{
+  "format_version": 1,
+  "tests": [
+    {"id":"RED-01","command":"infra/deploy/test-capture-service-state.sh","expected_failure":"application rollback capture included platform services"},
+    {"id":"RED-02","command":"terraform -chdir=infra/terraform/budget-production test -filter=tests/runtime-restore.tftest.hcl","expected_failure":"application service task definition was not pinned to the live ARN"},
+    {"id":"RED-03","command":"terraform -chdir=infra/terraform/budget-production test -filter=tests/runtime-restore.tftest.hcl","expected_failure":"RTMS schedule was coupled to backup_schedules_enabled"},
+    {"id":"RED-04","command":".github/scripts/test-budget-production-deploy-contract.sh","expected_failure":"market-news release and runtime flags were not all enabled"},
+    {"id":"RED-05","command":"terraform -chdir=infra/terraform/budget-production test -filter=tests/runtime-restore.tftest.hcl","expected_failure":"market-news task definitions and schedules were absent"},
+    {"id":"RED-06","command":"infra/deploy/test-install-ml-model.sh","expected_failure":"F37 installer was absent"},
+    {"id":"RED-07","command":"terraform -chdir=infra/terraform/budget-production test -filter=tests/runtime-restore.tftest.hcl","expected_failure":"prediction was disabled and ML desired count was zero"},
+    {"id":"RED-08","command":"terraform -chdir=infra/terraform/budget-production test -filter=tests/runtime-restore.tftest.hcl","expected_failure":"user-api wired only Kakao OAuth secrets"},
+    {"id":"RED-09","command":"infra/deploy/test-verify-budget-production-rollout-plan.sh","expected_failure":"rollout deny contract did not cover every forbidden scope"},
+    {"id":"RED-10","command":"infra/budget/test-run-property-search-audit.sh","expected_failure":"live V40 before-state was rejected"},
+    {"id":"RED-11","command":"infra/deploy/run-ai-canary.sh","expected_failure":"AI canary failure evidence was not produced"},
+    {"id":"RED-12","command":"infra/deploy/test-build-budget-production-incremental-ready-evidence.sh","expected_failure":"release manifest allowed market_news_enabled=false"}
+  ]
+}

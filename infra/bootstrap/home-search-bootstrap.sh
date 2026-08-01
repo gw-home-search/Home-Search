@@ -814,6 +814,9 @@ budget_secret_readiness() {
     ai/reference-dsn \
     ai/migrator-dsn \
     property/kakao-rest-api-key \
+    property/apt-service-key \
+    property/news/naver-client-id \
+    property/news/naver-client-secret \
     ai/openai-api-key \
     ai/openai-primary-model \
     ai/openai-secondary-model \

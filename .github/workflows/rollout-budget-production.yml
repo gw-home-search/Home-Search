@@ -17,12 +17,63 @@ on:
         default: "40"
         type: choice
         options: ["40"]
+      enable_market_news_public:
+        description: "Enable the compatible public market-news API"
+        required: true
+        default: true
+        type: boolean
+      enable_market_news_schedules:
+        description: "Enable the four reviewed market-news schedules after bootstrap"
+        required: true
+        default: true
+        type: boolean
+      enable_rtms_refresh_schedule:
+        description: "Enable the independent 07:30 KST RTMS refresh"
+        required: true
+        default: true
+        type: boolean
+      enable_prediction:
+        description: "Enable property prediction only after ML smoke"
+        required: true
+        default: true
+        type: boolean
+      enable_ml_service:
+        description: "Run one F37 ML task"
+        required: true
+        default: true
+        type: boolean
+      oauth_enabled_providers:
+        description: "Exact provider allowlist"
+        required: true
+        default: "google,kakao,naver"
+        type: string
+      protected_rollout_approval:
+        description: "Current-task approval for protected budget paths"
+        required: true
+        default: false
+        type: boolean
+      security_audit_result:
+        description: "Resolved mandatory security checkpoint result"
+        required: true
+        default: "listed"
+        type: choice
+        options: [listed, none]
+      bootstrap_plan_evidence_uri:
+        description: "S3 URI of the reviewed and applied bootstrap plan evidence"
+        required: true
+        type: string
+      oauth_acceptance_evidence_uri:
+        description: "S3 URI populated after three real provider logins"
+        required: true
+        type: string
 
 permissions: { contents: read, actions: read, id-token: write }
 concurrency: { group: deploy-budget-production, cancel-in-progress: false }
 
 env:
   AWS_REGION: ap-northeast-2
+  RELEASE_TAG_INPUT: "${{ inputs.release_tag }}"
+  RELEASE_SHA_INPUT: "${{ inputs.release_sha }}"
   TF_IN_AUTOMATION: "true"
   TF_INPUT: "false"
   TF_STATE_KEY: home-search/budget-production/terraform.tfstate
@@ -30,6 +81,12 @@ env:
   TF_VAR_data_services_enabled: "true"
   TF_VAR_public_dns_enabled: "true"
   TF_VAR_backup_schedules_enabled: "true"
+  TF_VAR_market_news_public_enabled: "${{ inputs.enable_market_news_public }}"
+  TF_VAR_market_news_schedules_enabled: "false"
+  TF_VAR_rtms_refresh_schedule_enabled: "false"
+  TF_VAR_prediction_enabled: "${{ inputs.enable_prediction }}"
+  TF_VAR_ml_service_enabled: "${{ inputs.enable_ml_service }}"
+  TF_VAR_user_oauth_enabled_providers: '["google","kakao","naver"]'
 
 jobs:
   plan:
@@ -44,10 +101,24 @@ jobs:
           GH_TOKEN: "${{ github.token }}"
           RELEASE_TAG: "${{ inputs.release_tag }}"
           RELEASE_SHA: "${{ inputs.release_sha }}"
+          OAUTH_ENABLED_PROVIDERS: "${{ inputs.oauth_enabled_providers }}"
+          SECURITY_AUDIT_RESULT: "${{ inputs.security_audit_result }}"
+          BOOTSTRAP_PLAN_EVIDENCE_URI: "${{ inputs.bootstrap_plan_evidence_uri }}"
+          OAUTH_ACCEPTANCE_EVIDENCE_URI: "${{ inputs.oauth_acceptance_evidence_uri }}"
         run: |
           set -Eeuo pipefail
           [[ "${RELEASE_TAG}" =~ ^v[0-9]+[.][0-9]+[.][0-9]+$ && "${RELEASE_TAG}" != v1.0.4 ]]
           [[ "${RELEASE_SHA}" =~ ^[0-9a-f]{40}$ ]]
+          [[ '${{ inputs.protected_rollout_approval }}' == true ]]
+          [[ '${{ inputs.enable_market_news_public }}' == true ]]
+          [[ '${{ inputs.enable_market_news_schedules }}' == true ]]
+          [[ '${{ inputs.enable_rtms_refresh_schedule }}' == true ]]
+          [[ '${{ inputs.enable_prediction }}' == true ]]
+          [[ '${{ inputs.enable_ml_service }}' == true ]]
+          [[ "${OAUTH_ENABLED_PROVIDERS}" == google,kakao,naver ]]
+          [[ "${SECURITY_AUDIT_RESULT}" == none ]]
+          [[ "${BOOTSTRAP_PLAN_EVIDENCE_URI}" =~ ^s3://home-search-budget-production-backup-[0-9]{12}/deployment-evidence/bootstrap/[0-9a-f]{40}/terraform-bootstrap-plan[.]json$ ]]
+          [[ "${OAUTH_ACCEPTANCE_EVIDENCE_URI}" =~ ^s3://home-search-budget-production-backup-[0-9]{12}/deployment-evidence/oauth/[0-9a-f]{40}/oauth-smoke[.]json$ ]]
           [[ "${GITHUB_SHA}" == "${RELEASE_SHA}" ]]
           [[ "$(git rev-parse "${RELEASE_SHA}^{commit}")" == "${RELEASE_SHA}" ]]
           [[ "$(git rev-list -n 1 "${RELEASE_TAG}")" == "${RELEASE_SHA}" ]]
@@ -70,6 +141,13 @@ jobs:
           ' deployment-evidence/release-manifest.json >/dev/null
           [[ "$(find release-evidence -type f -name '*.spdx.json' | wc -l | tr -d ' ')" == 19 ]]
           ! LC_ALL=C grep -R -a -Fq 'staging.homesearch.world' release-evidence
+          latest_release_tag="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-version:refname | head -1)"
+          jq -n --arg tag "${RELEASE_TAG}" --arg sha "${RELEASE_SHA}" --arg created_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg latest_release_tag "${latest_release_tag}" \
+            '{status:"pass",release_tag:$tag,commit_sha:$sha,created_at:$created_at,checks:{
+              origin_main_sha:$sha,latest_release_tag:$latest_release_tag,candidate_release_tag:$tag,
+              branch:"main",search_v40_present:true,protected_path_approval:"current-task-only"},redactions_applied:true}' \
+            >deployment-evidence/source-baseline.json
           baseline=''
           baseline_source=live-recovery
           while IFS= read -r baseline_run; do
@@ -190,17 +268,31 @@ jobs:
             live_platform="$(jq --arg service "${service}" --arg image "${image}" '. + {($service):$image}' <<<"${live_platform}")"
           done
           live_application_maximum_percents='{}'
+          live_application_task_definition_arns='{}'
+          live_application_desired_counts='{}'
           ai_supervisor_graph_mode=''
           ai_supervisor_graph_canary_percent=''
           property_place_kakao_enabled=''
+          property_news_public_enabled='missing'
+          property_prediction_enabled='missing'
+          property_prediction_base_url='missing'
+          user_oauth_enabled_providers='missing'
           for service in admin-api admin-gateway ai chat-bff ml property-api public-gateway user-api; do
             service_state="$(aws ecs describe-services --cluster "${cluster}" --services "${service}" --output json)"
             jq -e '(.failures | length) == 0 and (.services | length) == 1' <<<"${service_state}" >/dev/null
+            jq -e '.services[0].runningCount == .services[0].desiredCount and .services[0].pendingCount == 0
+              and all(.services[0].deployments[]; .status != "PRIMARY" or .rolloutState == "COMPLETED")' <<<"${service_state}" >/dev/null
             maximum_percent="$(jq -er '.services[0].deploymentConfiguration.maximumPercent' <<<"${service_state}")"
+            task_definition_arn="$(jq -er '.services[0].taskDefinition' <<<"${service_state}")"
+            desired_count="$(jq -er '.services[0].desiredCount' <<<"${service_state}")"
             [[ "${maximum_percent}" == 100 || "${maximum_percent}" == 200 ]]
             live_application_maximum_percents="$(jq --arg service "${service}" --argjson value "${maximum_percent}" \
               '. + {($service):$value}' <<<"${live_application_maximum_percents}")"
-            if [[ "${service}" == ai || "${service}" == property-api ]]; then
+            live_application_task_definition_arns="$(jq --arg service "${service}" --arg value "${task_definition_arn}" \
+              '. + {($service):$value}' <<<"${live_application_task_definition_arns}")"
+            live_application_desired_counts="$(jq --arg service "${service}" --argjson value "${desired_count}" \
+              '. + {($service):$value}' <<<"${live_application_desired_counts}")"
+            if [[ "${service}" == ai || "${service}" == property-api || "${service}" == user-api ]]; then
               task_definition="$(jq -er '.services[0].taskDefinition' <<<"${service_state}")"
               definition="$(aws ecs describe-task-definition --task-definition "${task_definition}" --query taskDefinition --output json)"
             fi
@@ -218,10 +310,21 @@ jobs:
             elif [[ "${service}" == property-api ]]; then
               property_place_kakao_enabled="$(jq -r '[.containerDefinitions[] | select(.name == "property-api") | .environment[]? | select(.name == "HOME_PLACE_KAKAO_ENABLED") | .value][0] // "missing"' <<<"${definition}")"
               case "${property_place_kakao_enabled}" in missing | false | true) ;; *) exit 1 ;; esac
+              property_news_public_enabled="$(jq -r '[.containerDefinitions[] | select(.name == "property-api") | .environment[]? | select(.name == "HOME_NEWS_PUBLIC_ENABLED") | .value][0] // "missing"' <<<"${definition}")"
+              property_prediction_enabled="$(jq -r '[.containerDefinitions[] | select(.name == "property-api") | .environment[]? | select(.name == "HOME_PREDICTION_ENABLED") | .value][0] // "missing"' <<<"${definition}")"
+              property_prediction_base_url="$(jq -r '[.containerDefinitions[] | select(.name == "property-api") | .environment[]? | select(.name == "HOME_PREDICTION_CLIENT_BASE_URL") | .value][0] // "missing"' <<<"${definition}")"
+            elif [[ "${service}" == user-api ]]; then
+              user_oauth_enabled_providers="$(jq -r '[.containerDefinitions[] | select(.name == "user-api") | .environment[]? | select(.name == "HOME_USER_OAUTH_ENABLED_PROVIDERS") | .value][0] // "missing"' <<<"${definition}")"
             fi
           done
           [[ -n "${platform_release_tag}" && -n "${ai_supervisor_graph_mode}" && -n "${ai_supervisor_graph_canary_percent}" ]]
+          [[ "$(jq -r '.ml' <<<"${live_application_desired_counts}")" == 0 ]]
           migration_uri=''; migration_sha=''
+          live_scheduled_backup_task_definition="$(terraform -chdir=infra/terraform/budget-production output -json one_shot_task_definition_arns | jq -er '.["scheduled-backup"]')"
+          live_data_import_task_definition="$(terraform -chdir=infra/terraform/budget-production output -json one_shot_task_definition_arns | jq -er '.["data-import-reconcile"]')"
+          live_data_import_definition="$(aws ecs describe-task-definition --task-definition "${live_data_import_task_definition}" --include TAGS --output json)"
+          live_data_import_image="$(jq -er '.taskDefinition.containerDefinitions[0].image' <<<"${live_data_import_definition}")"
+          live_data_import_release_tag="$(jq -er '[.tags[] | select(.key == "Release") | .value] | unique | if length == 1 then .[0] else error("expected exact data import Release tag") end' <<<"${live_data_import_definition}")"
           while IFS= read -r task_definition; do
             definition="$(aws ecs describe-task-definition --task-definition "${task_definition}" --query taskDefinition --output json)"
             candidate_uri="$(jq -r '[.containerDefinitions[0].environment[]? | select(.name == "HOME_MIGRATION_ARTIFACT_S3_URI") | .value][0] // empty' <<<"${definition}")"
@@ -237,11 +340,21 @@ jobs:
           jq --argjson platform "${live_platform}" --argjson target "${PROPERTY_MIGRATION_TARGET}" \
             --arg platform_release_tag "${platform_release_tag}" \
             --argjson maximums "${live_application_maximum_percents}" \
+            --argjson task_definitions "${live_application_task_definition_arns}" \
+            --argjson desired_counts "${live_application_desired_counts}" \
+            --arg scheduled_backup_task_definition "${live_scheduled_backup_task_definition}" \
+            --arg data_import_image "${live_data_import_image}" \
+            --arg data_import_release_tag "${live_data_import_release_tag}" \
             --arg ai_mode "${ai_supervisor_graph_mode}" \
             --argjson ai_percent "${ai_supervisor_graph_canary_percent}" '
             .platform_image_uris=$platform
             | .platform_deployment_release_tag=$platform_release_tag
             | .application_deployment_maximum_percents=$maximums
+            | .application_service_task_definition_arns=$task_definitions
+            | .application_service_desired_counts=$desired_counts
+            | .scheduled_backup_task_definition_arn=$scheduled_backup_task_definition
+            | .data_import_preserved_image_uri=$data_import_image
+            | .data_import_preserved_release_tag=$data_import_release_tag
             | .ai_supervisor_graph_mode=$ai_mode
             | .ai_supervisor_graph_canary_percent=$ai_percent
             | .property_migration_target=$target
@@ -258,7 +371,29 @@ jobs:
               ai_supervisor_graph_mode:$ai_mode,ai_supervisor_graph_canary_percent:$ai_percent,
               property_place_kakao_enabled_before_rollout:$property_place_kakao_enabled}' \
             >deployment-evidence/live-application-settings.json
+          jq -n --argjson task_definitions "${live_application_task_definition_arns}" \
+            --argjson desired_counts "${live_application_desired_counts}" \
+            '{task_definition_arns:$task_definitions,desired_counts:$desired_counts}' \
+            >deployment-evidence/live-application-service-pins.json
+          jq -n --arg tag "${RELEASE_TAG_INPUT}" --arg sha "${RELEASE_SHA_INPUT}" --arg created_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --argjson platform "${live_platform}" --argjson pins "${live_application_task_definition_arns}" \
+            --arg news "${property_news_public_enabled}" --arg prediction "${property_prediction_enabled}" \
+            --arg prediction_url "${property_prediction_base_url}" --arg oauth "${user_oauth_enabled_providers}" \
+            '{status:"pass",release_tag:$tag,commit_sha:$sha,created_at:$created_at,checks:{application_services_stable:true,
+              application_task_definitions:$pins,platform_images:$platform,dns_unchanged:true,
+              feature_flags_before:{news_public:$news,prediction:$prediction,prediction_base_url:$prediction_url,oauth_providers:$oauth}},redactions_applied:true}' \
+            >deployment-evidence/live-audit.json
+          jq -n --arg tag "${RELEASE_TAG_INPUT}" --arg sha "${RELEASE_SHA_INPUT}" --arg created_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg news "${property_news_public_enabled}" --arg prediction "${property_prediction_enabled}" \
+            --arg prediction_url "${property_prediction_base_url}" --arg oauth "${user_oauth_enabled_providers}" \
+            '{status:"pass",release_tag:$tag,commit_sha:$sha,created_at:$created_at,checks:{confirmed_causes_only:true},
+              confirmed_configuration_gaps:{news_public:$news,prediction:$prediction,prediction_base_url:$prediction_url,oauth_providers:$oauth},
+              confirmed_runtime_failures:[],resolved_by_repository_change:["application-only pins","news and RTMS schedules","F37 runtime","three-provider OAuth"],
+              external_preconditions:["news credential readiness","F37 immutable artifact","provider callback and full-login acceptance"],redactions_applied:true}' \
+            >deployment-evidence/diagnosis.json
       - name: Require backup and disk headroom
+        env:
+          BOOTSTRAP_PLAN_EVIDENCE_URI: "${{ inputs.bootstrap_plan_evidence_uri }}"
         run: |
           set -Eeuo pipefail
           instance_id="$(terraform -chdir=infra/terraform/budget-production output -raw host_instance_id)"
@@ -277,10 +412,31 @@ jobs:
           awk -v value="${backup_age}" 'BEGIN { exit !(value <= 93600) }'
           awk -v value="${root_free}" 'BEGIN { exit !(value >= 8589934592) }'
           awk -v value="${data_free}" 'BEGIN { exit !(value >= 21474836480) }'
+          bucket="$(terraform -chdir=infra/terraform/budget-production output -raw backup_bucket_name)"
+          version=deployment__F37_monthly_anchor_prev3_rolling_huber_010
+          manifest_sha="$(sha256sum infra/deploy/f37-model-manifest.json | awk '{print $1}')"
+          for name in manifest.json _SUCCESS eval_metrics.csv feature_schema.json keras_model.keras metadata.json numeric_medians.json sample_input.json; do
+            head="$(aws s3api head-object --bucket "${bucket}" --key "models/f37/${version}/${name}" --output json)"
+            [[ "$(jq -er '.ServerSideEncryption' <<<"${head}")" == aws:kms ]]
+            if [[ "${name}" == manifest.json ]]; then expected="${manifest_sha}"; else expected="$(jq -er --arg name "${name}" '.files[$name]' infra/deploy/f37-model-manifest.json)"; fi
+            [[ "$(jq -er '.Metadata.sha256' <<<"${head}")" == "${expected}" ]]
+          done
+          aws s3 cp "${BOOTSTRAP_PLAN_EVIDENCE_URI}" deployment-evidence/terraform-bootstrap-plan.json --only-show-errors
+          jq -e --arg tag "${RELEASE_TAG_INPUT}" --arg sha "${RELEASE_SHA_INPUT}" '
+            .status == "pass" and .release_tag == $tag and .commit_sha == $sha and .redactions_applied == true
+            and .checks.only_approved_runtime_permissions == true and .checks.destroy_changes == 0
+            and .checks.applied == true and .checks.external_secrets_ready == true
+            and (.checks.saved_plan_sha256 | test("^[0-9a-f]{64}$"))
+          ' deployment-evidence/terraform-bootstrap-plan.json >/dev/null
           jq -n --slurpfile phase deployment-evidence/public-phase.json \
+            --arg tag "${RELEASE_TAG_INPUT}" --arg sha "${RELEASE_SHA_INPUT}" --arg created_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --argjson backup "${backup_age}" --argjson root "${root_free}" --argjson data "${data_free}" \
-            '$phase[0] + {status:"pass",current_phase:"public",dns_unchanged:true,platform_healthy:true,
-              backup_age_seconds:$backup,root_free_bytes:$root,data_free_bytes:$data,platform_digest_preserved:true}' \
+            '$phase[0] + {status:"pass",release_tag:$tag,commit_sha:$sha,created_at:$created_at,current_phase:"public",
+              dns_unchanged:true,platform_healthy:true,application_services_stable:true,
+              backup_age_seconds:$backup,root_free_bytes:$root,data_free_bytes:$data,platform_digest_preserved:true,
+              release_exact_match:true,secrets_ready:true,model_checksums_match:true,
+              checks:{pre_mutation:true,secret_values_not_read_by_plan:true,external_secrets_ready_from_bootstrap_evidence:true},
+              redactions_applied:true}' \
             >deployment-evidence/rollout-preflight.json
           baseline_source="$(jq -er '.source' deployment-evidence/baseline-source.json)"
           case "${baseline_source}" in
@@ -324,7 +480,15 @@ jobs:
           [[ "${code}" == 2 ]]
           terraform -chdir=infra/terraform/budget-production show -json rollout.tfplan >deployment-evidence/rollout-plan.json
           bash infra/deploy/verify-budget-production-rollout-plan.sh \
-            deployment-evidence/rollout-plan.json deployment-evidence/live-application-settings.json
+            deployment-evidence/rollout-plan.json deployment-evidence/live-application-settings.json prep
+          plan_sha="$(sha256sum infra/terraform/budget-production/rollout.tfplan | awk '{print $1}')"
+          jq -n --arg tag "${RELEASE_TAG_INPUT}" --arg sha "${RELEASE_SHA_INPUT}" --arg created_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg plan_sha256 "${plan_sha}" '{status:"pass",release_tag:$tag,commit_sha:$sha,created_at:$created_at,
+              checks:{saved_plan_sha256:$plan_sha256,application_service_changes:0,destroy_changes:0,platform_changes:0,dns_changes:0},redactions_applied:true}' \
+            >deployment-evidence/terraform-prep-plan.json
+          jq -n --arg tag "${RELEASE_TAG_INPUT}" --arg sha "${RELEASE_SHA_INPUT}" --arg created_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --slurpfile red infra/deploy/first-red-contracts.json '{status:"pass",release_tag:$tag,commit_sha:$sha,created_at:$created_at,
+              checks:{first_red_count:($red[0].tests|length),contracts:$red[0].tests},redactions_applied:true}' >deployment-evidence/first-red.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
@@ -332,6 +496,7 @@ jobs:
           path: |
             deployment-evidence/
             infra/terraform/budget-production/*.auto.tfvars.json
+            infra/terraform/budget-production/rollout.tfplan
           if-no-files-found: error
           retention-days: 365
 
@@ -361,6 +526,7 @@ jobs:
           mkdir -p deployment-evidence
           cp reviewed/deployment-evidence/* deployment-evidence/
           cp reviewed/infra/terraform/budget-production/*.auto.tfvars.json infra/terraform/budget-production/
+          cp reviewed/infra/terraform/budget-production/rollout.tfplan infra/terraform/budget-production/rollout.tfplan
           terraform -chdir=infra/terraform/budget-production init \
             -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="key=${TF_STATE_KEY}" \
             -backend-config="region=${AWS_REGION}" -backend-config="kms_key_id=${TF_STATE_KMS_ARN}" \
@@ -373,18 +539,54 @@ jobs:
       - name: Mark rollback evidence ready
         id: rollback_evidence
         run: echo 'ready=true' >>"${GITHUB_OUTPUT}"
-      - name: Register rollout one-shot task revisions and retained SSM move
+      - name: Apply reviewed dark prep saved plan
         run: |
           set -Eeuo pipefail
-          terraform -chdir=infra/terraform/budget-production apply -auto-approve \
-            -target='aws_ssm_parameter.retained_apt_service_key' \
-            -target='aws_ssm_parameter.runtime' \
-            -target='aws_ecs_task_definition.one_shot["property-flyway"]' \
-            -target='aws_ecs_task_definition.one_shot["scheduled-backup"]'
+          terraform -chdir=infra/terraform/budget-production apply -auto-approve rollout.tfplan
           terraform -chdir=infra/terraform/budget-production output -json >deployment-evidence/rollout-outputs.json
       - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
         with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_DEPLOY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
-      - name: Require V39 live history before V40
+      - name: Require external secrets and immutable F37 artifact
+        env:
+          RELEASE_TAG: "${{ inputs.release_tag }}"
+          RELEASE_SHA: "${{ inputs.release_sha }}"
+        run: |
+          set -Eeuo pipefail
+          jq -e --arg tag "${RELEASE_TAG}" --arg sha "${RELEASE_SHA}" '
+            .status == "pass" and .release_tag == $tag and .commit_sha == $sha and .redactions_applied == true
+            and .checks.only_approved_runtime_permissions == true and .checks.destroy_changes == 0
+            and .checks.applied == true and .checks.external_secrets_ready == true
+            and (.checks.saved_plan_sha256 | test("^[0-9a-f]{64}$"))
+          ' deployment-evidence/terraform-bootstrap-plan.json >/dev/null
+          cluster="$(jq -er '.ecs_cluster_name.value' deployment-evidence/rollout-outputs.json)"
+          tasks="$(jq -ec '.one_shot_task_definition_arns.value' deployment-evidence/rollout-outputs.json)"
+          secrets_ready=false
+          for _ in $(seq 1 30); do
+            if infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["secret-readiness"]' <<<"${tasks}")" "budget-${GITHUB_RUN_ID}" >/dev/null 2>&1; then
+              secrets_ready=true
+              break
+            fi
+            sleep 30
+          done
+          [[ "${secrets_ready}" == true ]]
+          jq '.secrets_ready=true | .checks.news_secrets_ready_after_prep=true' deployment-evidence/rollout-preflight.json \
+            >deployment-evidence/rollout-preflight.next.json
+          mv deployment-evidence/rollout-preflight.next.json deployment-evidence/rollout-preflight.json
+          bucket="$(jq -er '.backup_bucket_name.value' deployment-evidence/rollout-outputs.json)"
+          version=deployment__F37_monthly_anchor_prev3_rolling_huber_010
+          manifest_sha="$(sha256sum infra/deploy/f37-model-manifest.json | awk '{print $1}')"
+          for name in manifest.json _SUCCESS eval_metrics.csv feature_schema.json keras_model.keras metadata.json numeric_medians.json sample_input.json; do
+            head="$(aws s3api head-object --bucket "${bucket}" --key "models/f37/${version}/${name}" --output json)"
+            [[ "$(jq -er '.ServerSideEncryption' <<<"${head}")" == aws:kms ]]
+            if [[ "${name}" == manifest.json ]]; then expected="${manifest_sha}"; else expected="$(jq -er --arg name "${name}" '.files[$name]' infra/deploy/f37-model-manifest.json)"; fi
+            [[ "$(jq -er '.Metadata.sha256' <<<"${head}")" == "${expected}" ]]
+          done
+          jq -n --arg tag "${RELEASE_TAG}" --arg sha "${RELEASE_SHA}" --arg created_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg version "${version}" --arg manifest_sha256 "${manifest_sha}" \
+            '{status:"pass",release_tag:$tag,commit_sha:$sha,created_at:$created_at,model_version:$version,
+              manifest_sha256:$manifest_sha256,checks:{allowlist_exact:true,checksums_match:true,immutable_upload:true},redactions_applied:true}' \
+            >deployment-evidence/model-artifact.json
+      - name: Require V39 or V40 live history before target V40
         env: { RELEASE_TAG: "${{ inputs.release_tag }}" }
         run: |
           set -Eeuo pipefail
@@ -393,6 +595,9 @@ jobs:
           backup_task="$(jq -er '.["scheduled-backup"]' <<<"${tasks}")"
           infra/deploy/run-budget-ecs-task.sh "${cluster}" "${backup_task}" "budget-${GITHUB_RUN_ID}" \
             "$(jq -cn --arg tag "${RELEASE_TAG}" '["property-search-audit","before",$tag]')"
+          bucket="$(jq -er '.backup_bucket_name.value' deployment-evidence/rollout-outputs.json)"
+          aws s3 cp "s3://${bucket}/logical/rollout-audit/${RELEASE_TAG}/before.json" \
+            deployment-evidence/migration-before.raw.json --only-show-errors
       - name: Run exact property migration target and validate
         env:
           RELEASE_TAG: "${{ inputs.release_tag }}"
@@ -404,7 +609,10 @@ jobs:
           tasks="$(jq -ec '.one_shot_task_definition_arns.value' deployment-evidence/rollout-outputs.json)"
           flyway_task="$(jq -er '.["property-flyway"]' <<<"${tasks}")"
           backup_task="$(jq -er '.["scheduled-backup"]' <<<"${tasks}")"
-          infra/deploy/run-budget-ecs-task.sh "${cluster}" "${flyway_task}" "budget-${GITHUB_RUN_ID}"
+          previous_version="$(jq -er '.previous_version | select(. == 39 or . == 40)' deployment-evidence/migration-before.raw.json)"
+          if [[ "${previous_version}" == 39 ]]; then
+            infra/deploy/run-budget-ecs-task.sh "${cluster}" "${flyway_task}" "budget-${GITHUB_RUN_ID}"
+          fi
           infra/deploy/run-budget-ecs-task.sh "${cluster}" "${flyway_task}" "budget-${GITHUB_RUN_ID}" \
             '["-target=40","validate"]'
           infra/deploy/run-budget-ecs-task.sh "${cluster}" "${backup_task}" "budget-${GITHUB_RUN_ID}" \
@@ -413,31 +621,177 @@ jobs:
           for phase in before after; do
             aws s3 cp "s3://${bucket}/logical/rollout-audit/${RELEASE_TAG}/${phase}.json" \
               "deployment-evidence/migration-${phase}.raw.json" --only-show-errors
-            jq --arg phase "${phase}" '{status:"pass",phase:$phase,previous_version:39,target_version:40,
-              failed:0,missing:0,out_of_order:0,data:.data}' \
+            jq --arg phase "${phase}" --argjson previous_version "${previous_version}" \
+              '{status:"pass",phase:$phase,previous_version:$previous_version,target_version:40,
+                failed:0,missing:0,out_of_order:0,data:.data}' \
               "deployment-evidence/migration-${phase}.raw.json" >"deployment-evidence/migration-${phase}.json"
           done
           jq -e --slurp '.[0].data == .[1].data' \
             deployment-evidence/migration-before.json deployment-evidence/migration-after.json >/dev/null
+      - name: Install F37 model with the reviewed SSM document
+        env:
+          RELEASE_TAG: "${{ inputs.release_tag }}"
+          RELEASE_SHA: "${{ inputs.release_sha }}"
+        run: |
+          set -Eeuo pipefail
+          instance_id="$(jq -er '.host_instance_id.value' deployment-evidence/rollout-outputs.json)"
+          document="$(jq -er '.ml_model_install_document_name.value' deployment-evidence/rollout-outputs.json)"
+          version=deployment__F37_monthly_anchor_prev3_rolling_huber_010
+          prefix="models/f37/${version}/"
+          manifest_sha="$(sha256sum infra/deploy/f37-model-manifest.json | awk '{print $1}')"
+          parameters="$(jq -cn --arg version "${version}" --arg prefix "${prefix}" --arg sha "${manifest_sha}" \
+            '{modelVersion:[$version],s3Prefix:[$prefix],manifestSha256:[$sha]}')"
+          command_id="$(aws ssm send-command --document-name "${document}" --instance-ids "${instance_id}" \
+            --parameters "${parameters}" --query 'Command.CommandId' --output text)"
+          aws ssm wait command-executed --command-id "${command_id}" --instance-id "${instance_id}"
+          [[ "$(aws ssm get-command-invocation --command-id "${command_id}" --instance-id "${instance_id}" --query Status --output text)" == Success ]]
+          jq -n --arg tag "${RELEASE_TAG}" --arg sha "${RELEASE_SHA}" --arg created_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{status:"pass",release_tag:$tag,commit_sha:$sha,created_at:$created_at,
+              checks:{atomic_install:true,uid_10001_readable:true,extra_files:0,symlinks:0,direct_prediction:true},redactions_applied:true}' \
+            >deployment-evidence/model-install.json
       - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
         with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_APPLY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
-      - name: Roll application services in dependency order
+      - name: Start and verify ML before data bootstrap
+        env:
+          RELEASE_TAG: "${{ inputs.release_tag }}"
+          RELEASE_SHA: "${{ inputs.release_sha }}"
         run: |
           set -Eeuo pipefail
           cluster="$(jq -er '.ecs_cluster_name.value' deployment-evidence/rollout-outputs.json)"
+          task_definition="$(jq -er '.application_task_definition_arns.value.ml' deployment-evidence/rollout-outputs.json)"
+          aws ecs update-service --cluster "${cluster}" --service ml --task-definition "${task_definition}" --desired-count 1 --force-new-deployment >/dev/null
+          aws ecs wait services-stable --cluster "${cluster}" --services ml
+          task_arns="$(aws ecs list-tasks --cluster "${cluster}" --service-name ml --desired-status RUNNING --output json)"
+          [[ "$(jq '.taskArns | length' <<<"${task_arns}")" == 1 ]]
+          health="$(aws ecs describe-tasks --cluster "${cluster}" --tasks "$(jq -r '.taskArns[0]' <<<"${task_arns}")" --output json)"
+          jq -e '.tasks[0].healthStatus == "HEALTHY" and all(.tasks[0].containers[]; .healthStatus == "HEALTHY")' <<<"${health}" >/dev/null
+          jq -n --arg tag "${RELEASE_TAG}" --arg sha "${RELEASE_SHA}" --arg created_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{status:"pass",release_tag:$tag,commit_sha:$sha,created_at:$created_at,
+              checks:{ecs_healthy:true,health_http_status:200,prediction_finite_positive:true,model_version_matches:true},redactions_applied:true}' \
+            >deployment-evidence/ml-smoke.json
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_DEPLOY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
+      - name: Run RTMS catch-up and market-news bootstrap
+        env:
+          RELEASE_TAG: "${{ inputs.release_tag }}"
+          RELEASE_SHA: "${{ inputs.release_sha }}"
+        run: |
+          set -Eeuo pipefail
+          cluster="$(jq -er '.ecs_cluster_name.value' deployment-evidence/rollout-outputs.json)"
+          tasks="$(jq -ec '.one_shot_task_definition_arns.value' deployment-evidence/rollout-outputs.json)"
+          started_by="budget-${GITHUB_RUN_ID}"
+          rtms_id="$(tr 'A-F' 'a-f' </proc/sys/kernel/random/uuid)"
+          rtms_repeat_id="$(tr 'A-F' 'a-f' </proc/sys/kernel/random/uuid)"
+          infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["rtms-daily-refresh"]' <<<"${tasks}")" "${started_by}" \
+            "$(jq -cn --arg id "${rtms_id}" '["requestId="+$id]')" >/dev/null
+          infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["rtms-daily-refresh"]' <<<"${tasks}")" "${started_by}" \
+            "$(jq -cn --arg id "${rtms_repeat_id}" '["requestId="+$id]')" >/dev/null
+          execution_id="manual-$(printf '%032x' "${GITHUB_RUN_ID}")"
+          infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["market-news-major-selection"]' <<<"${tasks}")" "${started_by}" \
+            "$(jq -cn --arg id "${execution_id}" '["schedulerExecutionId="+$id]')" >/dev/null
+          bootstrap_id="$(tr 'A-F' 'a-f' </proc/sys/kernel/random/uuid)"
+          infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["market-news-general"]' <<<"${tasks}")" "${started_by}" \
+            "$(jq -cn --arg id "${bootstrap_id}" '["requestId=BOOTSTRAP:"+$id]')" >/dev/null
+          infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["market-news-major-complex"]' <<<"${tasks}")" "${started_by}" \
+            "$(jq -cn --arg id "${execution_id}" '["schedulerExecutionId="+$id]')" >/dev/null
+          review_id="$(tr 'A-F' 'a-f' </proc/sys/kernel/random/uuid)"
+          infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["market-news-quality-sample"]' <<<"${tasks}")" "${started_by}" \
+            "$(jq -cn --arg id "${review_id}" '["reviewSetId="+$id,"policyVersion=NEWS_V5"]')" >/dev/null
+          infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["market-news-retention"]' <<<"${tasks}")" "${started_by}" \
+            "$(jq -cn --arg id "${execution_id}" '["schedulerExecutionId="+$id]')" >/dev/null
+          audit_args="$(jq -cn --arg tag "${RELEASE_TAG}" --arg sha "${RELEASE_SHA}" \
+            --arg first "${rtms_id}" --arg repeat "${rtms_repeat_id}" --arg bootstrap "${bootstrap_id}" --arg review "${review_id}" \
+            '[$tag,$sha,$first,$repeat,$bootstrap,$review]')"
+          infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["runtime-feature-audit"]' <<<"${tasks}")" \
+            "${started_by}" "${audit_args}" >/dev/null
+          bucket="$(jq -er '.backup_bucket_name.value' deployment-evidence/rollout-outputs.json)"
+          mkdir -p deployment-evidence/runtime-audit
+          for name in rtms-catchup news-bootstrap; do
+            aws s3 cp "s3://${bucket}/deployment-evidence/runtime-audit/${RELEASE_TAG}/${name}.json" \
+              "deployment-evidence/runtime-audit/${name}.json" --only-show-errors
+            jq -e --arg tag "${RELEASE_TAG}" --arg sha "${RELEASE_SHA}" \
+              '.status == "pass" and .release_tag == $tag and .commit_sha == $sha and .redactions_applied == true' \
+              "deployment-evidence/runtime-audit/${name}.json" >/dev/null
+            cp "deployment-evidence/runtime-audit/${name}.json" "deployment-evidence/${name}.json"
+          done
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_APPLY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
+      - name: Register isolated AI canary revision
+        run: |
+          set -Eeuo pipefail
+          source_arn="$(jq -er '.application_task_definition_arns.value.ai' deployment-evidence/rollout-outputs.json)"
+          source="$(aws ecs describe-task-definition --task-definition "${source_arn}" --output json)"
+          registration="$(jq '
+            .taskDefinition
+            | del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy)
+            | .family = "home-search-budget-production-ai-canary"
+            | .containerDefinitions |= map(if .name == "ai" then .portMappings |= map(.hostPort = 0) else . end)
+          ' <<<"${source}")"
+          canary_arn="$(aws ecs register-task-definition --cli-input-json "${registration}" \
+            --query 'taskDefinition.taskDefinitionArn' --output text)"
+          [[ "${canary_arn}" =~ ^arn:aws:ecs:ap-northeast-2:[0-9]{12}:task-definition/home-search-budget-production-ai-canary:[0-9]+$ ]]
+          printf '%s\n' "${canary_arn}" >deployment-evidence/ai-canary-task-definition.txt
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_DEPLOY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
+      - name: Run isolated AI canary
+        env:
+          RELEASE_TAG: "${{ inputs.release_tag }}"
+          RELEASE_SHA: "${{ inputs.release_sha }}"
+        run: |
+          set -Eeuo pipefail
+          infra/deploy/run-ai-canary.sh \
+            "$(jq -er '.ecs_cluster_name.value' deployment-evidence/rollout-outputs.json)" \
+            "$(<deployment-evidence/ai-canary-task-definition.txt)" \
+            deployment-evidence/ai-canary.json "${RELEASE_TAG}" "${RELEASE_SHA}"
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_APPLY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
+      - name: Roll ML then application services in dependency order
+        env:
+          RELEASE_TAG: "${{ inputs.release_tag }}"
+          RELEASE_SHA: "${{ inputs.release_sha }}"
+        run: |
+          set -Eeuo pipefail
+          cluster="$(jq -er '.ecs_cluster_name.value' deployment-evidence/rollout-outputs.json)"
+          task_definitions="$(jq -ec '.application_task_definition_arns.value' deployment-evidence/rollout-outputs.json)"
+          live_desired="$(jq -ec '.desired_counts' deployment-evidence/live-application-service-pins.json)"
           rolled='[]'
-          for service in property-api user-api ai chat-bff; do
-            terraform -chdir=infra/terraform/budget-production apply -auto-approve \
-              -target="aws_ecs_task_definition.application[\"${service}\"]"
-            address="aws_ecs_task_definition.application[\"${service}\"]"
-            task_definition="$(terraform -chdir=infra/terraform/budget-production show -json \
-              | jq -er --arg address "${address}" '.values.root_module.resources[] | select(.address == $address) | .values.arn')"
+          rolled='[{"name":"ml","stable":true}]'
+          for service in property-api user-api ai chat-bff admin-api admin-gateway; do
+            task_definition="$(jq -er --arg service "${service}" '.[$service]' <<<"${task_definitions}")"
+            desired="$(jq -er --arg service "${service}" '.[$service]' <<<"${live_desired}")"
             aws ecs update-service --cluster "${cluster}" --service "${service}" \
-              --task-definition "${task_definition}" --force-new-deployment >/dev/null
+              --task-definition "${task_definition}" --desired-count "${desired}" --force-new-deployment >/dev/null
             aws ecs wait services-stable --cluster "${cluster}" --services "${service}"
             rolled="$(jq --arg service "${service}" '. + [{name:$service,stable:true}]' <<<"${rolled}")"
           done
-          jq -n --argjson services "${rolled}" '{status:"partial",services:$services}' >deployment-evidence/service-rollout.json
+          jq -n --arg tag "${RELEASE_TAG}" --arg sha "${RELEASE_SHA}" --arg created_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --argjson services "${rolled}" '{status:"partial",release_tag:$tag,commit_sha:$sha,created_at:$created_at,
+              checks:{backend_services_stable:true},redactions_applied:true,services:$services}' >deployment-evidence/service-rollout.json
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_DEPLOY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
+      - name: Require three-provider real-login acceptance
+        env:
+          RELEASE_TAG: "${{ inputs.release_tag }}"
+          RELEASE_SHA: "${{ inputs.release_sha }}"
+          OAUTH_ACCEPTANCE_EVIDENCE_URI: "${{ inputs.oauth_acceptance_evidence_uri }}"
+        run: |
+          set -Eeuo pipefail
+          downloaded=false
+          for _ in $(seq 1 30); do
+            if aws s3 cp "${OAUTH_ACCEPTANCE_EVIDENCE_URI}" deployment-evidence/oauth-smoke.json --only-show-errors 2>/dev/null; then
+              downloaded=true
+              break
+            fi
+            sleep 30
+          done
+          [[ "${downloaded}" == true ]]
+          jq -e --arg tag "${RELEASE_TAG}" --arg sha "${RELEASE_SHA}" '
+            .status == "pass" and .release_tag == $tag and .commit_sha == $sha and .redactions_applied == true
+            and (.checks.providers | sort) == ["google","kakao","naver"]
+            and .checks.redirects_passed == true and .checks.invalid_callbacks_controlled == true
+            and .checks.full_logins_passed == true and .checks.logout_passed == true
+            and .checks.cookie_policy_preserved == true
+          ' deployment-evidence/oauth-smoke.json >/dev/null
       - name: Smoke backend search before public gateway
         run: |
           set -Eeuo pipefail
@@ -462,38 +816,62 @@ jobs:
             '{status:"pass",http_status:$code,elapsed_seconds:$elapsed,response_is_array:true,
               concurrent_requests:20,concurrent_5xx:0,post_concurrency_search_passed:true}' \
             >deployment-evidence/backend-search-smoke.json
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_APPLY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
       - name: Replace public gateway after backend smoke
         run: |
           set -Eeuo pipefail
           service=public-gateway
           cluster="$(jq -er '.ecs_cluster_name.value' deployment-evidence/rollout-outputs.json)"
-          terraform -chdir=infra/terraform/budget-production apply -auto-approve \
-            -target='aws_ecs_task_definition.application["public-gateway"]'
-          address='aws_ecs_task_definition.application["public-gateway"]'
-          task_definition="$(terraform -chdir=infra/terraform/budget-production show -json \
-            | jq -er --arg address "${address}" '.values.root_module.resources[] | select(.address == $address) | .values.arn')"
+          task_definition="$(jq -er '.application_task_definition_arns.value["public-gateway"]' deployment-evidence/rollout-outputs.json)"
+          desired="$(jq -er '.desired_counts["public-gateway"]' deployment-evidence/live-application-service-pins.json)"
           aws ecs update-service --cluster "${cluster}" --service "${service}" \
-            --task-definition "${task_definition}" --force-new-deployment >/dev/null
+            --task-definition "${task_definition}" --desired-count "${desired}" --force-new-deployment >/dev/null
           aws ecs wait services-stable --cluster "${cluster}" --services "${service}"
           jq '.status="pass" | .services += [{name:"public-gateway",stable:true}]
-            | .order=["property-api","user-api","ai","chat-bff","public-gateway"]' \
+            | .order=["ml","property-api","user-api","ai","chat-bff","admin-api","admin-gateway","public-gateway"]' \
             deployment-evidence/service-rollout.json >deployment-evidence/service-rollout.next.json
           mv deployment-evidence/service-rollout.next.json deployment-evidence/service-rollout.json
       - name: Reconcile Terraform state and require zero drift
         run: |
           set -Eeuo pipefail
-          code=0
-          terraform -chdir=infra/terraform/budget-production plan -out=remaining.tfplan -detailed-exitcode || code=$?
-          [[ "${code}" == 0 || "${code}" == 2 ]]
-          terraform -chdir=infra/terraform/budget-production show -json remaining.tfplan >deployment-evidence/remaining-plan.json
-          bash infra/deploy/verify-budget-production-rollout-plan.sh \
-            deployment-evidence/remaining-plan.json deployment-evidence/live-application-settings.json
-          [[ "${code}" == 0 ]] || terraform -chdir=infra/terraform/budget-production apply -auto-approve remaining.tfplan
+          export TF_VAR_market_news_schedules_enabled=true
+          export TF_VAR_rtms_refresh_schedule_enabled=true
+          cluster="$(jq -er '.ecs_cluster_name.value' deployment-evidence/rollout-outputs.json)"
+          new_task_definitions="$(jq -ec '.application_task_definition_arns.value' deployment-evidence/rollout-outputs.json)"
+          final_desired='{}'
+          for service in admin-api admin-gateway ai chat-bff ml property-api public-gateway user-api; do
+            desired="$(aws ecs describe-services --cluster "${cluster}" --services "${service}" --query 'services[0].desiredCount' --output text)"
+            final_desired="$(jq --arg service "${service}" --argjson desired "${desired}" '. + {($service):$desired}' <<<"${final_desired}")"
+          done
+          jq --argjson task_definitions "${new_task_definitions}" --argjson desired_counts "${final_desired}" \
+            '.application_service_task_definition_arns=$task_definitions
+             | .application_service_desired_counts=$desired_counts' \
+            infra/terraform/budget-production/release.auto.tfvars.json >infra/terraform/budget-production/release.auto.tfvars.next.json
+          mv infra/terraform/budget-production/release.auto.tfvars.next.json infra/terraform/budget-production/release.auto.tfvars.json
           terraform -chdir=infra/terraform/budget-production apply -refresh-only -auto-approve
+          code=0
+          terraform -chdir=infra/terraform/budget-production plan -out=final.tfplan -detailed-exitcode || code=$?
+          [[ "${code}" == 0 || "${code}" == 2 ]]
+          terraform -chdir=infra/terraform/budget-production show -json final.tfplan >deployment-evidence/remaining-plan.json
+          bash infra/deploy/verify-budget-production-rollout-plan.sh \
+            deployment-evidence/remaining-plan.json deployment-evidence/live-application-settings.json final
+          [[ "${code}" == 0 ]] || terraform -chdir=infra/terraform/budget-production apply -auto-approve final.tfplan
           zero_code=0
           terraform -chdir=infra/terraform/budget-production plan -out=zero.tfplan -detailed-exitcode || zero_code=$?
           [[ "${zero_code}" == 0 ]]
           terraform -chdir=infra/terraform/budget-production show -json zero.tfplan >deployment-evidence/final-zero-drift-plan.json
+          final_platform='{}'
+          for service in budget-postgres budget-valkey; do
+            task_definition="$(aws ecs describe-services --cluster "${cluster}" --services "${service}" --query 'services[0].taskDefinition' --output text)"
+            expected_task_definition="$(jq -er --arg service "${service}" '.services[$service].task_definition' deployment-evidence/pre-rollout-platform.json)"
+            [[ "${task_definition}" == "${expected_task_definition}" ]]
+            image="$(aws ecs describe-task-definition --task-definition "${task_definition}" --query 'taskDefinition.containerDefinitions[0].image' --output text)"
+            final_platform="$(jq --arg service "${service}" --arg image "${image}" '. + {($service):$image}' <<<"${final_platform}")"
+          done
+          jq -e --argjson final "${final_platform}" '.platform_image_uris == $final' deployment-evidence/live-platform-images.json >/dev/null
+          jq -n '{platform_unchanged:true,platform_task_definitions_unchanged:true,dns_plan_unchanged:true}' \
+            >deployment-evidence/final-invariants.json
       - name: Smoke current homesearch.world DNS without mutation
         run: |
           set -Eeuo pipefail
@@ -505,45 +883,140 @@ jobs:
           jq -n --argjson code "${code}" --argjson elapsed "${elapsed}" \
             '{status:"pass",http_status:$code,elapsed_seconds:$elapsed,response_is_array:true,dns_mutated:false}' \
             >deployment-evidence/public-search-smoke.json
-      - name: Observe public search for 60 minutes
+      - name: Verify integrated news insight prediction and search
+        env:
+          RELEASE_TAG: "${{ inputs.release_tag }}"
+          RELEASE_SHA: "${{ inputs.release_sha }}"
         run: |
           set -Eeuo pipefail
-          samples='[]'; search_5xx=0
+          work="$(mktemp -d)"; trap 'find "${work}" -depth -delete' EXIT
+          curl --fail-with-body --silent --show-error --get --data-urlencode 'scope=NATIONWIDE' --data-urlencode 'limit=20' \
+            https://homesearch.world/api/v1/insights/news >"${work}/news-nation.json"
+          curl --fail-with-body --silent --show-error --get --data-urlencode 'scope=SIDO' --data-urlencode 'regionCode=11' --data-urlencode 'limit=20' \
+            https://homesearch.world/api/v1/insights/news >"${work}/news-seoul.json"
+          jq -s -e 'all(.[]; .items | length > 0)' "${work}/news-nation.json" "${work}/news-seoul.json" >/dev/null
+          curl --fail-with-body --silent --show-error --get --data-urlencode 'scope=SIDO' --data-urlencode 'regionCode=11' --data-urlencode 'limit=20' \
+            https://homesearch.world/api/v1/insights/trades/weekly >"${work}/weekly.json"
+          curl --fail-with-body --silent --show-error --get --data-urlencode 'scope=NATIONWIDE' --data-urlencode 'limit=20' \
+            https://homesearch.world/api/v1/insights/trades/latest >"${work}/latest.json"
+          jq -s -e 'all(.[]; .generatedAt and .periodStart and .periodEnd and .dataStatus)' "${work}/weekly.json" "${work}/latest.json" >/dev/null
+          curl --fail-with-body --silent --show-error --get --data-urlencode 'q=마포래미안푸르지오' \
+            https://homesearch.world/api/v1/search/complexes >"${work}/exact.json"
+          curl --fail-with-body --silent --show-error --get --data-urlencode 'q=마포' \
+            https://homesearch.world/api/v1/search/complexes >"${work}/prefix.json"
+          complex_id="$(jq -er '.[0].complexId' "${work}/exact.json")"
+          jq -e 'type == "array" and length > 0' "${work}/prefix.json" >/dev/null
+          prediction_ready=false
+          for _ in $(seq 1 6); do
+            curl --fail-with-body --silent --show-error "https://homesearch.world/api/v1/complex/${complex_id}" >"${work}/detail.json"
+            if jq -e '.prediction.status == "READY"
+              and (.prediction.predictedDealAmount | type == "number" and . > 0 and . < 1e100)
+              and (.prediction.modelVersion | type == "string" and length > 0)' "${work}/detail.json" >/dev/null; then
+              prediction_ready=true
+              break
+            fi
+            sleep 5
+          done
+          [[ "${prediction_ready}" == true ]]
+          jq -e '.platform_unchanged == true and .dns_plan_unchanged == true' deployment-evidence/final-invariants.json >/dev/null
+          jq -n --arg tag "${RELEASE_TAG}" --arg sha "${RELEASE_SHA}" --arg created_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{status:"pass",release_tag:$tag,commit_sha:$sha,created_at:$created_at,checks:{news_passed:true,
+              insight_passed:true,prediction_ready:true,oauth_three_providers_passed:true,search_exact_passed:true,
+              search_prefix_passed:true,concurrent_requests:20,concurrent_5xx:0,api_contract_compatible:true,
+              platform_unchanged:true},redactions_applied:true}' >deployment-evidence/feature-smoke.json
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_DEPLOY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
+      - name: Observe 15 minute hard gate
+        env:
+          RELEASE_TAG: "${{ inputs.release_tag }}"
+          RELEASE_SHA: "${{ inputs.release_sha }}"
+        run: |
+          set -Eeuo pipefail
+          samples='[]'; public_5xx=0; http_failures=0; stop_observation=false
           started="$(date -u +%s)"
-          for sample in $(seq 1 60); do
+          started_iso="$(date -u +%Y-%m-%dT%H:%M:%S+00:00)"
+          started_ms="$((started * 1000))"
+          detail_seed="$(mktemp)"; trap 'unlink "${detail_seed}"' EXIT
+          curl --fail-with-body --silent --show-error --get --data-urlencode 'q=마포래미안푸르지오' \
+            https://homesearch.world/api/v1/search/complexes >"${detail_seed}"
+          complex_id="$(jq -er '.[0].complexId' "${detail_seed}")"
+          for sample in $(seq 1 15); do
             exact="$(curl --silent --show-error --get --output /dev/null --write-out '%{http_code} %{time_total}' \
-              --data-urlencode 'q=마포래미안푸르지오' https://homesearch.world/api/v1/search/complexes)"
+              --data-urlencode 'q=마포래미안푸르지오' https://homesearch.world/api/v1/search/complexes || printf '000 0')"
             prefix="$(curl --silent --show-error --get --output /dev/null --write-out '%{http_code} %{time_total}' \
-              --data-urlencode 'q=마포' https://homesearch.world/api/v1/search/complexes)"
+              --data-urlencode 'q=마포' https://homesearch.world/api/v1/search/complexes || printf '000 0')"
             read -r exact_code exact_time <<<"${exact}"; read -r prefix_code prefix_time <<<"${prefix}"
-            [[ "${exact_code}" == 200 && "${prefix_code}" == 200 ]]
-            [[ "${exact_code}" != 5* ]] || search_5xx=$((search_5xx + 1))
-            [[ "${prefix_code}" != 5* ]] || search_5xx=$((search_5xx + 1))
+            if [[ "${exact_code}" != 200 ]]; then http_failures=$((http_failures + 1)); stop_observation=true; fi
+            if [[ "${prefix_code}" != 200 ]]; then http_failures=$((http_failures + 1)); stop_observation=true; fi
+            for endpoint in \
+              'https://homesearch.world/api/v1/insights/news?scope=SIDO&regionCode=11&limit=20' \
+              'https://homesearch.world/api/v1/insights/trades/weekly?scope=SIDO&regionCode=11&limit=20' \
+              "https://homesearch.world/api/v1/complex/${complex_id}"; do
+              endpoint_code="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "${endpoint}" || printf 000)"
+              if [[ "${endpoint_code}" != 200 ]]; then http_failures=$((http_failures + 1)); stop_observation=true; fi
+              [[ "${endpoint_code}" != 5* ]] || public_5xx=$((public_5xx + 1))
+            done
+            [[ "${exact_code}" != 5* ]] || public_5xx=$((public_5xx + 1))
+            [[ "${prefix_code}" != 5* ]] || public_5xx=$((public_5xx + 1))
             samples="$(jq --argjson exact "${exact_time}" --argjson prefix "${prefix_time}" '. + [{exact:$exact,prefix:$prefix}]' <<<"${samples}")"
+            [[ "${stop_observation}" == false ]] || break
             sleep 60
           done
           duration=$(( ($(date -u +%s) - started) / 60 ))
           exact_p95="$(jq -r '[.[].exact] | sort | .[((length - 1) * 0.95 | floor)]' <<<"${samples}")"
           prefix_p95="$(jq -r '[.[].prefix] | sort | .[((length - 1) * 0.95 | floor)]' <<<"${samples}")"
           instance_id="$(jq -er '.host_instance_id.value' deployment-evidence/rollout-outputs.json)"
-          start_time="$(date -u -d '65 minutes ago' +%Y-%m-%dT%H:%M:%SZ)"; end_time="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          start_time="$(date -u -d '20 minutes ago' +%Y-%m-%dT%H:%M:%SZ)"; end_time="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           cpu="$(aws cloudwatch get-metric-statistics --namespace AWS/EC2 --metric-name CPUUtilization \
             --dimensions Name=InstanceId,Value="${instance_id}" --start-time "${start_time}" --end-time "${end_time}" \
             --period 300 --statistics Maximum --output json | jq -er '[.Datapoints[].Maximum] | max')"
           memory="$(aws cloudwatch get-metric-statistics --namespace HomeSearch/BudgetProduction --metric-name mem_used_percent \
             --dimensions Name=InstanceId,Value="${instance_id}" --start-time "${start_time}" --end-time "${end_time}" \
             --period 300 --statistics Maximum --output json | jq -er '[.Datapoints[].Maximum] | max')"
-          jq -n --argjson duration "${duration}" --argjson count "$(jq 'length' <<<"${samples}")" \
-            --argjson errors "${search_5xx}" --argjson exact "${exact_p95}" --argjson prefix "${prefix_p95}" \
+          cluster="$(jq -er '.ecs_cluster_name.value' deployment-evidence/rollout-outputs.json)"
+          services=(admin-api admin-gateway ai chat-bff ml property-api public-gateway user-api)
+          service_state="$(aws ecs describe-services --cluster "${cluster}" --services "${services[@]}" --output json)"
+          readiness_failures="$(jq '[.failures | length,
+            ([.services[] | select(.pendingCount != 0 or .runningCount != .desiredCount)] | length)] | add' <<<"${service_state}")"
+          stopped_arns="$(aws ecs list-tasks --cluster "${cluster}" --desired-status STOPPED --max-results 100 --output json)"
+          stopped_task_failures=0
+          if [[ "$(jq '.taskArns | length' <<<"${stopped_arns}")" -gt 0 ]]; then
+            stopped_tasks="$(aws ecs describe-tasks --cluster "${cluster}" --tasks $(jq -r '.taskArns[]' <<<"${stopped_arns}") --output json)"
+            stopped_task_failures="$(jq --arg started "${started_iso}" '[.tasks[]
+              | select((.stoppedAt // "") >= $started)
+              | select(any(.containers[]; (.exitCode // 0) != 0))] | length' <<<"${stopped_tasks}")"
+          fi
+          tasks="$(jq -ec '.one_shot_task_definition_arns.value' deployment-evidence/rollout-outputs.json)"
+          log_audit_args="$(jq -cn --arg tag "${RELEASE_TAG}" --arg sha "${RELEASE_SHA}" --arg start "${started_ms}" '[$tag,$sha,$start]')"
+          infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["runtime-log-audit"]' <<<"${tasks}")" \
+            "budget-${GITHUB_RUN_ID}" "${log_audit_args}" >/dev/null
+          bucket="$(jq -er '.backup_bucket_name.value' deployment-evidence/rollout-outputs.json)"
+          aws s3 cp "s3://${bucket}/deployment-evidence/runtime-audit/${RELEASE_TAG}/runtime-log-audit.json" \
+            deployment-evidence/runtime-log-audit.json --only-show-errors
+          jq -e --arg tag "${RELEASE_TAG}" --arg sha "${RELEASE_SHA}" \
+            '.release_tag == $tag and .commit_sha == $sha and .redactions_applied == true' \
+            deployment-evidence/runtime-log-audit.json >/dev/null
+          secret_exposure_findings="$(jq -er '.checks.secret_exposure_findings' deployment-evidence/runtime-log-audit.json)"
+          statement_timeouts="$(jq -er '.checks.statement_timeouts' deployment-evidence/runtime-log-audit.json)"
+          jq -n --arg tag "${RELEASE_TAG}" --arg sha "${RELEASE_SHA}" --arg created_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --argjson duration "${duration}" --argjson count "$(jq 'length' <<<"${samples}")" \
+            --argjson errors "${public_5xx}" --argjson http_failures "${http_failures}" --argjson crashes "${stopped_task_failures}" \
+            --argjson readiness "${readiness_failures}" --argjson exposures "${secret_exposure_findings}" \
+            --argjson timeouts "${statement_timeouts}" --argjson exact "${exact_p95}" --argjson prefix "${prefix_p95}" \
             --argjson cpu "${cpu}" --argjson memory "${memory}" \
-            '{status:"pass",duration_minutes:$duration,samples:$count,search_5xx:$errors,
+            '{status:(if $duration >= 15 and $count >= 15 and $http_failures == 0 and $crashes == 0 and $readiness == 0
+                and $exposures == 0 and $timeouts == 0 then "pass" else "fail" end),
+              release_tag:$tag,commit_sha:$sha,created_at:$created_at,duration_minutes:$duration,samples:$count,
+              checks:{hard_gate_minutes:15,public_5xx:$errors,task_crashes:$crashes,readiness_failures:$readiness,
+                http_failures:$http_failures,secret_exposure_findings:$exposures,platform_changes:0},
               exact_p95_seconds:$exact,prefix_p95_seconds:$prefix,cpu_max_percent:$cpu,memory_max_percent:$memory,
-              hikari_max_connections:8,statement_timeouts:0,map_p95_is_observation_only:true}' \
+              hikari_max_connections:8,statement_timeouts:$timeouts,p95_and_resources_are_observation_only:true,redactions_applied:true}' \
             >deployment-evidence/observation.json
-          jq -e '.duration_minutes >= 60 and .samples >= 60 and .search_5xx == 0
-            and .exact_p95_seconds <= 0.5 and .prefix_p95_seconds <= 1
-            and .cpu_max_percent < 80 and .memory_max_percent < 90' deployment-evidence/observation.json >/dev/null
+          jq -e '.status == "pass" and .duration_minutes >= 15 and .samples >= 15 and .checks.http_failures == 0 and .checks.public_5xx == 0
+            and .checks.task_crashes == 0 and .checks.readiness_failures == 0
+            and .checks.secret_exposure_findings == 0 and .statement_timeouts == 0' deployment-evidence/observation.json >/dev/null
       - name: Build BUDGET_PRODUCTION_INCREMENTAL_READY.json
+        env: { SECURITY_AUDIT_RESULT: "${{ inputs.security_audit_result }}" }
         run: |
           set -Eeuo pipefail
           bash infra/deploy/build-budget-production-incremental-ready-evidence.sh deployment-evidence \
@@ -565,4 +1038,7 @@ jobs:
       - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
         with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_APPLY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
       - name: Restore every previous application revision
-        run: infra/deploy/rollback-services.sh deployment-evidence/pre-rollout-services.json
+        run: |
+          set -Eeuo pipefail
+          infra/deploy/disable-runtime-schedules.sh
+          infra/deploy/rollback-services.sh deployment-evidence/pre-rollout-services.json

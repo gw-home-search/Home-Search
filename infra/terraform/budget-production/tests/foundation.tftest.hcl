@@ -193,6 +193,8 @@ run "data_phase_keeps_platform_services_dark_before_secret_bootstrap" {
         "ai-migration",
         "importer-grants",
         "scheduled-backup",
+        "runtime-feature-audit",
+        "runtime-log-audit",
         "data-import-reconcile",
         "map-marker-projection",
         "rtms-daily-refresh",

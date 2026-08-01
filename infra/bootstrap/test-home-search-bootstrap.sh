@@ -482,6 +482,8 @@ BUDGET_PARAMETER_PREFIX=/home-search/budget-production \
 
 for suffix in \
   property/kakao-rest-api-key \
+  property/apt-service-key \
+  property/news/naver-client-id property/news/naver-client-secret \
   user/oauth/kakao-client-id user/oauth/kakao-client-secret \
   ai/openai-api-key ai/openai-primary-model ai/openai-secondary-model; do
   printf 'EXTERNAL_SENTINEL' >"${FAKE_AWS_STATE}/ssm_home-search_budget-production_${suffix//\//_}"

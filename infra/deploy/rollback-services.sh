@@ -24,6 +24,14 @@ jq -e '
 
 progress='[]'
 rollback_order=(public-gateway chat-bff ai user-api property-api ml admin-api admin-gateway)
+smoke_public_search() {
+  local body status
+  body="$(mktemp)"
+  status="$(curl --silent --show-error --get --output "${body}" --write-out '%{http_code}' \
+    --data-urlencode 'q=마포' https://homesearch.world/api/v1/search/complexes)"
+  [[ "${status}" == 200 ]] && jq -e 'type == "array"' "${body}" >/dev/null
+  unlink "${body}"
+}
 for service in "${rollback_order[@]}"; do
   jq -e --arg service "${service}" '.services | has($service)' "${state_file}" >/dev/null || continue
   task_definition="$(jq -er --arg service "${service}" '.services[$service].task_definition' "${state_file}")"
@@ -33,6 +41,12 @@ for service in "${rollback_order[@]}"; do
     --force-new-deployment >/dev/null
   if ! aws ecs wait services-stable --cluster "${cluster}" --services "${service}"; then
     progress="$(jq --arg service "${service}" --arg reason stable_waiter_failed '. + [{service:$service,status:"fail",reason:$reason}]' <<<"${progress}")"
+    jq -n --arg status fail --arg failed_service "${service}" --argjson services "${progress}" \
+      '{status:$status,failed_service:$failed_service,services:$services}' >"${progress_file}"
+    exit 1
+  fi
+  if ! smoke_public_search; then
+    progress="$(jq --arg service "${service}" --arg reason public_smoke_failed '. + [{service:$service,status:"fail",reason:$reason}]' <<<"${progress}")"
     jq -n --arg status fail --arg failed_service "${service}" --argjson services "${progress}" \
       '{status:$status,failed_service:$failed_service,services:$services}' >"${progress_file}"
     exit 1

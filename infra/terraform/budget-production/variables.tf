@@ -267,12 +267,12 @@ variable "application_service_task_definition_arns" {
         toset(keys(var.application_service_task_definition_arns)) == toset([
           "admin-api", "admin-gateway", "ai", "chat-bff", "ml", "property-api", "public-gateway", "user-api",
         ])
-        && alltrue([for arn in values(var.application_service_task_definition_arns) :
-          can(regex("^arn:aws:ecs:ap-northeast-2:[0-9]{12}:task-definition/[A-Za-z0-9_-]+:[1-9][0-9]*$", arn))
+        && alltrue([for service, arn in var.application_service_task_definition_arns :
+          can(regex("^arn:aws:ecs:ap-northeast-2:[0-9]{12}:task-definition/home-search-budget-production-${service}:[1-9][0-9]*$", arn))
         ])
       )
     )
-    error_message = "application_service_task_definition_arns must be empty or pin all eight application services to exact Seoul task definition revisions."
+    error_message = "application_service_task_definition_arns must be empty or pin all eight application services to their exact budget-production family revisions."
   }
 }
 
@@ -290,6 +290,42 @@ variable "application_service_desired_counts" {
       )
     )
     error_message = "application_service_desired_counts must be empty or pin all eight application services to non-negative integers."
+  }
+}
+
+variable "scheduled_backup_task_definition_arn" {
+  type        = string
+  default     = ""
+  description = "Optional exact live scheduled-backup task ARN preserved by incremental application rollouts."
+  validation {
+    condition = var.scheduled_backup_task_definition_arn == "" || can(regex(
+      "^arn:aws:ecs:ap-northeast-2:[0-9]{12}:task-definition/home-search-budget-production-scheduled-backup:[0-9]+$",
+      var.scheduled_backup_task_definition_arn,
+    ))
+    error_message = "scheduled_backup_task_definition_arn must be empty or the exact budget scheduled-backup revision ARN."
+  }
+}
+
+variable "data_import_preserved_image_uri" {
+  type        = string
+  default     = ""
+  description = "Optional live immutable data-import image preserved outside the incremental rollout."
+  validation {
+    condition = var.data_import_preserved_image_uri == "" || can(regex(
+      "^[0-9]{12}[.]dkr[.]ecr[.]ap-northeast-2[.]amazonaws[.]com/home-search/backup@sha256:[0-9a-f]{64}$",
+      var.data_import_preserved_image_uri,
+    ))
+    error_message = "data_import_preserved_image_uri must be empty or an immutable Seoul backup image URI."
+  }
+}
+
+variable "data_import_preserved_release_tag" {
+  type        = string
+  default     = ""
+  description = "Optional live data-import Release tag preserved outside the incremental rollout."
+  validation {
+    condition     = var.data_import_preserved_release_tag == "" || can(regex("^v[0-9]+[.][0-9]+[.][0-9]+$", var.data_import_preserved_release_tag))
+    error_message = "data_import_preserved_release_tag must be empty or an immutable SemVer tag."
   }
 }
 

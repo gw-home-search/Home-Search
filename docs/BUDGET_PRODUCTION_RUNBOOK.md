@@ -112,7 +112,12 @@ security group 이름/설명/무인바운드를 전부 확인한 뒤 state taint
 운영 복구 중 `/home-search/budget-production/property/apt-service-key` 컨테이너를
 먼저 만들었다면 같은 입력으로 workflow를 한 번 실행한다. 복구 step은 exact 이름,
 `SecureString`, 보호 태그를 확인한 뒤 값은 읽지 않고 해당 resource만 Terraform
-state에 import한다. 다른 parameter key나 메타데이터 불일치는 fail closed한다.
+state에 import한다. provider import가 write-only `value_wo_version`을 state에 복원하지
+않으면 helper는 exact resource address, parameter name, state version, serial, lineage를
+검증한 뒤 해당 비민감 version metadata를 `1`로 기록하고 serial만 증가시킨다. state
+push에 `-force`를 사용하지 않으므로 동시 state 변경은 fail closed하며 parameter 값은
+읽거나 임시 파일과 log에 기록하지 않는다. 다른 parameter key나 메타데이터 불일치는
+fail closed한다.
 
 초기 data service 기동 전에 생성된 64자 hex parameter에 단일 LF가 포함됐다는
 Valkey URL-safe 오류가 확인되면 import를 시작하지 않는다. 먼저 exact Terraform

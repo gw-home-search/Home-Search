@@ -128,6 +128,8 @@ for required in \
   'Preserve live PostgreSQL and Valkey digests' \
   'Verify incremental Terraform allowlist' \
   'Capture rollback service state' \
+  'Mark rollback evidence ready' \
+  'Register rollout one-shot task revisions and retained SSM move' \
   'Run exact property migration target and validate' \
   'Roll application services in dependency order' \
   'Smoke backend search before public gateway' \
@@ -188,6 +190,19 @@ rollout_plan_artifact_block="$(sed -n "$((rollout_plan_artifact_line - 2)),$((ro
 grep -Fq 'if: always()' <<<"${rollout_plan_artifact_block}"
 grep -Fq 'infra/deploy/build-budget-production-incremental-ready-evidence.sh' "${rollout_workflow}"
 grep -Fq 'infra/deploy/rollback-services.sh deployment-evidence/pre-rollout-services.json' "${rollout_workflow}"
+grep -Fq "if: failure() && needs.rollout.result == 'failure' && needs.rollout.outputs.rollback_ready == 'true'" "${rollout_workflow}"
+capture_rollback_line="$(grep -nF 'name: Capture rollback service state' "${rollout_workflow}" | cut -d: -f1)"
+progress_artifact_line="$(grep -nF 'name: "budget-production-incremental-progress-${{ inputs.release_tag }}"' "${rollout_workflow}" | head -1 | cut -d: -f1)"
+rollback_ready_line="$(grep -nF 'id: rollback_evidence' "${rollout_workflow}" | cut -d: -f1)"
+register_one_shot_line="$(grep -nF 'name: Register rollout one-shot task revisions and retained SSM move' "${rollout_workflow}" | cut -d: -f1)"
+[[ "${capture_rollback_line}" -lt "${progress_artifact_line}" ]]
+[[ "${progress_artifact_line}" -lt "${rollback_ready_line}" ]]
+[[ "${rollback_ready_line}" -lt "${register_one_shot_line}" ]]
+register_one_shot_block="$(sed -n "${register_one_shot_line},$((register_one_shot_line + 14))p" "${rollout_workflow}")"
+grep -Fq -- "-target='aws_ssm_parameter.retained_apt_service_key'" <<<"${register_one_shot_block}"
+grep -Fq -- "-target='aws_ssm_parameter.runtime'" <<<"${register_one_shot_block}"
+grep -Fq -- "-target='aws_ecs_task_definition.one_shot[\"property-flyway\"]'" <<<"${register_one_shot_block}"
+grep -Fq -- "-target='aws_ecs_task_definition.one_shot[\"scheduled-backup\"]'" <<<"${register_one_shot_block}"
 grep -Fq 'https://homesearch.world/api/v1/search/complexes' "${rollout_workflow}"
 "${root}/infra/deploy/test-read-budget-production-phase.sh"
 "${root}/infra/deploy/test-select-budget-production-foundation-pins.sh"

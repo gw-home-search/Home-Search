@@ -296,8 +296,11 @@ run "post_cutover_enables_backup_and_public_alarms" {
 run "private_phase_uses_fixed_bridge_ports_and_least_privilege_roles" {
   command = plan
   variables {
-    deployment_phase      = "private"
-    data_services_enabled = true
+    deployment_phase                        = "private"
+    data_services_enabled                   = true
+    ai_supervisor_graph_mode                = "off"
+    ai_supervisor_graph_canary_percent      = 0
+    application_deployment_maximum_percents = {}
   }
 
   assert {

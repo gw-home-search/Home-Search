@@ -134,6 +134,48 @@ bootstrap/service role 13개의 password를 현재 runtime parameter와 idempote
 password를 command line이나 log에 출력하지 않는다. role 누락 또는 reconcile 실패 시
 container가 fail closed하므로 Flyway/import를 실행하지 않는다.
 
+## Application 증분 rollout
+
+최초 `BUDGET_PRODUCTION_READY.json`이 생성된 public phase에서는
+`Rollout budget production` workflow만 사용한다. bootstrap state에는 먼저 exact
+workflow claim을 반영한다. 이 trust 확장은 `main`과 `refs/tags/v*`,
+`budget-production-plan`/`budget-production` Environment에 계속 묶이며 다른 workflow나
+branch에는 권한을 주지 않는다.
+
+1. 병합된 `main` commit에 아직 사용되지 않은 exact release tag를 붙이고 17개
+   application image와 2개 platform manifest, SBOM, provenance가 성공한 뒤 tag/SHA와
+   `property_migration_target=40`을 입력한다.
+2. plan job이 live phase `public`, DNS enablement, PostgreSQL/Valkey health, 26시간 이내
+   backup, root 8GiB/data 20GiB 여유 공간을 확인한다. release의 application digest만
+   사용하고 live PostgreSQL/Valkey digest 두 개는 그대로 tfvars에 넣는다.
+3. plan은 application/one-shot task definition과 application service revision,
+   `rtms-daily-refresh`의 제한된 scheduler/IAM만 허용한다. EC2, EBS, EIP, VPC, S3,
+   DNS, platform service 변경 또는 보존형 task definition 외 delete가 있으면 승인하지 않는다.
+4. protected 승인 뒤 기존 application task definition ARN과 desired count를 캡처한다.
+   새 backup one-shot의 read-only audit가 V39 exact history와
+   `complex`/`complex_name_alias`/`parcel`/`trade` row count·식별자 checksum을 S3의
+   release별 `logical/rollout-audit` prefix에 기록한다.
+5. property Flyway만 `target=40 migrate`, `target=40 validate` 순서로 실행한다. V40의
+   `lock_timeout=5s` 실패, history drift, failed/missing/out-of-order migration이면
+   application rollout을 시작하지 않는다. after audit는 V40 history와 before snapshot의
+   row count/checksum 동일성을 함께 강제한다.
+6. `property-api → user-api → ai → chat-bff`를 각각 stable까지 교체한다. 기존
+   public gateway를 통해 20개 동시 prefix 검색과 backend smoke가 성공한 뒤
+   `public-gateway`를 마지막으로 교체한다.
+7. 남은 inactive application/one-shot revision과 RTMS scheduler/IAM을 reviewed plan으로
+   수렴시킨다. refresh-only 뒤 zero-drift plan, 기존 `homesearch.world` DNS의 public
+   exact/prefix smoke를 확인한다. DNS record에는 apply하지 않는다.
+8. 60분 동안 분당 exact/prefix synthetic 검색을 실행한다. 5xx 0, exact p95 500ms 이하,
+   prefix p95 1초 이하, CPU 80% 미만, memory 90% 미만을 만족해야
+   `BUDGET_PRODUCTION_INCREMENTAL_READY.json`을 만든다. 지도 p95는 관측만 하고 이
+   증분 rollout의 차단 조건으로 사용하지 않는다.
+
+이 workflow는 전국 data import, logical/EBS restore rehearsal, Unlimited CPU credit 전환,
+platform service 재시작, data volume 변경을 실행하지 않는다. V40은 additive index이므로
+down migration하지 않는다. migration 이후 실패하면 캡처한 이전 revision과 desired
+count로 모든 application service를 복원하며 DNS, PostgreSQL row, backup, data volume은
+변경하지 않는다.
+
 ## SSM과 Admin
 
 SSH는 사용하지 않는다. Session Manager로 host에 접속한다. Admin API/gateway는

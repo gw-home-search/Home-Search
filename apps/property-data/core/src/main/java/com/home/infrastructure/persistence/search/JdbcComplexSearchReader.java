@@ -8,13 +8,93 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Objects;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 @Repository
 public class JdbcComplexSearchReader implements ComplexSearchReader {
 
-    private static final String COMPLEX_SEARCH_SQL = """
+    private static final Logger log = LoggerFactory.getLogger(JdbcComplexSearchReader.class);
+
+    private static final String EXACT_CANDIDATES = """
+		SELECT c.id AS complex_id FROM complex c WHERE lower(c.display_name) = :lowerQuery
+		UNION
+		SELECT c.id AS complex_id FROM complex c WHERE lower(c.name) = :lowerQuery
+		UNION
+		SELECT c.id AS complex_id FROM complex c WHERE lower(c.trade_name) = :lowerQuery
+		UNION
+		SELECT c.id AS complex_id
+		FROM complex c
+		WHERE :normalizedQuery <> '' AND c.search_name = :normalizedQuery
+		UNION
+		SELECT alias.complex_id
+		FROM complex_name_alias alias
+		WHERE lower(alias.alias_name) = :lowerQuery
+		   OR (:normalizedQuery <> '' AND alias.normalized_name = :normalizedQuery)
+		""";
+
+    private static final String PREFIX_CANDIDATES = """
+		WITH query_tokens AS (
+		    SELECT
+		        token_no,
+		        lower(token) AS raw_token,
+		        hs_normalize_complex_search_name(token) AS normalized_token,
+		        hs_escape_like_pattern(lower(token)) || '%' AS raw_prefix,
+		        hs_escape_like_pattern(hs_normalize_complex_search_name(token)) || '%' AS normalized_prefix,
+		        (
+		            SELECT lexeme
+		            FROM unnest(tsvector_to_array(to_tsvector('simple', lower(token)))) AS lexeme
+		            LIMIT 1
+		        ) AS address_lexeme
+		    FROM regexp_split_to_table(btrim(CAST(:query AS text)), '[[:space:]]+')
+		         WITH ORDINALITY AS split(token, token_no)
+		),
+		query_meta AS (
+		    SELECT count(*) AS token_count
+		    FROM query_tokens
+		),
+		token_hits AS (
+		    SELECT token.token_no, c.id AS complex_id
+		    FROM query_tokens token
+		    JOIN complex c ON lower(c.display_name) LIKE token.raw_prefix ESCAPE chr(92)
+		    UNION ALL
+		    SELECT token.token_no, c.id AS complex_id
+		    FROM query_tokens token
+		    JOIN complex c ON lower(c.name) LIKE token.raw_prefix ESCAPE chr(92)
+		    UNION ALL
+		    SELECT token.token_no, c.id AS complex_id
+		    FROM query_tokens token
+		    JOIN complex c ON lower(c.trade_name) LIKE token.raw_prefix ESCAPE chr(92)
+		    UNION ALL
+		    SELECT token.token_no, c.id AS complex_id
+		    FROM query_tokens token
+		    JOIN complex c ON token.normalized_token <> ''
+		        AND c.search_name LIKE token.normalized_prefix ESCAPE chr(92)
+		    UNION ALL
+		    SELECT token.token_no, alias.complex_id
+		    FROM query_tokens token
+		    JOIN complex_name_alias alias
+		      ON lower(alias.alias_name) LIKE token.raw_prefix ESCAPE chr(92)
+		      OR (token.normalized_token <> ''
+		          AND alias.normalized_name LIKE token.normalized_prefix ESCAPE chr(92))
+		    UNION ALL
+		    SELECT token.token_no, c.id AS complex_id
+		    FROM query_tokens token
+		    JOIN parcel address_parcel ON token.address_lexeme IS NOT NULL
+		        AND to_tsvector('simple', lower(COALESCE(address_parcel.address, '')))
+		            @@ to_tsquery('simple', quote_literal(token.address_lexeme) || ':*')
+		    JOIN complex c ON c.parcel_id = address_parcel.id
+		)
+		SELECT hit.complex_id
+		FROM token_hits hit
+		GROUP BY hit.complex_id
+		HAVING count(DISTINCT hit.token_no) = (SELECT token_count FROM query_meta)
+		""";
+
+    private static final String CONTAINS_CANDIDATES = """
 		WITH query_tokens AS (
 		    SELECT
 		        token_no,
@@ -29,61 +109,117 @@ public class JdbcComplexSearchReader implements ComplexSearchReader {
 		    SELECT count(*) AS token_count
 		    FROM query_tokens
 		),
-		name_hits AS (
-		    SELECT c.id AS complex_id, token.token_no, 'NAME' AS source
-		    FROM complex c
-		    CROSS JOIN query_tokens token
-		    WHERE lower(c.display_name) LIKE token.raw_pattern ESCAPE chr(92)
-		       OR lower(c.name) LIKE token.raw_pattern ESCAPE chr(92)
-		       OR lower(COALESCE(c.trade_name, '')) LIKE token.raw_pattern ESCAPE chr(92)
-		       OR (
-		           token.normalized_token <> ''
-		           AND c.search_name LIKE token.normalized_pattern ESCAPE chr(92)
-		       )
-		),
-		alias_hits AS (
-		    SELECT alias.complex_id, token.token_no, 'ALIAS' AS source
-		    FROM complex_name_alias alias
-		    CROSS JOIN query_tokens token
-		    WHERE (
-		              char_length(token.raw_token) >= 3
-		              AND lower(alias.alias_name) LIKE token.raw_pattern ESCAPE chr(92)
-		          )
-		       OR (
-		           token.normalized_token <> ''
-		           AND (
-		               alias.normalized_name = token.normalized_token
-		               OR (
-		                   char_length(token.normalized_token) >= 3
-		                   AND alias.normalized_name LIKE token.normalized_pattern ESCAPE chr(92)
-		               )
-		           )
-		       )
-		),
-		address_hits AS (
-		    SELECT c.id AS complex_id, token.token_no, 'ADDRESS' AS source
-		    FROM parcel p
-		    JOIN complex c ON c.parcel_id = p.id
-		    CROSS JOIN query_tokens token
-		    WHERE lower(COALESCE(p.address, '')) LIKE token.raw_pattern ESCAPE chr(92)
+		eligible_tokens AS (
+		    SELECT token.*
+		    FROM query_tokens token
+		    WHERE char_length(token.raw_token) >= 3
 		),
 		token_hits AS (
-		    SELECT * FROM name_hits
+		    SELECT token.token_no, c.id AS complex_id
+		    FROM eligible_tokens token
+		    JOIN complex c ON lower(c.display_name) LIKE token.raw_pattern ESCAPE chr(92)
 		    UNION ALL
-		    SELECT * FROM alias_hits
+		    SELECT token.token_no, c.id AS complex_id
+		    FROM eligible_tokens token
+		    JOIN complex c ON lower(c.name) LIKE token.raw_pattern ESCAPE chr(92)
 		    UNION ALL
-		    SELECT * FROM address_hits
-		),
-		candidate_stats AS (
-		    SELECT
-		        hit.complex_id,
-		        count(DISTINCT hit.token_no) FILTER (WHERE hit.source = 'NAME') AS name_token_count,
-		        count(DISTINCT hit.token_no) FILTER (WHERE hit.source = 'ALIAS') AS alias_token_count,
-		        count(DISTINCT hit.token_no) FILTER (WHERE hit.source = 'ADDRESS') AS address_token_count
-		    FROM token_hits hit
-		    GROUP BY hit.complex_id
-		    HAVING count(DISTINCT hit.token_no) = (SELECT token_count FROM query_meta)
+		    SELECT token.token_no, c.id AS complex_id
+		    FROM eligible_tokens token
+		    JOIN complex c
+		      ON lower(COALESCE(c.trade_name, '')) LIKE token.raw_pattern ESCAPE chr(92)
+		    UNION ALL
+		    SELECT token.token_no, c.id AS complex_id
+		    FROM eligible_tokens token
+		    JOIN complex c ON token.normalized_token <> ''
+		        AND c.search_name LIKE token.normalized_pattern ESCAPE chr(92)
+		    UNION ALL
+		    SELECT token.token_no, alias.complex_id
+		    FROM eligible_tokens token
+		    JOIN complex_name_alias alias
+		      ON lower(alias.alias_name) LIKE token.raw_pattern ESCAPE chr(92)
+		      OR (token.normalized_token <> ''
+		          AND alias.normalized_name LIKE token.normalized_pattern ESCAPE chr(92))
+		    UNION ALL
+		    SELECT token.token_no, c.id AS complex_id
+		    FROM eligible_tokens token
+		    JOIN parcel address_parcel
+		      ON lower(COALESCE(address_parcel.address, '')) LIKE token.raw_pattern ESCAPE chr(92)
+		    JOIN complex c ON c.parcel_id = address_parcel.id
 		)
+		SELECT hit.complex_id
+		FROM token_hits hit
+		GROUP BY hit.complex_id
+		HAVING count(DISTINCT hit.token_no) = (SELECT token_count FROM query_meta)
+		""";
+
+    private static final String TWO_CHARACTER_CONTAINS_CANDIDATES = """
+		WITH query_token AS (
+		    SELECT
+		        lower(CAST(:query AS text)) AS raw_token,
+		        hs_normalize_complex_search_name(CAST(:query AS text)) AS normalized_token,
+		        '%' || hs_escape_like_pattern(lower(CAST(:query AS text))) || '%' AS raw_pattern,
+		        '%' || hs_escape_like_pattern(hs_normalize_complex_search_name(CAST(:query AS text))) || '%'
+		            AS normalized_pattern
+		),
+		bounded_hits AS (
+		    SELECT hit.id AS complex_id
+		    FROM query_token token
+		    CROSS JOIN LATERAL (
+		        SELECT c.id
+		        FROM complex c
+		        WHERE lower(c.display_name) LIKE token.raw_pattern ESCAPE chr(92)
+		        ORDER BY c.id
+		        LIMIT 200
+		    ) hit
+		    UNION ALL
+		    SELECT hit.id AS complex_id
+		    FROM query_token token
+		    CROSS JOIN LATERAL (
+		        SELECT c.id
+		        FROM complex c
+		        WHERE lower(c.name) LIKE token.raw_pattern ESCAPE chr(92)
+		        ORDER BY c.id
+		        LIMIT 200
+		    ) hit
+		    UNION ALL
+		    SELECT hit.id AS complex_id
+		    FROM query_token token
+		    CROSS JOIN LATERAL (
+		        SELECT c.id
+		        FROM complex c
+		        WHERE lower(COALESCE(c.trade_name, '')) LIKE token.raw_pattern ESCAPE chr(92)
+		        ORDER BY c.id
+		        LIMIT 200
+		    ) hit
+		    UNION ALL
+		    SELECT hit.id AS complex_id
+		    FROM query_token token
+		    CROSS JOIN LATERAL (
+		        SELECT c.id
+		        FROM complex c
+		        WHERE token.normalized_token <> ''
+		          AND c.search_name LIKE token.normalized_pattern ESCAPE chr(92)
+		        ORDER BY c.id
+		        LIMIT 200
+		    ) hit
+		    UNION ALL
+		    SELECT hit.complex_id
+		    FROM query_token token
+		    CROSS JOIN LATERAL (
+		        SELECT alias.complex_id
+		        FROM complex_name_alias alias
+		        WHERE lower(alias.alias_name) LIKE token.raw_pattern ESCAPE chr(92)
+		           OR (token.normalized_token <> ''
+		               AND alias.normalized_name LIKE token.normalized_pattern ESCAPE chr(92))
+		        ORDER BY alias.complex_id
+		        LIMIT 200
+		    ) hit
+		)
+		SELECT DISTINCT hit.complex_id
+		FROM bounded_hits hit
+		""";
+
+    private static final String SEARCH_PROJECTION = """
 		SELECT
 		    c.id AS complex_id,
 		    COALESCE(NULLIF(BTRIM(c.trade_name), ''), c.name) AS complex_name,
@@ -91,62 +227,24 @@ public class JdbcComplexSearchReader implements ComplexSearchReader {
 		    COALESCE(display_coordinate.latitude, p.latitude) AS latitude,
 		    COALESCE(display_coordinate.longitude, p.longitude) AS longitude,
 		    p.address
-		FROM candidate_stats candidate
+		FROM (%s) candidate
 		JOIN complex c ON c.id = candidate.complex_id
 		JOIN parcel p ON p.id = c.parcel_id
 		LEFT JOIN complex_display_coordinate display_coordinate ON display_coordinate.complex_id = c.id
-		CROSS JOIN query_meta
-		ORDER BY
-		    CASE
-		        WHEN query_meta.token_count > 1
-		             AND (lower(c.display_name) = :lowerQuery OR c.search_name = :normalizedQuery) THEN 0
-		        WHEN query_meta.token_count > 1
-		             AND (
-		                 lower(c.display_name) LIKE :prefixPattern ESCAPE chr(92)
-		                 OR c.search_name LIKE :normalizedPrefixPattern ESCAPE chr(92)
-		             ) THEN 1
-		        WHEN query_meta.token_count > 1 THEN 2
-		        WHEN lower(c.display_name) = :lowerQuery
-		            OR c.search_name = :normalizedQuery
-		            OR lower(c.name) = :lowerQuery
-		            OR lower(COALESCE(c.trade_name, '')) = :lowerQuery THEN 0
-		        WHEN lower(c.display_name) LIKE :prefixPattern ESCAPE chr(92)
-		            OR c.search_name LIKE :normalizedPrefixPattern ESCAPE chr(92)
-		            OR lower(c.name) LIKE :prefixPattern ESCAPE chr(92)
-		            OR lower(COALESCE(c.trade_name, '')) LIKE :prefixPattern ESCAPE chr(92) THEN 1
-		        WHEN EXISTS (
-		            SELECT 1
-		            FROM complex_name_alias a
-		            WHERE a.complex_id = c.id
-		              AND (
-		                  lower(a.alias_name) = :lowerQuery
-		                  OR lower(a.alias_name) LIKE :prefixPattern ESCAPE chr(92)
-		                  OR a.normalized_name = :normalizedQuery
-		                  OR a.normalized_name LIKE :normalizedPrefixPattern ESCAPE chr(92)
-		              )
-		        ) THEN 2
-		        WHEN lower(c.display_name) LIKE :pattern ESCAPE chr(92)
-		            OR c.search_name LIKE :normalizedPattern ESCAPE chr(92)
-		            OR lower(c.name) LIKE :pattern ESCAPE chr(92)
-		            OR lower(COALESCE(c.trade_name, '')) LIKE :pattern ESCAPE chr(92) THEN 3
-		        WHEN EXISTS (
-		            SELECT 1
-		            FROM complex_name_alias a
-		            WHERE a.complex_id = c.id
-		              AND (
-		                  lower(a.alias_name) LIKE :pattern ESCAPE chr(92)
-		                  OR a.normalized_name LIKE :normalizedPattern ESCAPE chr(92)
-		              )
-		        ) THEN 4
-		        WHEN lower(COALESCE(p.address, '')) LIKE :prefixPattern ESCAPE chr(92) THEN 5
-		        WHEN lower(COALESCE(p.address, '')) LIKE :pattern ESCAPE chr(92) THEN 6
-		        ELSE 7
-		    END,
-		    CASE WHEN query_meta.token_count > 1 THEN candidate.name_token_count ELSE 0 END DESC,
-		    CASE WHEN query_meta.token_count > 1 THEN candidate.alias_token_count ELSE 0 END DESC,
-		    CASE WHEN query_meta.token_count > 1 THEN candidate.address_token_count ELSE 0 END DESC,
-		    COALESCE(NULLIF(BTRIM(c.trade_name), ''), c.name),
-		    c.id
+		ORDER BY COALESCE(NULLIF(BTRIM(c.trade_name), ''), c.name), c.id
+		LIMIT :limit
+		""";
+
+    private static final String SUGGESTION_PROJECTION = """
+		SELECT
+		    c.id AS complex_id,
+		    COALESCE(NULLIF(BTRIM(c.trade_name), ''), c.name) AS complex_name,
+		    p.id AS parcel_id,
+		    p.address
+		FROM (%s) candidate
+		JOIN complex c ON c.id = candidate.complex_id
+		JOIN parcel p ON p.id = c.parcel_id
+		ORDER BY COALESCE(NULLIF(BTRIM(c.trade_name), ''), c.name), c.id
 		LIMIT :limit
 		""";
 
@@ -158,29 +256,52 @@ public class JdbcComplexSearchReader implements ComplexSearchReader {
 
     @Override
     public List<SearchComplexResult> searchComplexes(String query) {
-        return searchStatement(PropertySearchTerms.from(query), 20)
-                .query(this::mapSearchComplex)
-                .list();
+        return firstResults(query, 20, false, this::mapSearchComplex);
     }
 
     @Override
     public List<ComplexSuggestionResult> suggestComplexes(String query, int limit) {
-        return searchStatement(PropertySearchTerms.from(query), limit)
-                .query(this::mapComplexSuggestion)
-                .list();
+        return firstResults(query, limit, true, this::mapComplexSuggestion);
     }
 
-    private JdbcClient.StatementSpec searchStatement(PropertySearchTerms terms, int limit) {
-        return jdbcClient
-                .sql(COMPLEX_SEARCH_SQL)
-                .param("query", terms.query())
-                .param("lowerQuery", terms.lowerQuery())
-                .param("pattern", terms.pattern())
-                .param("prefixPattern", terms.prefixPattern())
-                .param("normalizedQuery", terms.normalizedQuery())
-                .param("normalizedPattern", terms.normalizedPattern())
-                .param("normalizedPrefixPattern", terms.normalizedPrefixPattern())
-                .param("limit", limit);
+    private <T> List<T> firstResults(String query, int limit, boolean suggestion, RowMapper<T> rowMapper) {
+        PropertySearchTerms terms = PropertySearchTerms.from(query);
+        for (SearchStage stage : SearchStage.values()) {
+            long startedAt = System.nanoTime();
+            List<T> results = stageStatement(stage, terms, limit, suggestion)
+                    .query(rowMapper)
+                    .list();
+            long elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000;
+            log.debug(
+                    "Complex search stage completed stage={} elapsedMs={} resultCount={} suggestion={}",
+                    stage,
+                    elapsedMillis,
+                    results.size(),
+                    suggestion);
+            if (!results.isEmpty()) {
+                return results;
+            }
+        }
+        return List.of();
+    }
+
+    private JdbcClient.StatementSpec stageStatement(
+            SearchStage stage, PropertySearchTerms terms, int limit, boolean suggestion) {
+        String candidates =
+                switch (stage) {
+                    case EXACT -> EXACT_CANDIDATES;
+                    case PREFIX -> PREFIX_CANDIDATES;
+                    case CONTAINS ->
+                        terms.isSingleTwoCodePointQuery() ? TWO_CHARACTER_CONTAINS_CANDIDATES : CONTAINS_CANDIDATES;
+                };
+        String projection = suggestion ? SUGGESTION_PROJECTION : SEARCH_PROJECTION;
+        JdbcClient.StatementSpec statement = jdbcClient.sql(projection.formatted(candidates));
+        statement = switch (stage) {
+            case EXACT ->
+                statement.param("lowerQuery", terms.lowerQuery()).param("normalizedQuery", terms.normalizedQuery());
+            case PREFIX, CONTAINS -> statement.param("query", terms.query());
+        };
+        return statement.param("limit", limit);
     }
 
     private SearchComplexResult mapSearchComplex(ResultSet resultSet, int rowNumber) throws SQLException {
@@ -204,5 +325,11 @@ public class JdbcComplexSearchReader implements ComplexSearchReader {
     private Double doubleOrNull(ResultSet resultSet, String column) throws SQLException {
         BigDecimal value = resultSet.getBigDecimal(column);
         return value == null ? null : value.doubleValue();
+    }
+
+    private enum SearchStage {
+        EXACT,
+        PREFIX,
+        CONTAINS
     }
 }

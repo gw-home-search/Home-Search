@@ -357,8 +357,10 @@ export function MapApp({
           regionTrail={region.regionTrail}
           rootRegions={region.rootRegions}
           searchError={search.searchError}
+          queryGuidance={search.queryGuidance}
           searchResults={search.searchResults}
           searchState={search.searchState}
+          suggestionState={search.suggestionState}
           selectedComplex={detail.selectedComplex}
           sidebarMode={sidebarMode}
           tradeRows={detail.tradeRows}

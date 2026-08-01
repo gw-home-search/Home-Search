@@ -13,18 +13,22 @@ export function SearchResultsSection({
   onResultSelect,
   onRetry,
   onSuggestionSelect,
+  queryGuidance,
   searchError,
   searchResults,
   searchState,
+  suggestionState,
 }: {
   complexSuggestions: ComplexSuggestion[];
   hidden: boolean;
   onResultSelect: (result: ComplexSearchResult) => void;
   onRetry: () => void;
   onSuggestionSelect: (suggestion: ComplexSuggestion) => void;
+  queryGuidance: string | null;
   searchError: RequestFailure | null;
   searchResults: ComplexSearchResult[];
   searchState: PanelRequestState;
+  suggestionState: PanelRequestState;
 }) {
   return (
     <section id="exploration-panel-search" aria-label="검색 결과 패널" className="panel-section" data-api-flow="search" hidden={hidden}>
@@ -40,6 +44,16 @@ export function SearchResultsSection({
         emptyMessage="검색 결과가 없습니다"
         feedback={feedbackForFailure(searchError, 'SEARCH_UNAVAILABLE')}
         onRetry={onRetry}
+      />
+      {queryGuidance == null ? null : (
+        <p className="request-state-notice request-state-empty" role="status" aria-live="polite">
+          {queryGuidance}
+        </p>
+      )}
+      <RequestStateNotice
+        state={suggestionState === 'loading' ? 'loading' : 'idle'}
+        loadingMessage="검색 제안을 찾는 중"
+        emptyMessage=""
       />
       {searchResults.length > 0 ? (
         <ComplexList ariaLabel="검색 결과" items={searchResults.map((result) => ({

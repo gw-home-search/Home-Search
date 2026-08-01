@@ -4,7 +4,7 @@ set -Eeuo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 script="${root}/infra/deploy/run-budget-ecs-task.sh"
 bash -n "${script}"
-for expected in '--launch-type EC2' '--count 1' '--started-by' 'timeout 7200' 'all(.tasks[0].containers[]; .exitCode == 0)' 'aws ecs stop-task' 'completed=false'; do
+for expected in '--launch-type EC2' '--count 1' '--started-by' '--overrides' 'containerOverrides' 'property-flyway override는 exact V40 validate만 허용합니다.' 'scheduled-backup override는 release별 property search audit만 허용합니다.' 'timeout 7200' 'all(.tasks[0].containers[]; .exitCode == 0)' 'aws ecs stop-task' 'completed=false'; do
   grep -Fq -- "${expected}" "${script}"
 done
 ! grep -Fq -- '--launch-type FARGATE' "${script}"

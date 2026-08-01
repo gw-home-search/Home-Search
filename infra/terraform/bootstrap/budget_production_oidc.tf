@@ -3,14 +3,14 @@ locals {
     "token.actions.githubusercontent.com:aud"         = ["sts.amazonaws.com"]
     "token.actions.githubusercontent.com:sub"         = ["repo:${var.github_repository}:environment:${var.github_budget_plan_environment}"]
     "token.actions.githubusercontent.com:repository"  = [var.github_repository]
-    "token.actions.githubusercontent.com:workflow"    = [var.github_budget_workflow_name]
+    "token.actions.githubusercontent.com:workflow"    = [var.github_budget_workflow_name, var.github_budget_rollout_workflow_name]
     "token.actions.githubusercontent.com:environment" = [var.github_budget_plan_environment]
   }
   github_budget_apply_oidc_string_equals = {
     "token.actions.githubusercontent.com:aud"         = ["sts.amazonaws.com"]
     "token.actions.githubusercontent.com:sub"         = ["repo:${var.github_repository}:environment:${var.github_budget_apply_environment}"]
     "token.actions.githubusercontent.com:repository"  = [var.github_repository]
-    "token.actions.githubusercontent.com:workflow"    = [var.github_budget_workflow_name]
+    "token.actions.githubusercontent.com:workflow"    = [var.github_budget_workflow_name, var.github_budget_rollout_workflow_name]
     "token.actions.githubusercontent.com:environment" = [var.github_budget_apply_environment]
   }
   github_budget_oidc_string_like = {

@@ -189,6 +189,16 @@ variable "deployment_release_tag" {
   }
 }
 
+variable "property_migration_target" {
+  type        = number
+  default     = 40
+  description = "Exact append-only Property Flyway target approved for the incremental rollout."
+  validation {
+    condition     = var.property_migration_target == 40
+    error_message = "property_migration_target is pinned to 40 for this rollout."
+  }
+}
+
 variable "migration_artifact_s3_uri" {
   type        = string
   default     = ""

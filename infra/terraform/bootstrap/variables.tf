@@ -172,6 +172,16 @@ variable "github_budget_workflow_name" {
   default     = "Deploy budget production"
 }
 
+variable "github_budget_rollout_workflow_name" {
+  description = "Exact incremental rollout workflow claim allowed on the same protected environments and refs."
+  type        = string
+  default     = "Rollout budget production"
+  validation {
+    condition     = var.github_budget_rollout_workflow_name == "Rollout budget production"
+    error_message = "The budget rollout workflow trust is fixed to Rollout budget production."
+  }
+}
+
 variable "github_budget_allowed_refs" {
   description = "Protected refs allowed to use budget-production roles."
   type        = list(string)

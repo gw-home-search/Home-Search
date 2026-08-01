@@ -322,7 +322,8 @@ jobs:
           terraform -chdir=infra/terraform/budget-production plan -out=rollout.tfplan -detailed-exitcode || code=$?
           [[ "${code}" == 2 ]]
           terraform -chdir=infra/terraform/budget-production show -json rollout.tfplan >deployment-evidence/rollout-plan.json
-          bash infra/deploy/verify-budget-production-rollout-plan.sh deployment-evidence/rollout-plan.json
+          bash infra/deploy/verify-budget-production-rollout-plan.sh \
+            deployment-evidence/rollout-plan.json deployment-evidence/live-application-settings.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
@@ -473,7 +474,8 @@ jobs:
           terraform -chdir=infra/terraform/budget-production plan -out=remaining.tfplan -detailed-exitcode || code=$?
           [[ "${code}" == 0 || "${code}" == 2 ]]
           terraform -chdir=infra/terraform/budget-production show -json remaining.tfplan >deployment-evidence/remaining-plan.json
-          bash infra/deploy/verify-budget-production-rollout-plan.sh deployment-evidence/remaining-plan.json
+          bash infra/deploy/verify-budget-production-rollout-plan.sh \
+            deployment-evidence/remaining-plan.json deployment-evidence/live-application-settings.json
           [[ "${code}" == 0 ]] || terraform -chdir=infra/terraform/budget-production apply -auto-approve remaining.tfplan
           terraform -chdir=infra/terraform/budget-production apply -refresh-only -auto-approve
           zero_code=0

@@ -337,6 +337,8 @@ jobs:
   rollout:
     name: budget-production-incremental-rollout
     needs: plan
+    outputs:
+      rollback_ready: "${{ steps.rollback_evidence.outputs.ready }}"
     environment: budget-production
     runs-on: ubuntu-latest
     timeout-minutes: 150
@@ -364,12 +366,20 @@ jobs:
             -backend-config="use_lockfile=true"
           cluster="$(terraform -chdir=infra/terraform/budget-production output -raw ecs_cluster_name)"
           infra/deploy/capture-service-state.sh "${cluster}" deployment-evidence/pre-rollout-services.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with: { name: "budget-production-incremental-progress-${{ inputs.release_tag }}", path: deployment-evidence/, if-no-files-found: error, retention-days: 365, overwrite: true }
+      - name: Mark rollback evidence ready
+        id: rollback_evidence
+        run: echo 'ready=true' >>"${GITHUB_OUTPUT}"
+      - name: Register rollout one-shot task revisions and retained SSM move
+        run: |
+          set -Eeuo pipefail
           terraform -chdir=infra/terraform/budget-production apply -auto-approve \
+            -target='aws_ssm_parameter.retained_apt_service_key' \
+            -target='aws_ssm_parameter.runtime' \
             -target='aws_ecs_task_definition.one_shot["property-flyway"]' \
             -target='aws_ecs_task_definition.one_shot["scheduled-backup"]'
           terraform -chdir=infra/terraform/budget-production output -json >deployment-evidence/rollout-outputs.json
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with: { name: "budget-production-incremental-progress-${{ inputs.release_tag }}", path: deployment-evidence/, if-no-files-found: error, retention-days: 365, overwrite: true }
       - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
         with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_DEPLOY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
       - name: Require V39 live history before V40
@@ -543,7 +553,7 @@ jobs:
   rollback:
     name: budget-production-incremental-rollback
     needs: rollout
-    if: failure() && needs.rollout.result == 'failure'
+    if: failure() && needs.rollout.result == 'failure' && needs.rollout.outputs.rollback_ready == 'true'
     environment: budget-production
     runs-on: ubuntu-latest
     steps:

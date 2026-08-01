@@ -145,14 +145,22 @@ for forbidden in \
   'aws_ecs_service.platform' \
   'aws_ecs_task_definition.platform' \
   'public_dns_enabled=true' \
-  'aws_route53_record' \
   'terraform destroy'; do
   ! grep -Fq -- "${forbidden}" "${rollout_workflow}"
 done
+! grep -Eq -- '-target=.*aws_route53_record|terraform .*apply.*aws_route53_record' "${rollout_workflow}"
 [[ "$(grep -Fc 'terraform_wrapper: false' "${rollout_workflow}")" -eq 2 ]]
 grep -Fq 'with: { fetch-depth: 0, ref: "${{ github.sha }}" }' "${rollout_workflow}"
 grep -Fq 'git rev-list -n 1 "${RELEASE_TAG}"' "${rollout_workflow}"
 grep -Fq '(.images | length) == 17 and (.platform_images | length) == 2' "${rollout_workflow}"
+grep -Fq 'recorded_phase="$(infra/deploy/read-budget-production-phase.sh infra/terraform/budget-production)"' "${rollout_workflow}"
+grep -Fq 'case "${recorded_phase}" in' "${rollout_workflow}"
+grep -Fq 'aws_route53_record.public[0]' "${rollout_workflow}"
+grep -Fq 'aws_ecs_service.application["public-gateway"]' "${rollout_workflow}"
+grep -Fq 'aws_ssm_association.configure_edge[0]' "${rollout_workflow}"
+grep -Fq 'public_gateway_state="$(aws ecs describe-services --cluster "${cluster}" --services public-gateway --output json)"' "${rollout_workflow}"
+grep -Fq '.services[0].runningCount == .services[0].desiredCount' "${rollout_workflow}"
+grep -Fq 'recorded_phase:$recorded_phase,phase_reconciled:$phase_reconciled' "${rollout_workflow}"
 grep -Fq 'infra/deploy/verify-budget-production-rollout-plan.sh' "${rollout_workflow}"
 grep -Fq 'infra/deploy/build-budget-production-incremental-ready-evidence.sh' "${rollout_workflow}"
 grep -Fq 'infra/deploy/rollback-services.sh deployment-evidence/pre-rollout-services.json' "${rollout_workflow}"

@@ -59,13 +59,11 @@ run "prep_pins_every_application_service_without_activation" {
   }
 
   assert {
-    condition = (
-      strcontains(file("runtime.tf"), "lookup(var.application_service_task_definition_arns")
-      && alltrue([
-        for name, service in aws_ecs_service.application :
-        service.desired_count == var.application_service_desired_counts[name]
-      ])
-    )
+    condition = alltrue([
+      for name, service in aws_ecs_service.application :
+      service.task_definition == var.application_service_task_definition_arns[name]
+      && service.desired_count == var.application_service_desired_counts[name]
+    ])
     error_message = "Prep plan must pin all eight application service task definitions and desired counts."
   }
 }

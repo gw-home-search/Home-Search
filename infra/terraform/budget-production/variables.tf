@@ -214,6 +214,42 @@ variable "application_deployment_maximum_percents" {
   }
 }
 
+variable "application_service_task_definition_arns" {
+  type        = map(string)
+  default     = {}
+  description = "Exact live or release task definition ARN pins for the eight application ECS services."
+  validation {
+    condition = (
+      length(var.application_service_task_definition_arns) == 0 || (
+        toset(keys(var.application_service_task_definition_arns)) == toset([
+          "admin-api", "admin-gateway", "ai", "chat-bff", "ml", "property-api", "public-gateway", "user-api",
+        ])
+        && alltrue([for arn in values(var.application_service_task_definition_arns) :
+          can(regex("^arn:aws:ecs:ap-northeast-2:[0-9]{12}:task-definition/[A-Za-z0-9_-]+:[1-9][0-9]*$", arn))
+        ])
+      )
+    )
+    error_message = "application_service_task_definition_arns must be empty or pin all eight application services to exact Seoul task definition revisions."
+  }
+}
+
+variable "application_service_desired_counts" {
+  type        = map(number)
+  default     = {}
+  description = "Exact live desired-count pins for the eight application ECS services."
+  validation {
+    condition = (
+      length(var.application_service_desired_counts) == 0 || (
+        toset(keys(var.application_service_desired_counts)) == toset([
+          "admin-api", "admin-gateway", "ai", "chat-bff", "ml", "property-api", "public-gateway", "user-api",
+        ])
+        && alltrue([for count in values(var.application_service_desired_counts) : count >= 0 && count == floor(count)])
+      )
+    )
+    error_message = "application_service_desired_counts must be empty or pin all eight application services to non-negative integers."
+  }
+}
+
 variable "ai_supervisor_graph_mode" {
   type        = string
   default     = "off"

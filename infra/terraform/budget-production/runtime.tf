@@ -415,11 +415,19 @@ resource "aws_ecs_task_definition" "application" {
 }
 
 resource "aws_ecs_service" "application" {
-  for_each                           = aws_ecs_task_definition.application
-  name                               = each.key
-  cluster                            = aws_ecs_cluster.this[0].id
-  task_definition                    = each.value.arn
-  desired_count                      = local.application_specs[each.key].desired
+  for_each = aws_ecs_task_definition.application
+  name     = each.key
+  cluster  = aws_ecs_cluster.this[0].id
+  task_definition = lookup(
+    var.application_service_task_definition_arns,
+    each.key,
+    each.value.arn,
+  )
+  desired_count = lookup(
+    var.application_service_desired_counts,
+    each.key,
+    local.application_specs[each.key].desired,
+  )
   launch_type                        = "EC2"
   scheduling_strategy                = "REPLICA"
   deployment_minimum_healthy_percent = 0

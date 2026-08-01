@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 
 state_file="${1:?previous service state is required}"
+progress_file="${2:-$(dirname "${state_file}")/rollback-progress.json}"
 [[ -f "${state_file}" ]] || { echo '상태: Fail - rollback state가 없습니다.' >&2; exit 1; }
 cluster="$(jq -r '.cluster' "${state_file}")"
 count="$(jq '.services | length' "${state_file}")"
@@ -9,7 +10,7 @@ count="$(jq '.services | length' "${state_file}")"
 jq -e '
   .format_version == 1
   and (.services | type == "object")
-  and ((.services | keys) - ["admin-api","admin-gateway","ai","chat-bff","ml","property-api","public-gateway","user-api","user-insight-worker"] | length == 0)
+  and ((.services | keys) - ["admin-api","admin-gateway","ai","chat-bff","ml","property-api","public-gateway","user-api"] | length == 0)
   and ([.services[] |
     (.task_definition | type == "string")
     and (.desired_count | type == "number")
@@ -21,8 +22,8 @@ jq -e '
   exit 1
 }
 
-services=()
-rollback_order=(property-api user-api admin-api ai ml chat-bff admin-gateway public-gateway user-insight-worker)
+progress='[]'
+rollback_order=(public-gateway chat-bff ai user-api property-api ml admin-api admin-gateway)
 for service in "${rollback_order[@]}"; do
   jq -e --arg service "${service}" '.services | has($service)' "${state_file}" >/dev/null || continue
   task_definition="$(jq -er --arg service "${service}" '.services[$service].task_definition' "${state_file}")"
@@ -30,7 +31,15 @@ for service in "${rollback_order[@]}"; do
   aws ecs update-service --cluster "${cluster}" --service "${service}" \
     --task-definition "${task_definition}" --desired-count "${desired_count}" \
     --force-new-deployment >/dev/null
-  services+=("${service}")
+  if ! aws ecs wait services-stable --cluster "${cluster}" --services "${service}"; then
+    progress="$(jq --arg service "${service}" --arg reason stable_waiter_failed '. + [{service:$service,status:"fail",reason:$reason}]' <<<"${progress}")"
+    jq -n --arg status fail --arg failed_service "${service}" --argjson services "${progress}" \
+      '{status:$status,failed_service:$failed_service,services:$services}' >"${progress_file}"
+    exit 1
+  fi
+  progress="$(jq --arg service "${service}" --arg task_definition "${task_definition}" --argjson desired_count "${desired_count}" \
+    '. + [{service:$service,status:"pass",task_definition:$task_definition,desired_count:$desired_count}]' <<<"${progress}")"
+  jq -n --arg status running --argjson services "${progress}" '{status:$status,services:$services}' >"${progress_file}"
 done
-aws ecs wait services-stable --cluster "${cluster}" --services "${services[@]}"
+jq -n --arg status pass --argjson services "${progress}" '{status:$status,services:$services}' >"${progress_file}"
 echo '상태: Pass - 이전 task definition ARN으로 ECS service rollback을 완료했습니다.'

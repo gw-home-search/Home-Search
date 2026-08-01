@@ -365,7 +365,8 @@ jobs:
             -backend-config="region=${AWS_REGION}" -backend-config="kms_key_id=${TF_STATE_KMS_ARN}" \
             -backend-config="use_lockfile=true"
           cluster="$(terraform -chdir=infra/terraform/budget-production output -raw ecs_cluster_name)"
-          infra/deploy/capture-service-state.sh "${cluster}" deployment-evidence/pre-rollout-services.json
+          infra/deploy/capture-service-state.sh "${cluster}" \
+            deployment-evidence/pre-rollout-services.json deployment-evidence/pre-rollout-platform.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with: { name: "budget-production-incremental-progress-${{ inputs.release_tag }}", path: deployment-evidence/, if-no-files-found: error, retention-days: 365, overwrite: true }
       - name: Mark rollback evidence ready

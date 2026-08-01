@@ -110,6 +110,26 @@ markers when the backend has enough coordinate confidence:
   point to the same `parcelId` and should pass their `complexId` into the
   detail/trade flow.
 
+## Chatbot Focus Flow
+
+`focusComplex/v1` is a compatible additive chatbot action. The Web accepts it
+only when its positive `parcelId`/`complexId`, marker-safe Korea coordinate,
+level `4`, and `factIds` pass the strict chatbot adapter.
+
+```text
+new assistant final saved in IndexedDB
+  -> run the one representative autoRun action once
+  -> focusMap(lat, lng, 4, SEARCH_FOCUS_DELTA)
+  -> selectComplex({parcelId, complexId})
+  -> /api/v1/detail/{parcelId}?complexId={complexId}
+  -> trade/trend and chatUiContext use the selected complexId
+```
+
+Restored conversations do not auto-run. Candidate buttons remain repeatable,
+including A→B→A candidates that share one parcel and coordinate; success is the
+selected `complexId` and detail request, not a visible center-coordinate change.
+Marker-unsafe candidates remain readable but do not receive a focus action.
+
 ## Backend Query Boundary
 
 `/api/v1/map/complexes` reads only the immutable generation referenced by

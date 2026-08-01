@@ -9,9 +9,25 @@ export type ShowNearbyCategoryAction = {
   factIds: string[];
 };
 
-export type ChatAction = ShowNearbyCategoryAction;
+export type FocusComplexAction = {
+  type: 'focusComplex';
+  version: 1;
+  actionId: string;
+  label: string;
+  parcelId: number;
+  complexId: number;
+  center: { lat: number; lng: number };
+  level: 4;
+  openDetail: true;
+  autoRun: boolean;
+  factIds: string[];
+};
 
-const MAX_ACTIONS = 4;
+export type ChatAction = ShowNearbyCategoryAction | FocusComplexAction;
+
+const MAX_ACTIONS = 10;
+const MAX_FOCUS_ACTIONS = 6;
+const MAX_NEARBY_ACTIONS = 4;
 const MAX_LABEL_LENGTH = 100;
 const MAX_FACT_IDS = 10;
 
@@ -19,13 +35,69 @@ export function readChatActions(value: unknown, availableFactIds: ReadonlySet<st
   if (!Array.isArray(value)) return [];
   const actions: ChatAction[] = [];
   const seenIds = new Set<string>();
-  for (const candidate of value.slice(0, MAX_ACTIONS)) {
-    const action = readShowNearbyCategory(candidate, availableFactIds);
+  const seenComplexIds = new Set<number>();
+  let focusCount = 0;
+  let nearbyCount = 0;
+  let hasAutoRun = false;
+  for (const candidate of value) {
+    if (actions.length === MAX_ACTIONS) break;
+    const focusAction = readFocusComplex(candidate, availableFactIds);
+    const action = focusAction ?? readShowNearbyCategory(candidate, availableFactIds);
     if (action == null || seenIds.has(action.actionId)) continue;
+    if (action.type === 'focusComplex') {
+      if (focusCount === MAX_FOCUS_ACTIONS
+        || seenComplexIds.has(action.complexId)
+        || (action.autoRun && hasAutoRun)) continue;
+      focusCount += 1;
+      seenComplexIds.add(action.complexId);
+      hasAutoRun ||= action.autoRun;
+    } else {
+      if (nearbyCount === MAX_NEARBY_ACTIONS) continue;
+      nearbyCount += 1;
+    }
     seenIds.add(action.actionId);
     actions.push(action);
   }
   return actions;
+}
+
+function readFocusComplex(
+  value: unknown,
+  availableFactIds: ReadonlySet<string>,
+): FocusComplexAction | null {
+  if (!isRecord(value)
+    || !hasExactKeys(value, [
+      'type', 'version', 'actionId', 'label', 'parcelId', 'complexId', 'center',
+      'level', 'openDetail', 'autoRun', 'factIds',
+    ])
+    || value.type !== 'focusComplex'
+    || value.version !== 1
+    || !isIdentifier(value.actionId)
+    || !isDisplayText(value.label, MAX_LABEL_LENGTH)
+    || !isPositiveSafeInteger(value.parcelId)
+    || !isPositiveSafeInteger(value.complexId)
+    || value.level !== 4
+    || value.openDetail !== true
+    || typeof value.autoRun !== 'boolean'
+    || !isRecord(value.center)
+    || !hasExactKeys(value.center, ['lat', 'lng'])
+    || !isMarkerSafeCoordinate(value.center.lat, value.center.lng)
+    || !isFactIds(value.factIds, availableFactIds)) {
+    return null;
+  }
+  return {
+    type: 'focusComplex',
+    version: 1,
+    actionId: value.actionId,
+    label: value.label.trim(),
+    parcelId: value.parcelId,
+    complexId: value.complexId,
+    center: { lat: value.center.lat as number, lng: value.center.lng as number },
+    level: 4,
+    openDetail: true,
+    autoRun: value.autoRun,
+    factIds: [...value.factIds] as string[],
+  };
 }
 
 function readShowNearbyCategory(
@@ -45,11 +117,7 @@ function readShowNearbyCategory(
     || !isRecord(value.center)
     || !hasExactKeys(value.center, ['lat', 'lng'])
     || !isKoreaCoordinate(value.center.lat, value.center.lng)
-    || !Array.isArray(value.factIds)
-    || value.factIds.length === 0
-    || value.factIds.length > MAX_FACT_IDS
-    || new Set(value.factIds).size !== value.factIds.length
-    || !value.factIds.every((factId) => isIdentifier(factId) && availableFactIds.has(factId))) {
+    || !isFactIds(value.factIds, availableFactIds)) {
     return null;
   }
   return {
@@ -62,6 +130,29 @@ function readShowNearbyCategory(
     level: 4,
     factIds: [...value.factIds] as string[],
   };
+}
+
+function isFactIds(value: unknown, availableFactIds: ReadonlySet<string>): value is string[] {
+  return Array.isArray(value)
+    && value.length > 0
+    && value.length <= MAX_FACT_IDS
+    && new Set(value).size === value.length
+    && value.every((factId) => isIdentifier(factId) && availableFactIds.has(factId));
+}
+
+function isPositiveSafeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
+}
+
+function isMarkerSafeCoordinate(lat: unknown, lng: unknown): boolean {
+  return typeof lat === 'number'
+    && Number.isFinite(lat)
+    && typeof lng === 'number'
+    && Number.isFinite(lng)
+    && lat >= 33
+    && lat <= 39
+    && lng >= 124
+    && lng <= 132;
 }
 
 function isKoreaCoordinate(lat: unknown, lng: unknown): boolean {

@@ -14,6 +14,7 @@ from .models import (
     CAPABILITY_EXECUTION_ORDER,
     ComplexRecord,
     EvidenceFact,
+    FocusComplexAction,
     MonthlyTrendRecord,
     QueryCapability,
     QueryPlan,
@@ -57,6 +58,15 @@ class PropertyFactRepository(Protocol):
     ) -> list[MonthlyTrendRecord]: ...
 
     def latest_trade_date(self) -> date | None: ...
+
+    def candidate_observation_summaries(
+        self,
+        complex_ids: tuple[int, ...],
+        start_date: date | None,
+        end_date: date | None,
+        exclusive_area_square_meters: float | None,
+        capability: QueryCapability,
+    ): ...
 
     def resolve_region_context(
         self, region_code: str
@@ -142,13 +152,21 @@ class CapabilityOutcome:
     facts: list[EvidenceFact]
     limitations: list[str]
     readiness: str
-    actions: tuple[ShowNearbyCategoryAction, ...] = ()
+    actions: tuple[ShowNearbyCategoryAction | FocusComplexAction, ...] = ()
     artifacts: tuple[dict[str, object], ...] = ()
     artifact_fact_ids: tuple[str, ...] = ()
     state: CapabilityOutcomeState | None = None
     assumptions: tuple[str, ...] = ()
     fallback_steps: tuple[str, ...] = ()
     recoverable: bool = True
+    result_facts: tuple[EvidenceFact, ...] | None = None
+    selection_facts: tuple[EvidenceFact, ...] = ()
+    alternative_facts: tuple[EvidenceFact, ...] = ()
+    primary_artifact_id: str | None = None
+    no_exact_result: bool = False
+    suggested_questions: tuple[str, ...] = ()
+    selection_reason: str | None = None
+    selection_reason_fact_ids: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.readiness not in {"supported", "partial", "unavailable"}:
@@ -264,9 +282,16 @@ class PropertyIdentityHandler:
 class RecentTradeHandler:
     capability: QueryCapability = "recent_trade_lookup"
 
-    def __init__(self, repository: PropertyFactRepository, builders: EvidenceFactBuilders) -> None:
+    def __init__(
+        self,
+        repository: PropertyFactRepository,
+        builders: EvidenceFactBuilders,
+        *,
+        allow_reference_fallback: bool = True,
+    ) -> None:
         self._repository = repository
         self._builders = builders
+        self._allow_reference_fallback = allow_reference_fallback
 
     async def observe(self, plan: QueryPlan, complex_record: ComplexRecord) -> CapabilityResult:
         trades = await asyncio.to_thread(
@@ -278,6 +303,14 @@ class RecentTradeHandler:
             plan.limit,
         )
         if not trades:
+            if not self._allow_reference_fallback:
+                return CapabilityOutcome(
+                    [],
+                    ["요청한 기간과 전용면적 조건에 맞는 실거래가 없습니다."],
+                    "unavailable",
+                    state="EMPTY",
+                    no_exact_result=True,
+                )
             same_area_reference = await asyncio.to_thread(
                 self._repository.recent_trades,
                 complex_record.complex_id,

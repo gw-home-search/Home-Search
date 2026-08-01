@@ -10,35 +10,76 @@ type ChatMessageBodyProps = {
   message: ChatMessage;
   executedActionIds?: ReadonlySet<string>;
   onUiAction?: (action: ChatAction) => void;
+  selectedComplexId?: number;
 };
 
 export function ChatMessageBody({
   message,
   executedActionIds = EMPTY_ACTION_IDS,
   onUiAction,
+  selectedComplexId,
 }: ChatMessageBodyProps) {
   const supportingDetails = visibleSupportingDetails(message);
+  const artifactActions = message.actions?.filter((action) => (
+    action.type === 'focusComplex' && actionLinkedToArtifacts(action, message.artifacts ?? [])
+  )) ?? [];
+  const embeddedActionIds = new Set(artifactActions.map(({ actionId }) => actionId));
+  const unplacedActions = message.actions?.filter(
+    ({ actionId }) => !embeddedActionIds.has(actionId),
+  ) ?? [];
+  const headerActions = unplacedActions.filter(
+    (action) => action.type === 'focusComplex' && action.autoRun,
+  ).slice(0, 1);
+  const headerActionIds = new Set(headerActions.map(({ actionId }) => actionId));
+  const remainingActions = unplacedActions.filter(
+    ({ actionId }) => !headerActionIds.has(actionId),
+  );
   return (
     <>
       {message.report ? (
-        <DecisionAnswerReport limitations={supportingDetails.limitations} message={message} />
-      ) : message.summary ? (
-        <StructuredAnswer
+        <DecisionAnswerReport
+          actions={artifactActions}
+          executedActionIds={executedActionIds}
+          headerActions={headerActions}
           limitations={supportingDetails.limitations}
           message={message}
+          onAction={onUiAction}
+          selectedComplexId={selectedComplexId}
+        />
+      ) : message.summary ? (
+        <StructuredAnswer
+          actions={artifactActions}
+          executedActionIds={executedActionIds}
+          headerActions={headerActions}
+          limitations={supportingDetails.limitations}
+          message={message}
+          onAction={onUiAction}
+          selectedComplexId={selectedComplexId}
           summary={message.summary}
         />
       ) : (
         <>
           <p>{message.content}</p>
-          {message.artifacts ? <ChatArtifacts artifacts={message.artifacts} /> : null}
+          <ChatActions
+            actions={headerActions}
+            executedActionIds={executedActionIds}
+            onExecute={onUiAction}
+            selectedComplexId={selectedComplexId}
+          />
+          {message.artifacts ? <ChatArtifacts
+            actions={artifactActions}
+            artifacts={message.artifacts}
+            onAction={onUiAction}
+            selectedComplexId={selectedComplexId}
+          /> : null}
         </>
       )}
-      {message.actions ? (
+      {remainingActions.length > 0 ? (
         <ChatActions
-          actions={message.actions}
+          actions={remainingActions}
           executedActionIds={executedActionIds}
           onExecute={onUiAction}
+          selectedComplexId={selectedComplexId}
         />
       ) : null}
       {message.summary == null && message.report == null && supportingDetails.limitations.length ? (
@@ -47,19 +88,33 @@ export function ChatMessageBody({
           {supportingDetails.limitations.map((limitation) => <p key={limitation}>{limitation}</p>)}
         </section>
       ) : null}
-      <ResolutionDetails message={message} omissions={supportingDetails.omissions} />
+      <ResolutionDetails
+        hideAssumptions={message.report != null || (message.summary?.criteria.length ?? 0) > 0}
+        message={message}
+        omissions={supportingDetails.omissions}
+      />
       <AnswerSources citations={message.evidence?.citations ?? []} />
     </>
   );
 }
 
 function StructuredAnswer({
+  actions,
+  executedActionIds,
+  headerActions,
   limitations,
   message,
+  onAction,
+  selectedComplexId,
   summary,
 }: {
+  actions: ChatAction[];
+  executedActionIds: ReadonlySet<string>;
+  headerActions: ChatAction[];
   limitations: string[];
   message: ChatMessage;
+  onAction?: (action: ChatAction) => void;
+  selectedComplexId?: number;
   summary: ChatUiSummary;
 }) {
   const hasFragmentGroups = summary.fragmentSummaries.length > 0
@@ -68,6 +123,12 @@ function StructuredAnswer({
     <div className="chatbot-structured-answer">
       {summary.scopeNotice ? <p className="chatbot-scope-notice">{summary.scopeNotice.text}</p> : null}
       <h3>{summary.headline.text}</h3>
+      <ChatActions
+        actions={headerActions}
+        executedActionIds={executedActionIds}
+        onExecute={onAction}
+        selectedComplexId={selectedComplexId}
+      />
       {summary.fragmentSummaries.length > 0 ? (
         <div aria-label="요청별 확인 결과" className="chatbot-fragment-summaries">
           {summary.fragmentSummaries.map((fragment) => (
@@ -86,7 +147,7 @@ function StructuredAnswer({
                 return (
                   <>
                     {fragmentArtifacts.length > 0
-                      ? <ChatArtifacts artifacts={fragmentArtifacts} />
+                      ? <ChatArtifacts actions={actions} artifacts={fragmentArtifacts} onAction={onAction} selectedComplexId={selectedComplexId} />
                       : null}
                     {detail.limitations.map((limitation) => (
                       <p className="chatbot-fragment-limitation" key={limitation}>{limitation}</p>
@@ -107,7 +168,7 @@ function StructuredAnswer({
         </section>
       ) : null}
       {!hasFragmentGroups && message.artifacts
-        ? <ChatArtifacts artifacts={message.artifacts} />
+        ? <ChatArtifacts actions={actions} artifacts={message.artifacts} onAction={onAction} selectedComplexId={selectedComplexId} />
         : null}
       {summary.interpretations.length > 0 ? (
         <section className="chatbot-summary-interpretations">
@@ -129,13 +190,17 @@ function StructuredAnswer({
 }
 
 function ResolutionDetails({
+  hideAssumptions,
   message,
   omissions,
 }: {
+  hideAssumptions: boolean;
   message: ChatMessage;
   omissions: string[];
 }) {
-  const assumptions = message.resolution?.assumptions.slice(0, 3) ?? [];
+  const assumptions = hideAssumptions
+    ? []
+    : message.resolution?.assumptions.slice(0, 3) ?? [];
   if (assumptions.length === 0 && omissions.length === 0) return null;
   return (
     <div className="chatbot-resolution-details">
@@ -214,3 +279,16 @@ function capabilityLabel(capability: string): string {
 }
 
 const EMPTY_ACTION_IDS: ReadonlySet<string> = new Set();
+
+function actionLinkedToArtifacts(action: ChatAction, artifacts: NonNullable<ChatMessage['artifacts']>): boolean {
+  const actionFacts = new Set(action.factIds);
+  const linked = (factIds: string[]) => factIds.some((factId) => actionFacts.has(factId));
+  return artifacts.some((artifact) => {
+    if (artifact.type === 'factList') return artifact.items.some((item) => linked(item.factIds));
+    if (artifact.type === 'comparisonTable') return artifact.columns.some((item) => linked(item.factIds));
+    if (artifact.type === 'recommendationCards') return artifact.cards.some((item) => linked(item.factIds));
+    if (artifact.type === 'recommendationTable') return artifact.rows.some((item) => linked(item.factIds));
+    if (artifact.type === 'candidateProfile') return linked(artifact.factIds);
+    return false;
+  });
+}

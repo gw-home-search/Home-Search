@@ -14,6 +14,14 @@ from ai_service.chat import ChatbotProviderUnavailable
 from ai_service.models import ChatbotQueryRequest
 
 from .answer_document import AnswerDocument, CompoundAnswerDocument, FactListPresenter
+from .candidate_selection import (
+    CandidateMatch,
+    CandidateObservationSummary,
+    CandidateSelection,
+    DeterministicCandidateSelector,
+    select_compound_primary,
+    validate_grounded_selection,
+)
 from .answer_quality import AnswerQualityError, AnswerQualityGate
 from .presentation import PresentationAssembler
 from .capability_handlers import (
@@ -50,6 +58,7 @@ from .models import (
     DraftAnswer,
     EvidenceFact,
     FactClaim,
+    FocusComplexAction,
     MonthlyTrendRecord,
     PropertyCapability,
     QueryCapability,
@@ -209,7 +218,11 @@ class GroundedChatbotEngine:
         self._catalog = CapabilityCatalog(
             (
                 PropertyIdentityHandler(builders),
-                RecentTradeHandler(repository, builders),
+                RecentTradeHandler(
+                    repository,
+                    builders,
+                    allow_reference_fallback=not answer_first_enabled,
+                ),
                 PriceTrendHandler(repository, builders),
                 SchoolLocationHandler(school_repository, builders, today),
                 AcademyLookupHandler(academy_location_repository, builders, today),
@@ -231,6 +244,7 @@ class GroundedChatbotEngine:
                     childcare_repository,  # type: ignore[arg-type]
                     builders,
                     today,
+                    answer_first_enabled,
                 ),
                 RecommendationHandler(
                     repository,  # type: ignore[arg-type]
@@ -244,6 +258,10 @@ class GroundedChatbotEngine:
                 ),
             ),
         )
+
+    @property
+    def answer_first_enabled(self) -> bool:
+        return self._answer_first_enabled
 
     async def query(
         self,
@@ -260,9 +278,16 @@ class GroundedChatbotEngine:
         )
         try:
             plans = await self.plan_goals(request)
+            shared_complexes = await self._shared_compound_complexes(plans)
             documents = tuple(await asyncio.gather(*(
                 self._execute_fragment(
-                    plan, request, request_id, polish_deadline=polish_deadline
+                    plan,
+                    request,
+                    request_id,
+                    polish_deadline=polish_deadline,
+                    resolved_complexes=shared_complexes.get(
+                        (plan.complex_name, plan.region_name)
+                    ),
                 )
                 for plan in plans
             )))
@@ -296,6 +321,51 @@ class GroundedChatbotEngine:
             raise
         except Exception as exception:
             raise ChatbotProviderUnavailable() from exception
+
+    async def _shared_compound_complexes(
+        self,
+        plans: tuple[QueryPlan, ...],
+    ) -> dict[tuple[str, str | None], tuple[ComplexRecord, ...]]:
+        if not self._answer_first_enabled or len(plans) < 2:
+            return {}
+        groups: dict[tuple[str, str | None], list[QueryPlan]] = {}
+        for plan in plans:
+            if plan.capability in {"recommendation", "comparison"}:
+                continue
+            groups.setdefault((plan.complex_name, plan.region_name), []).append(plan)
+        result: dict[tuple[str, str | None], tuple[ComplexRecord, ...]] = {}
+        for identity, grouped_plans in groups.items():
+            if len(grouped_plans) < 2:
+                continue
+            records = tuple(await asyncio.to_thread(
+                self._repository.find_complexes,
+                identity[0],
+                identity[1],
+                6,
+            ))
+            if not records:
+                result[identity] = ()
+                continue
+            if len(records) == 1:
+                result[identity] = records
+                continue
+            observation_groups = []
+            for plan in grouped_plans:
+                observations = await self._candidate_observations(plan, records)
+                if observations:
+                    observation_groups.append(observations)
+            matches = tuple(
+                CandidateMatch(
+                    complex=record,
+                    search_ordinal=index,
+                    match_tier=record.match_tier,
+                    explicit_region_match=bool(identity[1]),
+                )
+                for index, record in enumerate(records)
+            )
+            primary = select_compound_primary(matches, tuple(observation_groups))
+            result[identity] = (primary.complex,)
+        return result
 
     async def plan_goals(self, request: ChatbotQueryRequest) -> tuple[QueryPlan, ...]:
         return await self._plan_goals(
@@ -493,7 +563,9 @@ class GroundedChatbotEngine:
                         result = await plan_handler.observe(plan)
                 else:
                     result = await self._observe(
-                        plan, resolved_complexes=resolved_complexes
+                        plan,
+                        request=request,
+                        resolved_complexes=resolved_complexes,
                     )
             else:
                 result = CapabilityResult(
@@ -512,13 +584,24 @@ class GroundedChatbotEngine:
                 "unavailable",
             )
         if self._answer_first_enabled:
+            result = _attach_focus_actions_from_facts(result)
             result = _annotate_answer_first_assumptions(
                 result, plan, request.question
             )
+        draft_facts = (
+            list(result.selection_facts)
+            if result.no_exact_result and result.selection_facts
+            else
+            list(result.result_facts)
+            if result.result_facts is not None
+            else list(result.selection_facts)
+            if result.selection_facts
+            else result.facts
+        )
         if plan.capability == "recommendation":
             try:
                 draft = RecommendationTextPresenter().present(
-                    facts=result.facts,
+                    facts=draft_facts,
                     limitations=result.limitations,
                     readiness=result.readiness,
                 )
@@ -529,7 +612,7 @@ class GroundedChatbotEngine:
         elif deterministic_draft:
             draft = DeterministicAnswerPresenter().present(
                 plan=plan,
-                facts=result.facts,
+                facts=draft_facts,
                 limitations=result.limitations,
                 readiness=result.readiness,
             )
@@ -537,7 +620,7 @@ class GroundedChatbotEngine:
             try:
                 if polish_deadline is None:
                     draft = await self._language_model.draft_answer(
-                        facts=result.facts,
+                        facts=draft_facts,
                         limitations=result.limitations,
                         question=request.question,
                     )
@@ -547,7 +630,7 @@ class GroundedChatbotEngine:
                         raise TimeoutError
                     async with asyncio.timeout(remaining):
                         draft = await self._language_model.draft_answer(
-                            facts=result.facts,
+                            facts=draft_facts,
                             limitations=result.limitations,
                             question=request.question,
                         )
@@ -556,7 +639,7 @@ class GroundedChatbotEngine:
                     raise
                 draft = DeterministicAnswerPresenter().present(
                     plan=plan,
-                    facts=result.facts,
+                    facts=draft_facts,
                     limitations=result.limitations,
                     readiness=result.readiness,
                 )
@@ -570,11 +653,11 @@ class GroundedChatbotEngine:
         }
         try:
             used_facts = validate_draft(
-                draft, result.facts, result.readiness, **validation_options
+                draft, draft_facts, result.readiness, **validation_options
             )
             AnswerQualityGate().validate(
                 draft=draft,
-                facts=result.facts,
+                facts=draft_facts,
                 readiness=result.readiness,
             )
         except (GroundingValidationError, AnswerQualityError):
@@ -582,26 +665,30 @@ class GroundedChatbotEngine:
                 raise
             draft = DeterministicAnswerPresenter().present(
                 plan=plan,
-                facts=result.facts,
+                facts=draft_facts,
                 limitations=result.limitations,
                 readiness=result.readiness,
             )
             used_facts = validate_draft(
-                draft, result.facts, result.readiness, **validation_options
+                draft, draft_facts, result.readiness, **validation_options
             )
             AnswerQualityGate().validate(
                 draft=draft,
-                facts=result.facts,
+                facts=draft_facts,
                 readiness=result.readiness,
             )
-        if result.artifact_fact_ids:
+        supporting_fact_ids = tuple(dict.fromkeys((
+            *result.artifact_fact_ids,
+            *(fact_id for action in result.actions for fact_id in action.fact_ids),
+        )))
+        if supporting_fact_ids:
             fact_by_id = {fact.fact_id: fact for fact in result.facts}
-            if any(fact_id not in fact_by_id for fact_id in result.artifact_fact_ids):
+            if any(fact_id not in fact_by_id for fact_id in supporting_fact_ids):
                 raise GroundingValidationError("GROUNDING_ARTIFACT_FACT_UNKNOWN")
             used_ids = {fact.fact_id for fact in used_facts}
             used_facts.extend(
                 fact_by_id[fact_id]
-                for fact_id in result.artifact_fact_ids
+                for fact_id in supporting_fact_ids
                 if fact_id not in used_ids
             )
         used_fact_ids = {fact.fact_id for fact in used_facts}
@@ -614,9 +701,16 @@ class GroundedChatbotEngine:
             artifacts = list(result.artifacts) or FactListPresenter().present(
                 plan=plan, used_facts=used_facts, readiness=result.readiness
             )
+            presentation_facts = (
+                list(result.result_facts)
+                if result.result_facts is not None
+                else list(result.selection_facts)
+                if result.selection_facts
+                else used_facts
+            )
             presentation, artifacts = PresentationAssembler().present(
                 plan=plan,
-                used_facts=used_facts,
+                used_facts=presentation_facts,
                 readiness=result.readiness,
                 artifacts=artifacts,
             )
@@ -642,6 +736,21 @@ class GroundedChatbotEngine:
                 assumptions=result.assumptions,
                 fallback_steps=result.fallback_steps,
                 recoverable=result.recoverable,
+                primary_artifact_id=(
+                    result.primary_artifact_id
+                    or next((
+                        artifact.get("artifactId")
+                        for artifact in artifacts
+                        if artifact.get("type") in {
+                            "tradeTable", "trendTable", "comparisonTable",
+                            "recommendationTable", "recommendationCards",
+                        }
+                        and isinstance(artifact.get("artifactId"), str)
+                    ), None)
+                ),
+                suggested_questions=result.suggested_questions,
+                selection_reason=result.selection_reason,
+                selection_reason_fact_ids=result.selection_reason_fact_ids,
             )
         except Exception as exception:
             if plan.capability == "recommendation":
@@ -654,10 +763,19 @@ class GroundedChatbotEngine:
         self,
         plan: QueryPlan,
         *,
+        request: ChatbotQueryRequest,
         resolved_complexes: tuple[ComplexRecord, ...] | None = None,
     ) -> CapabilityResult:
+        selected_context_id = _selected_context_id(request, plan)
+        context_record = None
+        if selected_context_id is not None and resolved_complexes is None:
+            finder = getattr(self._repository, "find_complex_by_id", None)
+            if finder is not None:
+                context_record = await asyncio.to_thread(finder, selected_context_id)
         complexes = (
-            resolved_complexes
+            (context_record,)
+            if context_record is not None
+            else resolved_complexes
             if resolved_complexes is not None
             else await asyncio.to_thread(
                 self._repository.find_complexes,
@@ -672,7 +790,7 @@ class GroundedChatbotEngine:
                 ["지정한 이름과 지역 조건으로 단지를 식별하지 못했습니다."],
                 "unavailable",
             )
-        if len(complexes) > 1:
+        if len(complexes) > 1 and not self._answer_first_enabled:
             return CapabilityResult(
                 [_complex_fact(record) for record in complexes],
                 ["동명 단지가 여러 곳이어서 지역과 주소를 함께 표시했습니다."],
@@ -683,26 +801,197 @@ class GroundedChatbotEngine:
         handler = self._catalog.handler_for(plan.capability)
         if handler is None:
             raise GroundingValidationError("GROUNDING_CAPABILITY_UNSUPPORTED")
+        if not self._answer_first_enabled:
+            return await handler.observe(plan, complexes[0])
+        matches = tuple(
+            CandidateMatch(
+                complex=record,
+                search_ordinal=index,
+                match_tier=record.match_tier,
+                explicit_region_match=bool(
+                    plan.region_name
+                    and (
+                        plan.region_name in (record.region_name or "")
+                        or plan.region_name in (record.address or "")
+                    )
+                ),
+                selected_context_match=record.complex_id == selected_context_id,
+            )
+            for index, record in enumerate(complexes)
+        )
+        observations = await self._candidate_observations(plan, complexes)
+        deterministic_selection = DeterministicCandidateSelector().select(
+            matches, observations
+        )
+        selection = await self._grounded_candidate_selection(
+            matches, observations, deterministic_selection
+        )
+        ordered_candidates = (selection.primary, *selection.alternatives)
+        result: CapabilityResult | None = None
+        primary_result: CapabilityResult | None = None
+        selected_match = selection.primary
+        found_result = False
         try:
-            result = await handler.observe(plan, complexes[0])
+            for index, candidate in enumerate(ordered_candidates):
+                selected_match = candidate
+                result = await handler.observe(plan, candidate.complex)
+                if index == 0:
+                    primary_result = result
+                if result.state != "EMPTY" or result.facts:
+                    found_result = True
+                    break
         except (TimeoutError, OSError, RuntimeError, ChatbotProviderUnavailable):
             if not self._fallback_enabled(plan.capability):
                 raise
             return CapabilityResult(
-                [_complex_fact(complexes[0])],
+                [_complex_fact(selection.primary.complex)],
                 ["요청한 세부 데이터는 현재 확인하지 못해 단지 기본정보만 정리했습니다."],
                 "partial",
                 state="DEGRADED",
                 fallback_steps=("PRESERVED_COMPLEX_IDENTITY",),
                 recoverable=True,
             )
-        if self._fallback_enabled(plan.capability) and result.state == "EMPTY" and not result.facts:
-            return replace(
-                result,
-                facts=[_complex_fact(complexes[0])],
-                readiness="partial",
+        assert result is not None
+        if not found_result and primary_result is not None:
+            selected_match = selection.primary
+            result = primary_result
+        primary_fact = _complex_fact(selected_match.complex)
+        alternatives = tuple(
+            candidate for candidate in matches
+            if candidate.complex.complex_id != selected_match.complex.complex_id
+        )[:5]
+        alternative_facts = tuple(_complex_fact(item.complex) for item in alternatives)
+        observation_facts = tuple(
+            _candidate_observation_fact(
+                summary, selected_match.complex.data_updated_at.date()
             )
-        return result
+            for summary in observations
+        )
+        observation_by_id = {
+            fact.payload["complexId"]: fact for fact in observation_facts
+        }
+        selected_observation = observation_by_id.get(selected_match.complex.complex_id)
+        alternative_artifact = _alternative_candidate_artifact(
+            alternatives, observation_by_id, plan.capability
+        )
+        actions = _focus_complex_actions(selected_match, alternatives)
+        all_facts = _unique_facts((
+            *result.facts,
+            primary_fact,
+            *alternative_facts,
+            *observation_facts,
+        ))
+        supporting_ids = tuple(dict.fromkeys((
+            *((primary_fact.fact_id,) if len(matches) > 1 else ()),
+            *(fact.fact_id for fact in alternative_facts),
+            *(fact.fact_id for fact in observation_facts if len(matches) > 1),
+        )))
+        suggested = (
+            _no_exact_suggestions(plan, selected_match, alternatives)
+            if result.state == "EMPTY" else ()
+        )
+        limitations = (
+            [_no_exact_limitation(plan, selected_match.complex), *result.limitations[1:]]
+            if result.state == "EMPTY"
+            else result.limitations
+        )
+        return replace(
+            result,
+            facts=list(all_facts),
+            limitations=limitations,
+            readiness="partial" if result.state == "EMPTY" else result.readiness,
+            actions=tuple((*actions, *result.actions))[:10],
+            artifacts=tuple((
+                *result.artifacts,
+                *((alternative_artifact,) if alternative_artifact else ()),
+            )),
+            artifact_fact_ids=supporting_ids,
+            result_facts=tuple(result.facts),
+            selection_facts=(primary_fact,),
+            alternative_facts=alternative_facts,
+            no_exact_result=result.state == "EMPTY",
+            suggested_questions=suggested,
+            selection_reason=(
+                _selection_reason(selected_match, selected_observation)
+                if len(matches) > 1 else None
+            ),
+            selection_reason_fact_ids=tuple(
+                fact_id for fact_id in (
+                    primary_fact.fact_id,
+                    selected_observation.fact_id if selected_observation else None,
+                )
+                if fact_id is not None
+            ) if len(matches) > 1 else (),
+        )
+
+    async def _candidate_observations(
+        self,
+        plan: QueryPlan,
+        complexes: tuple[ComplexRecord, ...] | list[ComplexRecord],
+    ) -> tuple[CandidateObservationSummary, ...]:
+        if (
+            len(complexes) < 2
+            or plan.capability not in {"recent_trade_lookup", "price_trend"}
+        ):
+            return ()
+        loader = getattr(self._repository, "candidate_observation_summaries", None)
+        if loader is None:
+            return ()
+        return tuple(await asyncio.to_thread(
+            loader,
+            tuple(record.complex_id for record in complexes),
+            plan.start_date,
+            plan.end_date,
+            plan.exclusive_area_square_meters,
+            plan.capability,
+        ))
+
+    async def _grounded_candidate_selection(
+        self,
+        candidates: tuple[CandidateMatch, ...],
+        observations: tuple[CandidateObservationSummary, ...],
+        deterministic: CandidateSelection,
+    ) -> CandidateSelection:
+        selector = getattr(self._language_model, "select_complex_candidates", None)
+        if selector is None or len(candidates) < 2:
+            return deterministic
+        observation_by_id = {item.complex_id: item for item in observations}
+        payload = []
+        for item in candidates:
+            record = item.complex
+            observation = observation_by_id.get(record.complex_id)
+            payload.append({
+                "complexId": record.complex_id,
+                "displayName": record.display_name,
+                "regionName": record.region_name,
+                "address": record.address,
+                "unitCount": record.unit_count,
+                "useDate": record.use_date.isoformat() if record.use_date else None,
+                "exactObservationCount": (
+                    observation.exact_observation_count if observation else 0
+                ),
+                "latestObservationDate": (
+                    observation.latest_observation_date.isoformat()
+                    if observation and observation.latest_observation_date else None
+                ),
+                "markerSafe": record.marker_safe,
+                "matchTier": item.match_tier,
+                "factIds": [
+                    f"property-complex-{record.complex_id}",
+                    *(
+                        [f"candidate-observation-{record.complex_id}"]
+                        if observation else []
+                    ),
+                ],
+            })
+        try:
+            async with asyncio.timeout(5.0):
+                output = await selector(candidates=payload, comparison=False)
+            return validate_grounded_selection(
+                output, candidates, observations, deterministic
+            )
+        except Exception:
+            return deterministic
 
     def _fallback_enabled(self, capability: QueryCapability) -> bool:
         return (
@@ -714,6 +1003,260 @@ class GroundedChatbotEngine:
 def _fragment_timeout_seconds(capability: QueryCapability) -> float:
     # Recommendation handlers combine several independently bounded read queries.
     return 8.0 if capability == "recommendation" else 3.0
+
+
+def _selected_context_id(
+    request: ChatbotQueryRequest,
+    plan: QueryPlan,
+) -> int | None:
+    if plan.complex_name not in {"이 단지", "여기", "이곳"} and re.search(
+        r"(?:이\s*단지|여기|이곳|거래량도|가격도|추이도)", request.question
+    ) is None:
+        return None
+    ui_context = request.uiContext
+    if ui_context is not None and ui_context.selectedComplex is not None:
+        return ui_context.selectedComplex.complexId
+    conversation = request.conversationContext
+    if conversation is not None and conversation.memory is not None:
+        return conversation.memory.complexId
+    return None
+
+
+def _candidate_observation_fact(
+    summary: CandidateObservationSummary,
+    data_as_of: date,
+) -> EvidenceFact:
+    claims = [
+        FactClaim(str(summary.complex_id), "COMPLEX_ID"),
+        FactClaim(str(summary.exact_observation_count), "COUNT"),
+    ]
+    if summary.latest_observation_date is not None:
+        claims.append(FactClaim(summary.latest_observation_date.isoformat(), "DATE"))
+    return EvidenceFact(
+        fact_id=f"candidate-observation-{summary.complex_id}",
+        claims=tuple(claims),
+        data_as_of=data_as_of,
+        payload={
+            "complexId": summary.complex_id,
+            "exactObservationCount": summary.exact_observation_count,
+            "latestObservationDate": (
+                summary.latest_observation_date.isoformat()
+                if summary.latest_observation_date else None
+            ),
+            "supportedCapabilities": list(summary.supported_capabilities),
+        },
+    )
+
+
+def _alternative_candidate_artifact(
+    alternatives: tuple[CandidateMatch, ...],
+    observation_by_id: dict[object, EvidenceFact],
+    capability: QueryCapability,
+) -> dict[str, object] | None:
+    if not alternatives:
+        return None
+    items = []
+    for candidate in alternatives[:5]:
+        record = candidate.complex
+        observation = observation_by_id.get(record.complex_id)
+        count = (
+            observation.payload.get("exactObservationCount")
+            if observation is not None else None
+        )
+        location = record.region_name or record.address or "지역 정보 없음"
+        value = location
+        fact_ids = [f"property-complex-{record.complex_id}"]
+        if capability in {"recent_trade_lookup", "price_trend"} and isinstance(count, int):
+            value += f" · 요청 조건 데이터 {count}건"
+            fact_ids.append(observation.fact_id)  # type: ignore[union-attr]
+        if not record.marker_safe:
+            value += " · 지도 위치 확인 불가"
+        items.append({
+            "label": record.display_name,
+            "value": value,
+            "factIds": fact_ids,
+        })
+    return {
+        "type": "factList",
+        "version": 1,
+        "artifactId": "alternative-complexes",
+        "title": "다른 후보 단지",
+        "items": items,
+    }
+
+
+def _focus_complex_actions(
+    primary: CandidateMatch,
+    alternatives: tuple[CandidateMatch, ...],
+) -> tuple[FocusComplexAction, ...]:
+    actions: list[FocusComplexAction] = []
+    for index, candidate in enumerate((primary, *alternatives)):
+        record = candidate.complex
+        if (
+            not record.marker_safe
+            or record.parcel_id is None
+            or record.latitude is None
+            or record.longitude is None
+            or not 33 <= record.latitude <= 39
+            or not 124 <= record.longitude <= 132
+        ):
+            continue
+        action = FocusComplexAction(
+            label=f"{record.display_name} 지도에서 보기",
+            parcel_id=record.parcel_id,
+            complex_id=record.complex_id,
+            latitude=record.latitude,
+            longitude=record.longitude,
+            auto_run=index == 0,
+            fact_ids=(f"property-complex-{record.complex_id}",),
+        )
+        _validate_focus_action(action, _complex_fact(record))
+        actions.append(action)
+        if len(actions) == 6:
+            break
+    return tuple(actions)
+
+
+def _attach_focus_actions_from_facts(result: CapabilityResult) -> CapabilityResult:
+    if any(isinstance(action, FocusComplexAction) for action in result.actions):
+        return result
+    actions: list[FocusComplexAction] = []
+    seen_complex_ids: set[int] = set()
+    property_fact_seen = False
+    for fact in result.facts:
+        payload = fact.payload
+        if not fact.fact_id.startswith("property-complex-"):
+            continue
+        is_primary = not property_fact_seen
+        property_fact_seen = True
+        complex_id = payload.get("complexId")
+        parcel_id = payload.get("parcelId")
+        latitude = payload.get("latitude")
+        longitude = payload.get("longitude")
+        display_name = payload.get("displayName")
+        if (
+            payload.get("markerSafe") is not True
+            or isinstance(complex_id, bool)
+            or not isinstance(complex_id, int)
+            or complex_id <= 0
+            or complex_id in seen_complex_ids
+            or isinstance(parcel_id, bool)
+            or not isinstance(parcel_id, int)
+            or parcel_id <= 0
+            or not isinstance(latitude, (int, float))
+            or isinstance(latitude, bool)
+            or not isinstance(longitude, (int, float))
+            or isinstance(longitude, bool)
+            or not 33 <= latitude <= 39
+            or not 124 <= longitude <= 132
+            or not isinstance(display_name, str)
+        ):
+            continue
+        action = FocusComplexAction(
+            label=f"{display_name} 지도에서 보기",
+            parcel_id=parcel_id,
+            complex_id=complex_id,
+            latitude=float(latitude),
+            longitude=float(longitude),
+            auto_run=is_primary,
+            fact_ids=(fact.fact_id,),
+        )
+        _validate_focus_action(action, fact)
+        actions.append(action)
+        seen_complex_ids.add(complex_id)
+        if len(actions) == 6:
+            break
+    return replace(result, actions=tuple((*actions, *result.actions)))
+
+
+def _validate_focus_action(
+    action: FocusComplexAction,
+    fact: EvidenceFact,
+) -> None:
+    payload = fact.payload
+    if (
+        payload.get("markerSafe") is not True
+        or payload.get("parcelId") != action.parcel_id
+        or payload.get("complexId") != action.complex_id
+        or payload.get("latitude") != action.latitude
+        or payload.get("longitude") != action.longitude
+        or fact.fact_id not in action.fact_ids
+    ):
+        raise GroundingValidationError("GROUNDING_ACTION_FACT_UNKNOWN")
+
+
+def _unique_facts(facts: tuple[EvidenceFact, ...]) -> tuple[EvidenceFact, ...]:
+    by_id: dict[str, EvidenceFact] = {}
+    for fact in facts:
+        existing = by_id.get(fact.fact_id)
+        if existing is not None and existing != fact:
+            raise GroundingValidationError("GROUNDING_FACT_UNKNOWN")
+        by_id.setdefault(fact.fact_id, fact)
+    return tuple(by_id.values())
+
+
+def _no_exact_suggestions(
+    plan: QueryPlan,
+    primary: CandidateMatch,
+    alternatives: tuple[CandidateMatch, ...],
+) -> tuple[str, ...]:
+    name = primary.complex.display_name
+    area = plan.exclusive_area_square_meters
+    suffix = f" 전용 {_number(area)}㎡" if area is not None else ""
+    suggestions = [
+        f"{name}{suffix}의 최근 3년 실거래를 알려줘",
+        f"{name}의 면적 제한 없는 최근 실거래를 알려줘",
+    ]
+    if alternatives:
+        suggestions.append(
+            f"{alternatives[0].complex.display_name}{suffix} 실거래를 확인해줘"
+        )
+    return tuple(suggestions)
+
+
+def _selection_reason(
+    primary: CandidateMatch,
+    observation: EvidenceFact | None,
+) -> str:
+    record = primary.complex
+    count = observation.payload.get("exactObservationCount") if observation else None
+    if isinstance(count, int) and count > 0:
+        scale = (
+            f" 세대수 {record.unit_count:,}세대도 확인되는"
+            if record.unit_count is not None else ""
+        )
+        return (
+            f"요청한 기간·면적의 데이터 {count}건이 확인되고{scale} "
+            f"{record.display_name}를 대표로 선택했습니다."
+        )
+    if record.unit_count is not None:
+        return (
+            f"공개된 세대수 {record.unit_count:,}세대와 단지 위치를 확인할 수 있어 "
+            f"{record.display_name}를 대표로 선택했습니다."
+        )
+    return f"단지 주소와 위치를 확인할 수 있어 {record.display_name}를 대표로 선택했습니다."
+
+
+def _no_exact_limitation(plan: QueryPlan, record: ComplexRecord) -> str:
+    period = (
+        f"{plan.start_date.isoformat()}부터 {plan.end_date.isoformat()}까지 "
+        if plan.start_date is not None and plan.end_date is not None
+        else "요청한 기간에 "
+    )
+    area = (
+        f"전용 {_number(plan.exclusive_area_square_meters)}㎡ ±1.0㎡ "
+        if plan.exclusive_area_square_meters is not None
+        else "면적 제한 없는 "
+    )
+    observation = (
+        "월별 가격 관찰값은"
+        if plan.capability == "price_trend"
+        else "실거래는"
+    )
+    return (
+        f"{record.display_name}를 대표로 확인했지만, {period}{area}조건에 맞는 "
+        f"{observation} 확인되지 않았습니다."
+    )
 
 
 def _complex_fact(record: ComplexRecord) -> EvidenceFact:
@@ -732,6 +1275,9 @@ def _complex_fact(record: ComplexRecord) -> EvidenceFact:
         "address": record.address,
         "markerSafe": record.marker_safe,
     }
+    if record.parcel_id is not None:
+        claims.append(FactClaim(str(record.parcel_id), "PARCEL_ID"))
+        payload["parcelId"] = record.parcel_id
     if record.unit_count is not None:
         claims.append(FactClaim(str(record.unit_count), "HOUSEHOLD_COUNT"))
         payload["unitCount"] = record.unit_count

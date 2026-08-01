@@ -33,6 +33,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 @SpringBootTest(
         webEnvironment = WebEnvironment.RANDOM_PORT,
@@ -331,6 +332,65 @@ class ChatBffHttpContractTest {
     }
 
     @Test
+    @DisplayName("focusComplex/v1은 JSON 응답에서 business 재선택 없이 그대로 전달한다")
+    void queryPassesThroughFocusComplexAction() {
+        JsonNode response = responseWithFocusComplexAction();
+        when(aiClient.query(any(), anyString(), anyString(), any())).thenReturn(Mono.just(response));
+
+        client.post()
+                .uri("/api/v1/chatbot/query")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer valid-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"question\":\"마포래미안푸르지오 최근 거래\"}")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.uiActions[0].type")
+                .isEqualTo("focusComplex")
+                .jsonPath("$.uiActions[0].parcelId")
+                .isEqualTo(8015)
+                .jsonPath("$.uiActions[0].complexId")
+                .isEqualTo(7756)
+                .jsonPath("$.uiActions[0].autoRun")
+                .isEqualTo(true)
+                .jsonPath("$.uiActions[0].factIds[0]")
+                .isEqualTo("property-complex-7756");
+    }
+
+    @Test
+    @DisplayName("focusComplex/v1은 SSE final에도 JSON과 같은 shape로 전달한다")
+    void streamPassesThroughFocusComplexAction() throws Exception {
+        JsonNode response = responseWithFocusComplexAction();
+        when(aiClient.stream(any(), anyString(), anyString(), any()))
+                .thenReturn(Flux.just(new ChatbotAiStreamEvent("final", response)));
+
+        byte[] body = client.post()
+                .uri("/api/v1/chatbot/query/stream")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer valid-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"question\":\"마포래미안푸르지오 최근 거래\"}")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .returnResult()
+                .getResponseBody();
+
+        String events = new String(body, java.nio.charset.StandardCharsets.UTF_8);
+        JsonNode finalData = null;
+        String currentEvent = "";
+        for (String line : events.split("\\R")) {
+            if (line.startsWith("event:")) currentEvent = line.substring(6).trim();
+            else if (line.startsWith("data:") && currentEvent.equals("final")) {
+                finalData = objectMapper.readTree(line.substring(5).trim()).get("response");
+            }
+        }
+        assertThat(finalData).isNotNull();
+        assertThat(finalData.get("uiActions")).isEqualTo(response.get("uiActions"));
+    }
+
+    @Test
     @DisplayName("시작된 SSE의 timeout은 safe final 한 번으로 종료한다")
     void streamMapsTimeoutToSafeFinal() {
         when(aiClient.stream(any(), anyString(), anyString(), any())).thenReturn(Flux.never());
@@ -538,7 +598,7 @@ class ChatBffHttpContractTest {
         }
     }
 
-    private JsonNode successfulResponse(String answer) {
+    private ObjectNode successfulResponse(String answer) {
         var response = objectMapper.createObjectNode();
         response.put("success", true);
         response.put("status", "success");
@@ -552,6 +612,24 @@ class ChatBffHttpContractTest {
         evidence.put("factCount", 0);
         evidence.put("citationCount", 0);
         response.set("evidenceSummary", evidence);
+        return response;
+    }
+
+    private ObjectNode responseWithFocusComplexAction() {
+        var response = successfulResponse("대표 단지의 실거래를 확인했습니다.");
+        var action = objectMapper.createObjectNode();
+        action.put("type", "focusComplex");
+        action.put("version", 1);
+        action.put("actionId", "action-request-focus-complex-7756");
+        action.put("label", "마포래미안푸르지오4단지 지도에서 보기");
+        action.put("parcelId", 8015);
+        action.put("complexId", 7756);
+        action.putObject("center").put("lat", 37.5555141).put("lng", 126.9537536);
+        action.put("level", 4);
+        action.put("openDetail", true);
+        action.put("autoRun", true);
+        action.putArray("factIds").add("property-complex-7756");
+        response.putArray("uiActions").add(action);
         return response;
     }
 }

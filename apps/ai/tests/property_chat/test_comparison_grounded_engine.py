@@ -190,6 +190,7 @@ def _query(
     school_repository=None,
     academy_repository=None,
     childcare_repository=None,
+    answer_first_enabled: bool = False,
     question: str = "잠실엘스와 헬리오시티 84㎡ 비교",
 ):
     property_repository = property_repository or PropertyRepository()
@@ -205,6 +206,7 @@ def _query(
         academy_location_repository=academy_repository,
         childcare_repository=childcare_repository,
         today=lambda: date(2026, 7, 20),
+        answer_first_enabled=answer_first_enabled,
     )
     response = asyncio.run(engine.query(
         request=ChatbotQueryRequest(question=question),
@@ -425,6 +427,36 @@ def test_comparison_stops_before_observation_when_a_name_is_ambiguous() -> None:
     assert response["uiArtifacts"] == []
     assert property_repository.batch_trade_calls == 0
     assert any("동명 단지" in item for item in response["limitations"])
+
+
+def test_answer_first_comparison_selects_one_candidate_per_explicit_name() -> None:
+    repository = PropertyRepository()
+    repository.complexes["헬리오시티"] = (
+        replace(repository.complexes["헬리오시티"][0], unit_count=9_510),
+        replace(
+            _complex(503, "다른 지역 헬리오시티", 37.4, 127.0),
+            unit_count=20,
+        ),
+    )
+
+    response, property_repository, _, _ = _query(
+        property_repository=repository,
+        answer_first_enabled=True,
+    )
+
+    assert response["success"] is True
+    assert property_repository.batch_trade_calls == 1
+    comparison = next(
+        artifact for artifact in response["uiArtifacts"]
+        if artifact["type"] == "comparisonTable"
+    )
+    assert [column["key"] for column in comparison["columns"]] == ["501", "502"]
+    alternatives = next(
+        artifact for artifact in response["uiArtifacts"]
+        if artifact["type"] == "factList"
+    )
+    assert alternatives["title"] == "추가로 확인된 후보"
+    assert alternatives["items"][0]["label"] == "다른 지역 헬리오시티"
 
 
 def test_comparison_rejects_two_aliases_resolving_to_the_same_complex() -> None:

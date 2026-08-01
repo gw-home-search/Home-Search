@@ -1,9 +1,17 @@
 import type { RecommendationCardsArtifact } from './artifactContract';
+import type { ChatAction } from './actionContract';
+import { ArtifactFocusButton } from './ArtifactFocusButton';
 
 export function RecommendationCardsArtifactView({
   artifact,
+  actions = [],
+  onAction,
+  selectedComplexId,
 }: {
   artifact: RecommendationCardsArtifact;
+  actions?: ChatAction[];
+  onAction?: (action: ChatAction) => void;
+  selectedComplexId?: number;
 }) {
   return (
     <section className="chatbot-recommendation-cards">
@@ -15,6 +23,7 @@ export function RecommendationCardsArtifactView({
               <strong>{card.rank}. {card.complexName}</strong>
               <span>조건 충족도 {formatScore(card.totalScore)}점</span>
             </div>
+            <ArtifactFocusButton actions={actions} factIds={card.factIds} onAction={onAction} selectedComplexId={selectedComplexId} />
             {card.activeThemes.length > 0 && (
               <div aria-label="반영한 생활조건" className="chatbot-recommendation-themes">
                 {card.activeThemes.map((theme) => <span key={theme}>{themeLabel(theme)}</span>)}

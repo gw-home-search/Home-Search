@@ -13,6 +13,28 @@ import type {
 import { readChatArtifacts } from './artifactContract';
 
 describe('조회표 artifact UI', () => {
+  it('후보 fact와 연결된 focus action을 행 전체 버튼으로 표시한다', () => {
+    const html = renderToStaticMarkup(<ChatArtifacts
+      actions={[{
+        type: 'focusComplex', version: 1, actionId: 'action-request-focus-complex-7753',
+        label: '마포래미안푸르지오1단지 지도에서 보기', parcelId: 8015,
+        complexId: 7753, center: { lat: 37.5555, lng: 126.9537 }, level: 4,
+        openDetail: true, autoRun: false, factIds: ['property-complex-7753'],
+      }]}
+      artifacts={[{
+        type: 'factList', version: 1, artifactId: 'alternative-complexes',
+        title: '다른 후보 단지', items: [{
+          label: '마포래미안푸르지오1단지', value: '서울 마포구 · 요청 조건 데이터 0건',
+          factIds: ['property-complex-7753', 'candidate-observation-7753'],
+        }],
+      }]}
+    />);
+
+    expect(html).toContain('<button');
+    expect(html).toContain('aria-label="마포래미안푸르지오1단지 지도에서 보기"');
+    expect(html).toContain('마포래미안푸르지오1단지');
+  });
+
   it('실거래와 월별 관찰값을 각각 고정 표 component로 표시한다', () => {
     const trade: TradeTableArtifact = {
       type: 'tradeTable', version: 1, artifactId: 'trade-table-1',
@@ -83,7 +105,8 @@ describe('비교표 artifact UI', () => {
 
     const html = renderToStaticMarkup(<ChatArtifacts artifacts={[artifact]} />);
 
-    expect(html).toContain('<th scope="col">잠실엘스</th>');
+    expect(html).toContain('<th scope="col">잠실엘스');
+    expect(html).toContain('지도 위치 확인 불가');
     expect(html).toContain('<th scope="row">가장 최근 거래</th>');
     expect(html).toContain('확인 불가 · 동일 면적의 최근 거래 표본이 3건 미만입니다.');
     expect(html).toContain('기준일 2026-07-20 · 최근 365일 · 전용면적');

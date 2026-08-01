@@ -16,7 +16,9 @@ from .models import (
     ComplexRecord,
     MonthlyTrendRecord,
     TradeRecord,
+    QueryCapability,
 )
+from .candidate_selection import CandidateObservationSummary
 
 _AREA_TOLERANCE_SQUARE_METERS = Decimal("1.0")
 _FRESHNESS_CACHE_SECONDS = 300
@@ -74,7 +76,7 @@ class PostgresPropertyFactRepository:
         with self._pool.connection() as connection:
             row = connection.execute(
                 """
-                SELECT complex_id, display_name, region_code, region_name, address,
+                SELECT complex_id, parcel_id, display_name, region_code, region_name, address,
                        latitude, longitude, marker_safe, data_updated_at,
                        unit_count, use_date
                 FROM ai_read.complex_fact
@@ -154,10 +156,18 @@ class PostgresPropertyFactRepository:
         with self._pool.connection() as connection:
             rows = connection.execute(
                 """
-                SELECT search.complex_id, search.display_name, search.region_code,
+                SELECT search.complex_id, base.parcel_id, search.display_name, search.region_code,
                        search.region_name, search.address, base.latitude, base.longitude,
                        search.marker_safe, search.data_updated_at,
-                       search.unit_count, search.use_date
+                       search.unit_count, search.use_date,
+                       CASE
+                           WHEN lower(search.display_name) = lower(%s)
+                             OR lower(search.canonical_name) = lower(%s)
+                             OR lower(search.trade_name) = lower(%s) THEN 0
+                           WHEN search.canonical_search_name = %s THEN 1
+                           WHEN %s = ANY(search.alias_search_names) THEN 2
+                           ELSE 3
+                       END AS match_tier
                 FROM ai_read.complex_search_fact search
                 JOIN ai_read.complex_fact base ON base.complex_id = search.complex_id
                 WHERE NOT EXISTS (
@@ -187,6 +197,11 @@ class PostgresPropertyFactRepository:
                 LIMIT %s
                 """,
                 (
+                    normalized_name,
+                    normalized_name,
+                    normalized_name,
+                    "".join(search_tokens),
+                    "".join(search_tokens),
                     list(search_tokens),
                     requires_literal_name_match,
                     literal_name_pattern,
@@ -279,7 +294,7 @@ class PostgresPropertyFactRepository:
                     FROM unnest(%s::text[]) WITH ORDINALITY AS value(requested_name, ordinal)
                 ), matches AS (
                     SELECT requested.requested_name, requested.ordinal,
-                           fact.complex_id, fact.display_name, fact.region_code,
+                           fact.complex_id, fact.parcel_id, fact.display_name, fact.region_code,
                            fact.region_name, fact.address, fact.latitude, fact.longitude,
                            fact.marker_safe, fact.data_updated_at, fact.unit_count, fact.use_date,
                            row_number() OVER (
@@ -376,6 +391,60 @@ class PostgresPropertyFactRepository:
             result[int(row["complex_id"])].append(_trade_record(row))
         return {complex_id: tuple(trades) for complex_id, trades in result.items()}
 
+    def candidate_observation_summaries(
+        self,
+        complex_ids: tuple[int, ...],
+        start_date: date | None,
+        end_date: date | None,
+        exclusive_area_square_meters: float | None,
+        capability: QueryCapability,
+    ) -> tuple[CandidateObservationSummary, ...]:
+        if (
+            not 1 <= len(complex_ids) <= 6
+            or len(complex_ids) != len(set(complex_ids))
+            or any(isinstance(value, bool) or value <= 0 for value in complex_ids)
+            or capability not in {"recent_trade_lookup", "price_trend"}
+        ):
+            raise ValueError("candidate observation query is outside the supported range")
+        _validate_trade_query(
+            complex_ids[0], start_date, end_date, exclusive_area_square_meters
+        )
+        area = _optional_decimal(exclusive_area_square_meters)
+        with self._pool.connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT requested.complex_id,
+                       count(trade.trade_id)::integer AS observation_count,
+                       max(trade.deal_date) AS latest_observation_date
+                FROM unnest(%s::bigint[]) requested(complex_id)
+                LEFT JOIN ai_read.trade_fact trade
+                  ON trade.complex_id = requested.complex_id
+                 AND (%s::date IS NULL OR trade.deal_date >= %s)
+                 AND (%s::date IS NULL OR trade.deal_date <= %s)
+                 AND (
+                    %s::numeric IS NULL
+                    OR trade.exclusive_area_square_meters BETWEEN %s - %s AND %s + %s
+                 )
+                GROUP BY requested.complex_id
+                ORDER BY array_position(%s::bigint[], requested.complex_id)
+                """,
+                (
+                    list(complex_ids), start_date, start_date, end_date, end_date,
+                    area, area, _AREA_TOLERANCE_SQUARE_METERS,
+                    area, _AREA_TOLERANCE_SQUARE_METERS, list(complex_ids),
+                ),
+            ).fetchall()
+        return tuple(
+            CandidateObservationSummary(
+                complex_id=int(row["complex_id"]),
+                exact_observation_count=int(row["observation_count"]),
+                latest_observation_date=row["latest_observation_date"],
+                supported_capabilities=(capability,)
+                if int(row["observation_count"]) > 0 else (),
+            )
+            for row in rows
+        )
+
     def recommendation_candidates(
         self,
         region_name: str,
@@ -433,7 +502,7 @@ class PostgresPropertyFactRepository:
             rows = connection.execute(
                 """
                 WITH candidate_complexes AS (
-                    SELECT complex.complex_id, complex.display_name,
+                    SELECT complex.complex_id, complex.parcel_id, complex.display_name,
                            complex.region_code, complex.region_name, complex.address,
                            complex.latitude, complex.longitude, complex.marker_safe,
                            complex.data_updated_at, complex.unit_count, complex.use_date
@@ -553,7 +622,7 @@ class PostgresPropertyFactRepository:
                     JOIN target_regions parent
                       ON child.parent_region_id = parent.region_id
                 ), selected AS (
-                    SELECT complex.complex_id, complex.display_name,
+                    SELECT complex.complex_id, complex.parcel_id, complex.display_name,
                            complex.region_code, complex.region_name, complex.address,
                            complex.latitude, complex.longitude, complex.marker_safe,
                            complex.data_updated_at, complex.unit_count, complex.use_date
@@ -614,7 +683,7 @@ class PostgresPropertyFactRepository:
                 WITH origin AS (
                     SELECT ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography AS point
                 )
-                SELECT complex.complex_id, complex.display_name,
+                SELECT complex.complex_id, complex.parcel_id, complex.display_name,
                        complex.region_code, complex.region_name, complex.address,
                        complex.latitude, complex.longitude, complex.marker_safe,
                        complex.data_updated_at, complex.unit_count, complex.use_date
@@ -836,6 +905,14 @@ def _complex_record(row: dict[str, object]) -> ComplexRecord:
         data_updated_at=row["data_updated_at"],  # type: ignore[arg-type]
         unit_count=int(row["unit_count"]) if row["unit_count"] is not None else None,
         use_date=row["use_date"],  # type: ignore[arg-type]
+        parcel_id=(
+            int(row["parcel_id"])
+            if row.get("parcel_id") is not None else None
+        ),
+        match_tier=(
+            int(row["match_tier"])
+            if row.get("match_tier") is not None else 3
+        ),
     )
 
 

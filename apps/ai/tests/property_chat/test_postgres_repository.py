@@ -170,6 +170,26 @@ def test_recent_trade_query_keeps_date_boundaries_area_tolerance_and_latest_orde
     assert records[-1].deal_date == date(2026, 1, 1)
 
 
+def test_candidate_observation_summary_is_one_bounded_exact_complex_query(
+    property_postgres_dsn: str,
+) -> None:
+    repository = PostgresPropertyFactRepository(
+        property_postgres_dsn, expected_database="test", expected_username="test"
+    )
+    try:
+        summaries = repository.candidate_observation_summaries(
+            (1, 2), date(2026, 1, 1), date(2026, 2, 15), 84.0,
+            "recent_trade_lookup",
+        )
+    finally:
+        repository.close()
+
+    assert [summary.complex_id for summary in summaries] == [1, 2]
+    assert summaries[0].exact_observation_count == 3
+    assert summaries[0].latest_observation_date == date(2026, 2, 15)
+    assert summaries[1].exact_observation_count == 0
+
+
 def test_comparison_lookup_and_trades_use_two_bounded_batch_queries(
     property_postgres_dsn: str,
 ) -> None:

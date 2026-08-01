@@ -365,6 +365,52 @@ class ShowNearbyCategoryAction:
 
 
 @dataclass(frozen=True)
+class FocusComplexAction:
+    label: str
+    parcel_id: int
+    complex_id: int
+    latitude: float
+    longitude: float
+    auto_run: bool
+    fact_ids: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if (
+            not 1 <= len(self.label.strip()) <= 100
+            or isinstance(self.parcel_id, bool)
+            or not isinstance(self.parcel_id, int)
+            or self.parcel_id <= 0
+            or isinstance(self.complex_id, bool)
+            or not isinstance(self.complex_id, int)
+            or self.complex_id <= 0
+            or not 33 <= self.latitude <= 39
+            or not 124 <= self.longitude <= 132
+            or not isinstance(self.auto_run, bool)
+            or not 1 <= len(self.fact_ids) <= 10
+            or len(self.fact_ids) != len(set(self.fact_ids))
+        ):
+            raise ValueError("focus complex action is invalid")
+
+    def to_public_dict(self, request_id: str) -> dict[str, object]:
+        action_id = f"action-{request_id}-focus-complex-{self.complex_id}"
+        if len(action_id) > 200:
+            raise ValueError("focus complex action id is too long")
+        return {
+            "type": "focusComplex",
+            "version": 1,
+            "actionId": action_id,
+            "label": self.label.strip(),
+            "parcelId": self.parcel_id,
+            "complexId": self.complex_id,
+            "center": {"lat": self.latitude, "lng": self.longitude},
+            "level": 4,
+            "openDetail": True,
+            "autoRun": self.auto_run,
+            "factIds": list(self.fact_ids),
+        }
+
+
+@dataclass(frozen=True)
 class ComplexRecord:
     complex_id: int
     display_name: str
@@ -377,6 +423,8 @@ class ComplexRecord:
     data_updated_at: datetime
     unit_count: int | None = None
     use_date: date | None = None
+    parcel_id: int | None = None
+    match_tier: int = 3
 
 
 @dataclass(frozen=True)

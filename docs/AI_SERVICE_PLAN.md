@@ -52,7 +52,8 @@ AI는 두 DB에 별도 pool을 사용하고 DB 간 SQL join을 하지 않는다.
 5. LLM은 답변과 사용한 `factId`를 구조적으로 반환한다.
 6. 서버가 fact 존재, 수치·단위 일치, citation 누락을 검증한다.
 7. 검증된 fact로만 citation을 조립한다.
-8. exact 결과가 없으면 가까운 기간·조건·후보를 조회하고 exact와 참고 결과를 구분한다.
+8. 실거래·추이의 exact 결과가 없으면 요청 기간·면적·지역을 자동 완화하지 않고,
+   대표 단지 기본정보와 exact 0건 사유 및 사용자가 선택할 후속 질문을 반환한다.
 9. primary model 1회와 secondary model 1회가 모두 실패하면 결정형 router와
    presenter로 복구한다. 검증된 근거가 전혀 없거나 안전 invariant를 복구할 수 없을
    때만 `503`/SSE error로 종료한다.
@@ -66,9 +67,14 @@ AI는 두 DB에 별도 pool을 사용하고 DB 간 SQL join을 하지 않는다.
 
 - 기간 미지정 거래·추이는 최근 1년, 결과 수는 5건을 기본으로 한다.
 - 시설 반경은 학교·학원·어린이집 800m, 대규모점포 1,000m, 철도 1,500m다.
-- 최근 거래와 추이가 0건이면 참고 거래를 찾고, 끝까지 없으면 검증된 단지
-  기본정보와 exact 0건 사유를 반환한다.
-- 복합 질문 fragment는 독립 실행하며 하나의 오류가 다른 성공 결과를 제거하지 않는다.
+- 동명 후보는 최대 6개를 조회하고, exact 관찰값이 있는 후보를 우선해 대표 하나를
+  선택한다. selector 실패 시 marker-safe, 세대수, 관찰 최신일, `complexId` 순의
+  결정형 fallback을 사용한다.
+- 최근 거래와 추이가 0건이면 기간·면적을 넓히지 않고 검증된 단지 기본정보와
+  exact 0건 사유를 반환한다.
+- 복합 질문은 entity group별로 exact 지원 goal 수가 가장 많은 대표 `complexId`를 먼저
+  한 번 선택해 모든 fragment가 공유한다. fragment 실행과 오류 격리는 독립적으로
+  유지하며 하나의 오류가 다른 성공 결과를 제거하지 않는다.
 - 추천은 현재 scope의 marker-safe 후보를 최대 5,000건까지 bounded query로 관찰한 뒤
   전체 eligible 집합에서 최대 5곳을 결정론적으로 선택한다. exact 세대수 후보가
   없거나 exact 예산 후보가 없으면 조건 차이가 작은 후보를 별도 가까운 후보로 표시한다.
@@ -186,6 +192,8 @@ AI가 검증 후보 안에서 최종 후보·순서·설명을 선택한다. 서
 - 검색 조건·시각 표시, 정책 승인 범위 내 무저장 또는 TTL cache
 - 병원·어린이집은 검증된 단지 좌표 기반 `showNearbyCategory/v1` action으로 기존
   web viewport overlay를 열며 ai-service가 Kakao를 직접 호출하지 않음
+- 단지 답변은 marker-safe fact와 `parcelId`/`complexId`/좌표가 일치할 때만
+  `focusComplex/v1`을 생성한다. 대표 action만 자동 실행하고 후보 action은 반복 실행한다.
 
 ### Slice 9: 단지 비교
 

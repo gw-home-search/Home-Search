@@ -14,6 +14,7 @@ from ai_service.property_chat.engine import (
     GroundedChatbotEngine,
     RecommendationExecutionError,
 )
+from ai_service.property_chat.candidate_selection import CandidateObservationSummary
 from ai_service.property_chat.models import (
     ComplexRecord,
     DraftAnswer,
@@ -21,6 +22,7 @@ from ai_service.property_chat.models import (
     DraftSentence,
     QueryPlan,
     QueryPlanBundle,
+    TradeRecord,
 )
 
 
@@ -63,6 +65,49 @@ class PartiallyFailingPropertyRepository(PropertyRepository):
     def recent_trades(self, *args):
         del args
         raise RuntimeError("must-not-leak")
+
+
+class AmbiguousCompoundRepository(PropertyRepository):
+    def __init__(self) -> None:
+        self.recent_complex_ids: list[int] = []
+        self.summary_calls = 0
+
+    def find_complexes(self, name, region_name, limit):
+        del name, region_name
+        assert limit == 6
+        return [
+            ComplexRecord(
+                complex_id=501, parcel_id=8015, display_name="후보 1",
+                region_code="11710", region_name="송파구", address="서울 송파구",
+                latitude=37.5, longitude=127.1, marker_safe=True,
+                data_updated_at=datetime(2026, 7, 20, tzinfo=UTC), unit_count=5_000,
+            ),
+            ComplexRecord(
+                complex_id=502, parcel_id=8015, display_name="후보 2",
+                region_code="11710", region_name="송파구", address="서울 송파구",
+                latitude=37.5, longitude=127.1, marker_safe=True,
+                data_updated_at=datetime(2026, 7, 20, tzinfo=UTC), unit_count=20,
+            ),
+        ]
+
+    def candidate_observation_summaries(
+        self, complex_ids, start_date, end_date, area, capability,
+    ):
+        del start_date, end_date, area
+        self.summary_calls += 1
+        return tuple(
+            CandidateObservationSummary(
+                complex_id,
+                1 if complex_id == 502 else 0,
+                date(2026, 7, 1) if complex_id == 502 else None,
+                (capability,) if complex_id == 502 else (),
+            )
+            for complex_id in complex_ids
+        )
+
+    def recent_trades(self, complex_id, *_args):
+        self.recent_complex_ids.append(complex_id)
+        return [TradeRecord(7001, complex_id, date(2026, 7, 1), 200_000, 84.0, 10)]
 
 
 class CompoundLanguageModel:
@@ -224,6 +269,35 @@ def test_compound_query_preserves_success_when_one_fragment_is_unavailable() -> 
     ]
     assert response["evidenceSummary"]["status"] == "partial"
     assert response["uiArtifacts"][0]["type"] == "factList"
+
+
+def test_answer_first_compound_shares_one_capability_aware_complex() -> None:
+    repository = AmbiguousCompoundRepository()
+    plans = (
+        QueryPlan("complex_identity", "동명 단지"),
+        QueryPlan(
+            "recent_trade_lookup", "동명 단지",
+            start_date=date(2025, 7, 20), end_date=date(2026, 7, 20),
+            exclusive_area_square_meters=84.0,
+        ),
+    )
+    engine = GroundedChatbotEngine(
+        repository=repository,
+        language_model=CompoundLanguageModel(plans),
+        enabled_capabilities=frozenset({"complex_identity", "recent_trade_lookup"}),
+        answer_first_enabled=True,
+    )
+
+    response = asyncio.run(engine.query(
+        request=ChatbotQueryRequest(question="동명 단지 정보와 84㎡ 실거래를 알려줘"),
+        user=AuthenticatedUser(user_id=1),
+        request_id="request-shared-compound",
+    ))
+
+    assert repository.summary_calls == 1
+    assert repository.recent_complex_ids == [502]
+    assert {action["complexId"] for action in response["uiActions"]} == {502}
+    assert sum(action.get("autoRun") is True for action in response["uiActions"]) == 1
 
 
 def test_compound_query_preserves_success_when_one_fragment_raises() -> None:

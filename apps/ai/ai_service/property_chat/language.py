@@ -81,6 +81,20 @@ class RetryingLanguageModel:
         except ChatbotProviderUnavailable as exception:
             raise LanguageModelStageError("DRAFT") from exception
 
+    async def select_complex_candidates(
+        self,
+        *,
+        candidates: list[dict[str, object]],
+        comparison: bool,
+    ) -> object:
+        async def select(model: GroundedLanguageModel) -> object:
+            operation = getattr(model, "select_complex_candidates", None)
+            if operation is None:
+                raise ChatbotProviderUnavailable()
+            return await operation(candidates=candidates, comparison=comparison)
+
+        return await self._execute(select)
+
     async def _execute(
         self,
         operation: Callable[[GroundedLanguageModel], Awaitable[T]],

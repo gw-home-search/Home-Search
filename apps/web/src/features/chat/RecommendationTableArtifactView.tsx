@@ -3,13 +3,21 @@ import type {
   RecommendationTableArtifact,
   RecommendationTableMetric,
 } from './artifactContract';
+import type { ChatAction } from './actionContract';
+import { ArtifactFocusButton } from './ArtifactFocusButton';
 
 export function RecommendationTableArtifactView({
   artifact,
+  actions = [],
+  onAction,
+  selectedComplexId,
 }: {
   artifact: RecommendationTableArtifact;
+  actions?: ChatAction[];
+  onAction?: (action: ChatAction) => void;
+  selectedComplexId?: number;
 }) {
-  if (artifact.version === 2) return <AgentRecommendationTable artifact={artifact} />;
+  if (artifact.version === 2) return <AgentRecommendationTable actions={actions} artifact={artifact} onAction={onAction} selectedComplexId={selectedComplexId} />;
   return (
     <section className="chatbot-recommendation-table">
       <h4>{artifact.title}</h4>
@@ -27,7 +35,10 @@ export function RecommendationTableArtifactView({
           <tbody>
             {artifact.rows.map((row) => (
               <tr key={row.complexId}>
-                <th scope="row">{row.order}. {row.complexName}</th>
+                <th scope="row">
+                  {row.order}. {row.complexName}
+                  <ArtifactFocusButton actions={actions} factIds={row.factIds} onAction={onAction} selectedComplexId={selectedComplexId} />
+                </th>
                 <td>{row.unitCount == null ? '확인 불가' : `${row.unitCount.toLocaleString('ko-KR')}세대`}</td>
                 {artifact.basis.criteriaOrder.map((key) => (
                   <td key={key}>{formatMetric(key, row.metrics[key])}</td>
@@ -50,8 +61,14 @@ export function RecommendationTableArtifactView({
 
 function AgentRecommendationTable({
   artifact,
+  actions,
+  onAction,
+  selectedComplexId,
 }: {
   artifact: Extract<RecommendationTableArtifact, { version: 2 }>;
+  actions: ChatAction[];
+  onAction?: (action: ChatAction) => void;
+  selectedComplexId?: number;
 }) {
   return (
     <section className="chatbot-recommendation-table chatbot-agent-recommendations">
@@ -66,6 +83,7 @@ function AgentRecommendationTable({
               <strong>{row.order}. {row.complexName}</strong>
               <span>{roleLabel(row.role)}</span>
             </div>
+            <ArtifactFocusButton actions={actions} factIds={row.factIds} onAction={onAction} selectedComplexId={selectedComplexId} />
             <p>{row.summary}</p>
             <div className="chatbot-agent-recommendation-reasons">
               <div>

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from datetime import UTC, date, datetime
 
 import pytest
@@ -30,6 +31,7 @@ from ai_service.property_chat.models import (
     QueryPlan,
     TradeRecord,
 )
+from ai_service.property_chat.candidate_selection import CandidateObservationSummary
 
 ALL_PROPERTY_CAPABILITIES = frozenset(
     {"complex_identity", "recent_trade_lookup", "price_trend"}
@@ -438,7 +440,7 @@ def test_recent_trade_without_period_uses_one_year_default() -> None:
     )
 
 
-def test_recent_trade_exact_empty_returns_same_area_reference_trade() -> None:
+def test_recent_trade_exact_empty_does_not_widen_period_or_area() -> None:
     repository = FallbackTradeRepository()
     repository.complexes = [complex_record()]
     model = FakeLanguageModel(
@@ -465,18 +467,18 @@ def test_recent_trade_exact_empty_returns_same_area_reference_trade() -> None:
 
     assert response["success"] is True
     assert response["status"] == "partial_success"
-    assert response["conversationResolution"]["answerMode"] == "BEST_EFFORT"
+    assert response["conversationResolution"]["answerMode"] == "NO_RESULT"
     assert response["conversationResolution"]["goals"] == [
         {"capability": "recent_trade_lookup", "status": "degraded"}
     ]
-    assert response["conversationResolution"]["assumptions"][0]["code"] == (
-        "SAME_AREA_ANY_PERIOD"
+    assert not any(
+        item["type"] == "tradeTable" for item in response["uiArtifacts"]
     )
-    assert response["uiArtifacts"][0]["type"] == "tradeTable"
-    assert any("정확 조건에서는 0건" in item for item in response["limitations"])
+    assert "2025-07-22부터 2026-07-22까지" in response["limitations"][0]
+    assert "전용 84.8㎡ ±1.0㎡" in response["limitations"][0]
+    assert "최근 3년 실거래" in response["uiSummary"]["followUp"]
     assert repository.trade_queries == [
         (11471, date(2025, 7, 22), date(2026, 7, 22), 84.8, 5),
-        (11471, None, None, 84.8, 5),
     ]
 
 
@@ -541,8 +543,38 @@ def test_trade_with_no_exact_or_reference_result_keeps_verified_complex() -> Non
         {"capability": "recent_trade_lookup", "status": "degraded"}
     ]
     assert "잠실동 잠실엘스" in response["answer"]
-    assert "실거래가 없습니다" in response["limitations"][0]
+    assert "실거래는 확인되지 않았습니다" in response["limitations"][0]
     assert response["conversationMemoryPatch"]["complexId"] == 11471
+
+
+def test_all_empty_candidates_keep_the_original_representative() -> None:
+    repository = FakeRepository()
+    repository.complexes = [
+        replace(complex_record(11471, "대표 단지"), unit_count=2_000),
+        replace(complex_record(11472, "다른 후보"), unit_count=20),
+    ]
+    model = DraftFailingLanguageModel(
+        QueryPlan(
+            capability="recent_trade_lookup",
+            complex_name="동명 단지",
+            exclusive_area_square_meters=84.0,
+        ),
+        DraftAnswer([]),
+    )
+
+    response = run_query(
+        GroundedChatbotEngine(
+            repository=repository,
+            language_model=model,
+            enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+            answer_first_enabled=True,
+        ),
+        "동명 단지 전용 84㎡ 최근 실거래 알려줘",
+        "request-all-empty-candidates",
+    )
+
+    assert response["conversationMemoryPatch"]["complexId"] == 11471
+    assert "대표 단지" in response["limitations"][0]
 
 
 def test_recent_trade_accepts_server_supplied_korean_amount_display_claim() -> None:
@@ -706,7 +738,7 @@ def test_ambiguous_complex_is_not_selected_arbitrarily() -> None:
             repository=repository,
             language_model=model,
             enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
-            answer_first_enabled=True,
+            answer_first_enabled=False,
         ),
         "한빛아파트 어디야?",
         "request-2",
@@ -717,6 +749,190 @@ def test_ambiguous_complex_is_not_selected_arbitrarily() -> None:
     assert response["evidenceSummary"]["factCount"] == 2
     assert "동명 단지" in response["limitations"][0]
     assert repository.trade_query is None
+
+
+def test_answer_first_multi_candidate_trade_selects_exact_data_and_keeps_alternatives() -> None:
+    class MultiCandidateRepository(FakeRepository):
+        def candidate_observation_summaries(
+            self, complex_ids, start_date, end_date, area, capability
+        ):
+            del start_date, end_date, area
+            return tuple(
+                CandidateObservationSummary(
+                    complex_id,
+                    2 if complex_id == 7756 else 0,
+                    date(2026, 6, 20) if complex_id == 7756 else None,
+                    (capability,) if complex_id == 7756 else (),
+                )
+                for complex_id in complex_ids
+            )
+
+        def recent_trades(self, complex_id, start_date, end_date, area, limit):
+            self.trade_query = (complex_id, start_date, end_date, area, limit)
+            if complex_id != 7756:
+                return []
+            return [
+                TradeRecord(9005, 7756, date(2026, 6, 20), 250_000, 84.60, 18),
+                TradeRecord(9004, 7756, date(2026, 6, 5), 265_000, 84.60, 21),
+            ]
+
+    repository = MultiCandidateRepository()
+    repository.complexes = [
+        ComplexRecord(
+            complex_id=7753,
+            parcel_id=8015,
+            display_name="마포래미안푸르지오1단지",
+            region_code="11440101",
+            region_name="아현동",
+            address="서울 마포구 아현동",
+            latitude=37.5555141,
+            longitude=126.9537536,
+            marker_safe=True,
+            data_updated_at=datetime(2026, 7, 31, tzinfo=UTC),
+            unit_count=3885,
+        ),
+        ComplexRecord(
+            complex_id=7756,
+            parcel_id=8015,
+            display_name="마포래미안푸르지오4단지",
+            region_code="11440101",
+            region_name="아현동",
+            address="서울 마포구 아현동",
+            latitude=37.5555141,
+            longitude=126.9537536,
+            marker_safe=True,
+            data_updated_at=datetime(2026, 7, 31, tzinfo=UTC),
+            unit_count=1237,
+        ),
+    ]
+    model = DraftFailingLanguageModel(
+        QueryPlan(
+            capability="recent_trade_lookup",
+            complex_name="마포래미안푸르지오",
+            start_date=date(2025, 7, 31),
+            end_date=date(2026, 7, 31),
+            exclusive_area_square_meters=84,
+            limit=5,
+        ),
+        DraftAnswer([]),
+    )
+
+    response = run_query(
+        GroundedChatbotEngine(
+            repository=repository,
+            language_model=model,
+            enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+            answer_first_enabled=True,
+        ),
+        "마포래미안푸르지오 전용 84㎡의 최근 실거래 5건을 알려줘",
+        "request-mapo",
+    )
+
+    trade_table = next(item for item in response["uiArtifacts"] if item["type"] == "tradeTable")
+    alternative_list = next(
+        item for item in response["uiArtifacts"]
+        if item["type"] == "factList" and item["title"] == "다른 후보 단지"
+    )
+    assert [row["tradeId"] for row in trade_table["rows"]] == [9005, 9004]
+    assert response["uiReport"]["primaryArtifactId"] == trade_table["artifactId"]
+    assert response["uiReport"]["basis"][-1] == {
+        "text": (
+            "대표 선택 근거: 요청한 기간·면적의 데이터 2건이 확인되고 "
+            "세대수 1,237세대도 확인되는 마포래미안푸르지오4단지를 대표로 선택했습니다."
+        ),
+        "factIds": [
+            "property-complex-7756",
+            "candidate-observation-7756",
+        ],
+    }
+    assert response["conversationMemoryPatch"]["complexId"] == 7756
+    assert alternative_list["items"][0]["factIds"] == [
+        "property-complex-7753",
+        "candidate-observation-7753",
+    ]
+    assert response["uiActions"][0] == {
+        "type": "focusComplex",
+        "version": 1,
+        "actionId": "action-request-mapo-focus-complex-7756",
+        "label": "마포래미안푸르지오4단지 지도에서 보기",
+        "parcelId": 8015,
+        "complexId": 7756,
+        "center": {"lat": 37.5555141, "lng": 126.9537536},
+        "level": 4,
+        "openDetail": True,
+        "autoRun": True,
+        "factIds": ["property-complex-7756"],
+    }
+    assert repository.trade_query == (7756, date(2025, 7, 31), date(2026, 7, 31), 84, 5)
+
+
+def test_answer_first_helio_trend_counts_month_rows_not_candidates() -> None:
+    class HelioRepository(FakeRepository):
+        selected_complex_id: int | None = None
+
+        def candidate_observation_summaries(
+            self, complex_ids, start_date, end_date, area, capability
+        ):
+            del start_date, end_date, area
+            return tuple(CandidateObservationSummary(
+                complex_id,
+                20 if complex_id == 12416 else 0,
+                date(2026, 7, 1) if complex_id == 12416 else None,
+                (capability,) if complex_id == 12416 else (),
+            ) for complex_id in complex_ids)
+
+        def monthly_trends(self, complex_id, start_date, end_date, area):
+            del start_date, end_date, area
+            self.selected_complex_id = complex_id
+            return self.trends if complex_id == 12416 else []
+
+    repository = HelioRepository()
+    repository.complexes = [
+        ComplexRecord(
+            12417, "작동 헬리오시티", "11710103", "작동", "서울 송파구 작동",
+            37.49, 127.10, True, datetime(2026, 7, 31, tzinfo=UTC),
+            unit_count=20, parcel_id=9016,
+        ),
+        ComplexRecord(
+            12416, "가락동 헬리오시티", "11710107", "가락동", "서울 송파구 가락동",
+            37.497, 127.107, True, datetime(2026, 7, 31, tzinfo=UTC),
+            unit_count=9510, parcel_id=9015,
+        ),
+    ]
+    rows = (
+        (date(2025, 9, 1), 255_500, 4),
+        (date(2025, 10, 1), 270_000, 1),
+        (date(2025, 11, 1), 278_000, 1),
+        (date(2025, 12, 1), 278_000, 1),
+        (date(2026, 3, 1), 246_500, 2),
+        (date(2026, 4, 1), 253_429, 7),
+        (date(2026, 5, 1), 257_667, 3),
+        (date(2026, 7, 1), 193_000, 1),
+    )
+    repository.trends = [
+        MonthlyTrendRecord(12416, month, average, count, average, average)
+        for month, average, count in rows
+    ]
+    model = DraftFailingLanguageModel(QueryPlan(
+        "price_trend", "헬리오시티",
+        start_date=date(2025, 8, 1), end_date=date(2026, 8, 1),
+        exclusive_area_square_meters=59,
+    ), DraftAnswer([]))
+
+    response = run_query(GroundedChatbotEngine(
+        repository=repository,
+        language_model=model,
+        enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+        answer_first_enabled=True,
+    ), "헬리오시티 전용 59㎡의 최근 1년 월별 가격 흐름과 거래량을 보여줘", "request-helio")
+
+    trend = next(item for item in response["uiArtifacts"] if item["type"] == "trendTable")
+    assert len(trend["rows"]) == 8
+    assert sum(row["tradeCount"] for row in trend["rows"]) == 20
+    assert repository.selected_complex_id == 12416
+    assert response["conversationMemoryPatch"]["complexId"] == 12416
+    assert response["uiActions"][0]["complexId"] == 12416
+    assert response["uiActions"][0]["autoRun"] is True
 
 
 def test_monthly_trend_exposes_amount_and_volume_facts() -> None:

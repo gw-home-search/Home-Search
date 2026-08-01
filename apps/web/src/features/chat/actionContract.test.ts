@@ -78,4 +78,44 @@ describe('챗봇 지도 action 계약', () => {
 
     expect(readChatActions(actions, new Set(['property-complex-501']))).toHaveLength(4);
   });
+
+  it('검증된 focusComplex action을 strict shape로 읽고 대표 자동 실행을 하나로 제한한다', () => {
+    const first = {
+      type: 'focusComplex',
+      version: 1,
+      actionId: 'action-request-1-focus-complex-7756',
+      label: '마포래미안푸르지오4단지 지도에서 보기',
+      parcelId: 8015,
+      complexId: 7756,
+      center: { lat: 37.5555141, lng: 126.9537536 },
+      level: 4,
+      openDetail: true,
+      autoRun: true,
+      factIds: ['property-complex-7756'],
+    };
+    const second = {
+      ...first,
+      actionId: 'action-request-1-focus-complex-7753',
+      label: '마포래미안푸르지오1단지 지도에서 보기',
+      complexId: 7753,
+      autoRun: false,
+      factIds: ['property-complex-7753'],
+    };
+    const duplicateAutoRun = {
+      ...second,
+      actionId: 'action-request-1-focus-complex-7754',
+      complexId: 7754,
+      autoRun: true,
+      factIds: ['property-complex-7754'],
+    };
+
+    expect(readChatActions(
+      [first, second, duplicateAutoRun],
+      new Set(['property-complex-7756', 'property-complex-7753', 'property-complex-7754']),
+    )).toEqual([first, second]);
+    expect(readChatActions(
+      [{ ...first, parcelId: true }, { ...first, extra: 'rejected' }],
+      new Set(['property-complex-7756']),
+    )).toEqual([]);
+  });
 });

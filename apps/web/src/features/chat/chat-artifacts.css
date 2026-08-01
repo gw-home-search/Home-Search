@@ -71,6 +71,65 @@
   font-weight: 650;
 }
 
+.chatbot-candidate-map-action {
+  display: grid;
+  width: 100%;
+  min-height: 40px;
+  grid-template-columns: minmax(52px, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  padding: 7px 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.chatbot-candidate-map-action span,
+.chatbot-candidate-map-action small {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
+.chatbot-candidate-map-action span { color: var(--hs-map-color-muted); }
+.chatbot-candidate-map-action small { color: var(--hs-map-color-ink); font-weight: 650; }
+
+.chatbot-artifact-map-action {
+  min-height: 40px;
+  margin: 4px 0 0;
+  border: 1px solid var(--hs-map-color-action);
+  border-radius: var(--hs-map-radius-control);
+  padding: 0 9px;
+  background: var(--hs-map-color-surface);
+  color: var(--hs-map-color-action);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.chatbot-map-unavailable {
+  color: var(--color-text-muted);
+  display: inline-block;
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.chatbot-artifact-map-action[aria-pressed="true"]::after {
+  content: " · 선택됨";
+}
+
+@media (max-width: 720px) {
+  .chatbot-candidate-map-action,
+  .chatbot-artifact-map-action { min-height: 44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chatbot-candidate-map-action { scroll-behavior: auto; }
+}
+
 .chatbot-comparison-table {
   min-width: 0;
 }

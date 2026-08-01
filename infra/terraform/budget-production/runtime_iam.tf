@@ -38,11 +38,21 @@ locals {
     admin-api = {
       ADMIN_DB_PASSWORD = "postgres/admin-runtime-password"
     }
-    user-api = {
-      USER_DB_PASSWORD          = "postgres/user-runtime-password"
-      KAKAO_OAUTH_CLIENT_ID     = "user/oauth/kakao-client-id"
-      KAKAO_OAUTH_CLIENT_SECRET = "user/oauth/kakao-client-secret"
-    }
+    user-api = merge(
+      { USER_DB_PASSWORD = "postgres/user-runtime-password" },
+      contains(var.user_oauth_enabled_providers, "google") ? {
+        GOOGLE_OAUTH_CLIENT_ID     = "user/oauth/google-client-id"
+        GOOGLE_OAUTH_CLIENT_SECRET = "user/oauth/google-client-secret"
+      } : {},
+      contains(var.user_oauth_enabled_providers, "kakao") ? {
+        KAKAO_OAUTH_CLIENT_ID     = "user/oauth/kakao-client-id"
+        KAKAO_OAUTH_CLIENT_SECRET = "user/oauth/kakao-client-secret"
+      } : {},
+      contains(var.user_oauth_enabled_providers, "naver") ? {
+        NAVER_OAUTH_CLIENT_ID     = "user/oauth/naver-client-id"
+        NAVER_OAUTH_CLIENT_SECRET = "user/oauth/naver-client-secret"
+      } : {},
+    )
     ai = {
       HOME_AI_PROPERTY_DSN           = "ai/property-dsn"
       HOME_AI_REFERENCE_DSN          = "ai/reference-dsn"

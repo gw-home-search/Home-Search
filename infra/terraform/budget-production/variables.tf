@@ -109,6 +109,19 @@ variable "ml_service_enabled" {
   description = "Runs exactly one ML service task when the reviewed F37 model is installed."
 }
 
+variable "user_oauth_enabled_providers" {
+  type        = set(string)
+  default     = ["kakao"]
+  description = "Exact allowlist of OAuth providers enabled in user-api and secret readiness."
+  validation {
+    condition = (
+      length(var.user_oauth_enabled_providers) > 0
+      && length(setsubtract(var.user_oauth_enabled_providers, toset(["google", "kakao", "naver"]))) == 0
+    )
+    error_message = "user_oauth_enabled_providers must contain only google, kakao, and naver."
+  }
+}
+
 variable "alarm_email" {
   type        = string
   description = "Operator email subscribed to the budget-production SNS topic."

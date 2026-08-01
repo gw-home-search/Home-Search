@@ -35,7 +35,7 @@ locals {
         value = "/home-search/budget-production"
         }, {
         name  = "HOME_USER_OAUTH_ENABLED_PROVIDERS"
-        value = "kakao"
+        value = join(",", sort(tolist(var.user_oauth_enabled_providers)))
       }]
     }
     property-flyway = {

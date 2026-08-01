@@ -88,7 +88,7 @@ locals {
       host_port      = 18081
       cpu            = 128
       memory         = 640
-      desired        = var.ml_service_enabled ? 1 : 0
+      desired        = 0
       readonly_root  = false
       health         = ["CMD-SHELL", "timeout 3 bash -c 'exec 3<>/dev/tcp/127.0.0.1/8081; printf \"GET /actuator/health/readiness HTTP/1.0\\r\\n\\r\\n\" >&3; head -1 <&3 | grep -q \" 200 \"' || exit 1"]
       environment = [
@@ -131,7 +131,7 @@ locals {
         { name = "USER_JWT_ACTIVE_KID", value = "budget-production-1" },
         { name = "USER_JWT_PRIVATE_KEY_PATH", value = "/run/keys/private.pem" },
         { name = "USER_JWT_ACTIVE_PUBLIC_KEY_PATH", value = "/run/keys/public.pem" },
-        { name = "HOME_USER_OAUTH_ENABLED_PROVIDERS", value = "kakao" },
+        { name = "HOME_USER_OAUTH_ENABLED_PROVIDERS", value = join(",", sort(tolist(var.user_oauth_enabled_providers))) },
       ]
     }
     ai = {
@@ -218,7 +218,7 @@ locals {
       host_port      = 18085
       cpu            = 256
       memory         = 1280
-      desired        = 0
+      desired        = var.ml_service_enabled ? 1 : 0
       readonly_root  = false
       health         = ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3)\" || exit 1"]
       environment    = [{ name = "F37_ARTIFACT_DIR", value = "/model" }]

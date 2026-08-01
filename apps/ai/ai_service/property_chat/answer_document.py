@@ -208,6 +208,10 @@ class AnswerDocument:
     assumptions: tuple[str, ...] = ()
     fallback_steps: tuple[str, ...] = ()
     recoverable: bool = True
+    primary_artifact_id: str | None = None
+    suggested_questions: tuple[str, ...] = ()
+    selection_reason: str | None = None
+    selection_reason_fact_ids: tuple[str, ...] = ()
 
     @classmethod
     def from_grounded_result(
@@ -227,6 +231,10 @@ class AnswerDocument:
         assumptions: tuple[str, ...] = (),
         fallback_steps: tuple[str, ...] = (),
         recoverable: bool = True,
+        primary_artifact_id: str | None = None,
+        suggested_questions: tuple[str, ...] = (),
+        selection_reason: str | None = None,
+        selection_reason_fact_ids: tuple[str, ...] = (),
     ) -> AnswerDocument:
         return cls(
             request=request,
@@ -240,12 +248,16 @@ class AnswerDocument:
             limitations=tuple(limitations),
             readiness=readiness,
             artifacts=_bounded_artifacts(artifacts),
-            actions=tuple(actions[:4]),
+            actions=_bounded_actions(actions),
             presentation=presentation,
             outcome_state=outcome_state,
             assumptions=assumptions,
             fallback_steps=fallback_steps,
             recoverable=recoverable,
+            primary_artifact_id=primary_artifact_id,
+            suggested_questions=suggested_questions,
+            selection_reason=selection_reason,
+            selection_reason_fact_ids=selection_reason_fact_ids,
         )
 
     def to_public_dict(self) -> dict[str, object]:
@@ -280,12 +292,60 @@ class AnswerDocument:
                     "RECOMMENDATION_UI_SUMMARY_SERIALIZATION_FAILED"
                 ) from exception
             raise
+        if self.suggested_questions:
+            if ui_summary is None:
+                primary = next((
+                    fact for fact in self.used_facts
+                    if fact.fact_id.startswith("property-complex-")
+                ), None)
+                if primary is not None:
+                    ui_summary = {
+                        "version": 1,
+                        "scopeNotice": None,
+                        "headline": {
+                            "text": self.limitations[0],
+                            "factIds": [primary.fact_id],
+                        },
+                        "criteria": [],
+                        "interpretations": [],
+                        "followUp": " · ".join(self.suggested_questions),
+                        "fragmentSummaries": [],
+                    }
+            else:
+                ui_summary = {
+                    **ui_summary,
+                    "followUp": " · ".join(self.suggested_questions),
+                }
+        if self.selection_reason and ui_summary is not None:
+            used_fact_ids = {fact.fact_id for fact in self.used_facts}
+            if (
+                not 1 <= len(self.selection_reason_fact_ids) <= 10
+                or len(self.selection_reason_fact_ids)
+                != len(set(self.selection_reason_fact_ids))
+                or not set(self.selection_reason_fact_ids).issubset(used_fact_ids)
+            ):
+                raise ValueError("selection reason facts are invalid")
+            criteria = ui_summary.get("criteria")
+            existing_criteria = criteria if isinstance(criteria, list) else []
+            ui_summary = {
+                **ui_summary,
+                "criteria": [
+                    *existing_criteria[:3],
+                    {
+                        "key": "representativeSelection",
+                        "label": "대표 선택 근거",
+                        "value": self.selection_reason,
+                        "factIds": list(self.selection_reason_fact_ids),
+                    },
+                ],
+            }
         ui_report, public_artifacts = build_answer_report(
             plan=self.plan,
             ui_summary=ui_summary,
             artifacts=self.artifacts,
             actions=self.actions,
             facts=self.used_facts,
+            preferred_primary_artifact_id=self.primary_artifact_id,
         )
         return {
             "success": success,
@@ -376,11 +436,11 @@ class CompoundAnswerDocument:
             for fragment in self.fragments
             for artifact in fragment.artifacts
         )
-        actions = tuple(
+        actions = _bounded_actions(
             action
             for fragment in self.fragments
             for action in fragment.actions
-        )[:4]
+        )
         artifact_ids = {
             artifact_id
             for artifact in artifacts
@@ -611,6 +671,56 @@ def _bounded_artifacts(
             continue
         accepted.append(artifact)
         encoded_bytes += size + int(len(accepted) > 1)
+    return tuple(accepted)
+
+
+def _bounded_actions(
+    actions: Iterable[dict[str, object]],
+) -> tuple[dict[str, object], ...]:
+    accepted: list[dict[str, object]] = []
+    seen_ids: set[str] = set()
+    seen_complex_ids: set[int] = set()
+    focus_count = 0
+    nearby_count = 0
+    has_auto_run = False
+    encoded_bytes = 2
+    for action in actions:
+        if len(accepted) == 10:
+            break
+        action_id = action.get("actionId")
+        action_type = action.get("type")
+        if not isinstance(action_id, str) or action_id in seen_ids:
+            continue
+        if action_type == "focusComplex":
+            complex_id = action.get("complexId")
+            auto_run = action.get("autoRun")
+            if (
+                focus_count == 6
+                or not isinstance(complex_id, int)
+                or isinstance(complex_id, bool)
+                or complex_id <= 0
+                or complex_id in seen_complex_ids
+                or not isinstance(auto_run, bool)
+                or auto_run and has_auto_run
+            ):
+                continue
+        elif action_type == "showNearbyCategory":
+            if nearby_count == 4:
+                continue
+        else:
+            continue
+        size = len(json.dumps(action, ensure_ascii=False).encode("utf-8"))
+        if encoded_bytes + size + int(bool(accepted)) > 16_384:
+            continue
+        accepted.append(action)
+        seen_ids.add(action_id)
+        encoded_bytes += size + int(len(accepted) > 1)
+        if action_type == "focusComplex":
+            focus_count += 1
+            seen_complex_ids.add(action["complexId"])  # type: ignore[arg-type]
+            has_auto_run = has_auto_run or bool(action["autoRun"])
+        else:
+            nearby_count += 1
     return tuple(accepted)
 
 

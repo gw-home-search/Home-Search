@@ -13,11 +13,27 @@ def build_answer_report(
     artifacts: tuple[dict[str, object], ...],
     actions: tuple[dict[str, object], ...],
     facts: tuple[EvidenceFact, ...],
+    preferred_primary_artifact_id: str | None = None,
 ) -> tuple[dict[str, object] | None, tuple[dict[str, object], ...]]:
     """Builds a bounded presentation report without becoming a fact owner."""
     fact_by_id = {fact.fact_id: fact for fact in facts}
     allowed_fact_ids = set(fact_by_id)
-    primary = next((artifact for artifact in artifacts if _artifact_id(artifact)), None)
+    primary = next((
+        artifact for artifact in artifacts
+        if preferred_primary_artifact_id is not None
+        and _artifact_id(artifact) == preferred_primary_artifact_id
+    ), None)
+    if primary is None:
+        primary = next((
+            artifact for artifact in artifacts
+            if artifact.get("type") in {
+                "tradeTable", "trendTable", "comparisonTable",
+                "recommendationTable", "recommendationCards",
+            }
+            and _artifact_id(artifact)
+        ), None)
+    if primary is None:
+        primary = next((artifact for artifact in artifacts if _artifact_id(artifact)), None)
     profiles: tuple[dict[str, object], ...] = ()
     highlights: list[dict[str, object]] = []
     if primary is not None and primary.get("type") == "recommendationTable":
@@ -33,10 +49,11 @@ def build_answer_report(
     basis = _basis(ui_summary, allowed_fact_ids)
     detail_ids = [
         artifact_id
-        for artifact in profiles
-        if (artifact_id := _artifact_id(artifact)) is not None
-        and any(item.get("artifactId") == artifact_id for item in augmented)
-    ]
+        for artifact in augmented
+        if artifact.get("type") in {"factList", "candidateProfile"}
+        and (artifact_id := _artifact_id(artifact)) is not None
+        and artifact_id != primary_id
+    ][:5]
     report = {
         "version": 1,
         "kind": _report_kind(plan.capability),

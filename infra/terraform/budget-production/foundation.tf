@@ -147,6 +147,28 @@ resource "aws_iam_role_policy" "host_operations" {
         }
       },
       {
+        Sid      = "ReadReviewedF37Model"
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = ["${aws_s3_bucket.backup[0].arn}/models/f37/deployment__F37_monthly_anchor_prev3_rolling_huber_010/*"]
+      },
+      {
+        Sid      = "ListReviewedF37Model"
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket"]
+        Resource = [aws_s3_bucket.backup[0].arn]
+        Condition = { StringLike = {
+          "s3:prefix" = ["models/f37/deployment__F37_monthly_anchor_prev3_rolling_huber_010/*"]
+        } }
+      },
+      {
+        Sid       = "DecryptReviewedF37Model"
+        Effect    = "Allow"
+        Action    = ["kms:Decrypt"]
+        Resource  = ["arn:aws:kms:${var.aws_region}:${data.aws_caller_identity.current.account_id}:alias/aws/s3"]
+        Condition = { StringEquals = { "kms:ViaService" = "s3.${var.aws_region}.amazonaws.com" } }
+      },
+      {
         Sid      = "DescribeAttachedVolume"
         Effect   = "Allow"
         Action   = ["ec2:DescribeInstances", "ec2:DescribeTags", "ec2:DescribeVolumes", "ecs:DescribeServices"]

@@ -1,0 +1,12 @@
+{
+  "model_version": "deployment__F37_monthly_anchor_prev3_rolling_huber_010",
+  "files": {
+    "_SUCCESS": "d8d882672ffcd6531e030e686eafb85733889641a0fc99e9198fcb606d5994a2",
+    "eval_metrics.csv": "c5bc6d5b22a26d06c521a8a31a4024b3a300faa9bda5652d2e6fcd9be15b93f1",
+    "feature_schema.json": "1b58815f179bc8cce7323c7fd89b43b590eb3d486e100b5d53c5e5ceca204c6d",
+    "keras_model.keras": "5a2c7448dafac027c98ca10c593883ce3ef1cab869b8850af81218790f8edb42",
+    "metadata.json": "c8c48729a6c48fa24ec87722dc632fcc73fe9e8a10fbb6fb323f119fb4f4de9b",
+    "numeric_medians.json": "33373678b6cc7a468e99835a82ae04848cba54c2a4b4164571e74def08457ecd",
+    "sample_input.json": "def79442e50692e38846eeecbd7a7ae04951125cf2badcbe64994e61d58845bd"
+  }
+}

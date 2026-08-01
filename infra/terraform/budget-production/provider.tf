@@ -88,6 +88,13 @@ check "rtms_refresh_schedule_is_post_cutover_only" {
   }
 }
 
+check "prediction_requires_ml_service" {
+  assert {
+    condition     = !var.prediction_enabled || (local.public_enabled && var.ml_service_enabled)
+    error_message = "prediction_enabled requires deployment_phase=public and ml_service_enabled=true."
+  }
+}
+
 check "data_phase_requires_platform_release" {
   assert {
     condition     = !local.data_enabled || (length(var.platform_image_uris) == 2 && length(var.image_uris) == 17)

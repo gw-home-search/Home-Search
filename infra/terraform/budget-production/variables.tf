@@ -97,6 +97,18 @@ variable "rtms_refresh_schedule_enabled" {
   description = "Enables the 07:30 KST RTMS refresh independently from backup schedules."
 }
 
+variable "prediction_enabled" {
+  type        = bool
+  default     = false
+  description = "Enables the property prediction client only after ML artifact and health gates pass."
+}
+
+variable "ml_service_enabled" {
+  type        = bool
+  default     = false
+  description = "Runs exactly one ML service task when the reviewed F37 model is installed."
+}
+
 variable "alarm_email" {
   type        = string
   description = "Operator email subscribed to the budget-production SNS topic."

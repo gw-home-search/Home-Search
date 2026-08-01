@@ -626,6 +626,28 @@ resource "aws_iam_role_policy" "github_budget_deploy" {
         Resource = ["arn:aws:s3:::home-search-budget-production-backup-${data.aws_caller_identity.current.account_id}/*"]
       },
       {
+        Sid      = "PublishReviewedF37Model"
+        Effect   = "Allow"
+        Action   = ["s3:GetObject", "s3:PutObject"]
+        Resource = ["arn:aws:s3:::home-search-budget-production-backup-${data.aws_caller_identity.current.account_id}/models/f37/deployment__F37_monthly_anchor_prev3_rolling_huber_010/*"]
+      },
+      {
+        Sid      = "UseReviewedF37InstallDocument"
+        Effect   = "Allow"
+        Action   = ["ssm:SendCommand"]
+        Resource = ["arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:document/home-search-budget-production-install-ml-model"]
+      },
+      {
+        Sid      = "InstallModelOnBudgetHostOnly"
+        Effect   = "Allow"
+        Action   = ["ssm:SendCommand"]
+        Resource = ["arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*"]
+        Condition = { StringEquals = {
+          "ssm:resourceTag/Environment" = "budget-production"
+          "ssm:resourceTag/Service"     = "home-search-host"
+        } }
+      },
+      {
         Sid      = "DeleteTaggedRecoveryClone"
         Effect   = "Allow"
         Action   = ["ec2:DeleteVolume"]

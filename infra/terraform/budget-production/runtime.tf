@@ -73,7 +73,8 @@ locals {
         { name = "HOME_MAP_MARKER_CACHE_ENABLED", value = "true" },
         { name = "HOME_PLACE_KAKAO_ENABLED", value = "true" },
         { name = "HOME_NEWS_PUBLIC_ENABLED", value = tostring(var.market_news_public_enabled) },
-        { name = "HOME_PREDICTION_ENABLED", value = "false" },
+        { name = "HOME_PREDICTION_ENABLED", value = tostring(var.prediction_enabled) },
+        { name = "HOME_PREDICTION_CLIENT_BASE_URL", value = "http://${local.host_gateway}:18085" },
         { name = "HOME_ADMIN_INTERNAL_ENABLED", value = "true" },
         { name = "HOME_ADMIN_INTERNAL_ISSUER", value = "admin-service" },
         { name = "HOME_ADMIN_INTERNAL_AUDIENCE", value = "property-data-admin" },
@@ -87,7 +88,7 @@ locals {
       host_port      = 18081
       cpu            = 128
       memory         = 640
-      desired        = 0
+      desired        = var.ml_service_enabled ? 1 : 0
       readonly_root  = false
       health         = ["CMD-SHELL", "timeout 3 bash -c 'exec 3<>/dev/tcp/127.0.0.1/8081; printf \"GET /actuator/health/readiness HTTP/1.0\\r\\n\\r\\n\" >&3; head -1 <&3 | grep -q \" 200 \"' || exit 1"]
       environment = [

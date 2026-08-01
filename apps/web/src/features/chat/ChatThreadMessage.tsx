@@ -11,6 +11,7 @@ type ChatThreadMessageProps = {
   onUiAction?: (action: ChatAction) => void;
   onRetry?: () => void;
   retrying?: boolean;
+  selectedComplexId?: number;
 };
 
 export function ChatThreadMessage({
@@ -20,6 +21,7 @@ export function ChatThreadMessage({
   onUiAction,
   onRetry,
   retrying = false,
+  selectedComplexId,
 }: ChatThreadMessageProps) {
   const isUser = message.role === 'user';
   return (
@@ -35,6 +37,7 @@ export function ChatThreadMessage({
           executedActionIds={executedActionIds}
           message={message}
           onUiAction={onUiAction}
+          selectedComplexId={selectedComplexId}
         />
       )}
       {!isUser && onRetry ? (

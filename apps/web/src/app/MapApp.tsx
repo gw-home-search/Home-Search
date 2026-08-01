@@ -18,6 +18,7 @@ import { AppHeader } from './AppHeader';
 import { useFavoriteComplex } from '../features/favorites/hooks/useFavoriteComplex';
 import type { IndexedDbChatConversationStore } from '../features/chat/storage/chatConversationStore';
 import type { ChatAction } from '../features/chat/actionContract';
+import { executeFocusComplexAction } from './chatMapAction';
 import type { ChatUiContext } from '../features/chat/conversationContract';
 import { MyPagePanel } from '../features/my-page/MyPageRoutes';
 import { InsightRailContent } from '../features/insights/InsightRailContent';
@@ -228,7 +229,17 @@ export function MapApp({
     else if (!isOpen && window.innerWidth > 720) setIsExplorationOpen(true);
   }, []);
 
-  const handleChatUiAction = useCallback((action: ChatAction) => {
+  const handleChatUiAction = useCallback((action: ChatAction, source?: 'auto') => {
+    if (action.type === 'focusComplex') {
+      executeFocusComplexAction(
+        action, focusMap, detail.selectComplex, SEARCH_FOCUS_DELTA,
+      );
+      if (source !== 'auto' && window.innerWidth < 1280) {
+        setIsChatOpen(false);
+        setIsExplorationOpen(true);
+      }
+      return true;
+    }
     if (consumedMapActionIds.current.has(action.actionId)) return false;
     consumedMapActionIds.current.add(action.actionId);
     focusMap(
@@ -243,7 +254,7 @@ export function MapApp({
       category: action.category,
     });
     return true;
-  }, [focusMap]);
+  }, [detail, focusMap]);
 
   const handleMapUiCommandConsumed = useCallback((actionId: string) => {
     setMapUiCommand((current) => current?.actionId === actionId ? null : current);

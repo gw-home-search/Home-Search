@@ -127,6 +127,36 @@ describe('복합 구조화 답변', () => {
     expect(html.match(/확인할 점/g)).toHaveLength(1);
   });
 
+  it('의사결정 리포트가 있어도 검증된 후속 질문을 표시한다', () => {
+    const message: ChatMessage = {
+      id: 'message-report-follow-up', role: 'assistant', content: 'fallback',
+      createdAt: '2026-07-22T00:00:00Z',
+      evidence: {
+        requestId: 'request-report-follow-up', dataAsOf: '2026-07-20', citations: [],
+        limitations: [], evidenceSummary: {
+          status: 'supported', capabilities: ['recent_trade_lookup'], factCount: 1,
+          citationCount: 0,
+        },
+      },
+      summary: {
+        version: 1, scopeNotice: null,
+        headline: { text: '대표 단지의 실거래를 확인했습니다.', factIds: ['trade-1'] },
+        criteria: [], interpretations: [], fragmentSummaries: [],
+        followUp: '같은 단지의 거래량도 확인해보세요.',
+      },
+      report: {
+        version: 1, kind: 'PROPERTY_OVERVIEW',
+        opening: { text: '대표 단지의 실거래를 확인했습니다.', factIds: ['trade-1'] },
+        basis: [], primaryArtifactId: null, highlights: [], detailArtifactIds: [],
+        actionIds: [],
+      },
+    };
+
+    const html = renderToStaticMarkup(<ChatMessageBody message={message} />);
+
+    expect(html).toContain('같은 단지의 거래량도 확인해보세요.');
+  });
+
   it('동일한 실제 출처는 한 번만 표시하고 근거 메타데이터는 숨긴다', () => {
     const duplicate = {
       citationId: 'citation-duplicate', sourceId: 'property.ai_read',

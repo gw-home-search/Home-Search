@@ -1,9 +1,17 @@
 import type { CandidateProfileArtifact } from './artifactContract';
+import type { ChatAction } from './actionContract';
+import { ArtifactFocusButton } from './ArtifactFocusButton';
 
 export function CandidateProfileArtifactView({
   artifact,
+  actions = [],
+  onAction,
+  selectedComplexId,
 }: {
   artifact: CandidateProfileArtifact;
+  actions?: ChatAction[];
+  onAction?: (action: ChatAction) => void;
+  selectedComplexId?: number;
 }) {
   return (
     <details
@@ -19,6 +27,7 @@ export function CandidateProfileArtifactView({
         </span>
       </summary>
       <div className="chatbot-candidate-profile-body">
+        <ArtifactFocusButton actions={actions} factIds={artifact.factIds} onAction={onAction} selectedComplexId={selectedComplexId} />
         {artifact.address || artifact.unitCount != null || artifact.useDate ? (
           <p className="chatbot-candidate-meta">
             {[artifact.address,

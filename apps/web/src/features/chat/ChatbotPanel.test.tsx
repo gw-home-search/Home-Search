@@ -422,6 +422,88 @@ describe('챗봇 패널', () => {
     expect(JSON.stringify(saved)).not.toContain('phone');
   });
 
+  it('새 focusComplex 답변은 저장 후 한 번 자동 실행하고 버튼은 반복 실행한다', async () => {
+    const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-focus-action');
+    const onUiAction = vi.fn((_action: ChatAction) => true);
+    const action = {
+      type: 'focusComplex',
+      version: 1,
+      actionId: 'action-request-1-focus-complex-7756',
+      label: '마포래미안푸르지오4단지 지도에서 보기',
+      parcelId: 8015,
+      complexId: 7756,
+      center: { lat: 37.5555141, lng: 126.9537536 },
+      level: 4,
+      openDetail: true,
+      autoRun: true,
+      factIds: ['property-trade-1'],
+    } as const;
+    ({ root, host } = await renderPanel(authenticatedClient([action]), store, onUiAction));
+
+    await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
+    await waitFor(() => host?.querySelector<HTMLTextAreaElement>('#chatbot-question')?.disabled === false);
+    await change(host.querySelector<HTMLTextAreaElement>('#chatbot-question'), '마포래미안푸르지오 거래');
+    await click(host.querySelector<HTMLButtonElement>('button[type="submit"]'));
+    await waitFor(async () => (await store.list())[0]?.messages.length === 2);
+
+    expect(onUiAction).toHaveBeenCalledTimes(1);
+    expect(onUiAction).toHaveBeenLastCalledWith(action, 'auto');
+    await waitFor(() => host?.querySelector<HTMLButtonElement>(
+      `button[aria-label="${action.label}"]`,
+    ) != null);
+    const actionButton = host?.querySelector<HTMLButtonElement>(
+      `button[aria-label="${action.label}"]`,
+    ) ?? null;
+    expect(actionButton?.getAttribute('aria-disabled')).toBe('false');
+    await click(actionButton);
+    await click(actionButton);
+    expect(onUiAction).toHaveBeenCalledTimes(3);
+  });
+
+  it('저장된 대화를 복원할 때 focusComplex를 자동 실행하지 않는다', async () => {
+    const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-focus-restore');
+    const restored = conversation('restored-focus', '저장된 답변', '2026-07-19T09:00:00.000Z');
+    restored.messages.push({
+      id: 'restored-focus-assistant',
+      role: 'assistant',
+      content: '저장된 답변',
+      createdAt: '2026-07-19T09:00:00.000Z',
+      evidence: {
+        requestId: 'request-restored',
+        citations: [{
+          citationId: 'citation-1', sourceId: 'property.ai_read', sourceName: 'Home Search 실거래',
+          sourceUrl: null, evidenceGrade: 'A', datasetVersion: 'property-2026-07-16',
+          dataAsOf: '2026-07-16', observedAt: null, factIds: ['property-trade-1'],
+        }],
+        dataAsOf: '2026-07-16', limitations: [],
+        evidenceSummary: { status: 'supported', capabilities: ['complex_identity'], factCount: 1, citationCount: 1 },
+      },
+      actions: [{
+        type: 'focusComplex',
+        version: 1,
+        actionId: 'action-restored-focus-complex-7756',
+        label: '마포래미안푸르지오4단지 지도에서 보기',
+        parcelId: 8015,
+        complexId: 7756,
+        center: { lat: 37.5555141, lng: 126.9537536 },
+        level: 4,
+        openDetail: true,
+        autoRun: true,
+        factIds: ['property-trade-1'],
+      }],
+    });
+    await store.save(restored);
+    const onUiAction = vi.fn((_action: ChatAction) => true);
+    ({ root, host } = await renderPanel(authenticatedClient(), store, onUiAction));
+
+    await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
+    await waitFor(() => host?.textContent?.includes('저장된 답변') === true);
+
+    expect(onUiAction).not.toHaveBeenCalled();
+  });
+
   it('대화 목록을 GPT형 내비게이션으로 보여주고 목록에서 대화를 전환한다', async () => {
     const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-navigation');
     await store.save(conversation('older', '잠실엘스 최근 거래', '2026-07-18T09:00:00.000Z'));

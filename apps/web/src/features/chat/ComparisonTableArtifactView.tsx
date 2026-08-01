@@ -1,11 +1,19 @@
 import { useMemo, useState } from 'react';
 
 import type { ComparisonTableArtifact } from './artifactContract';
+import type { ChatAction } from './actionContract';
+import { ArtifactFocusButton } from './ArtifactFocusButton';
 
 export function ComparisonTableArtifactView({
   artifact,
+  actions = [],
+  onAction,
+  selectedComplexId,
 }: {
   artifact: ComparisonTableArtifact;
+  actions?: ChatAction[];
+  onAction?: (action: ChatAction) => void;
+  selectedComplexId?: number;
 }) {
   const availableGroups = useMemo(() => GROUPS.filter(({ key }) => (
     artifact.rows.some((row) => comparisonGroup(row.key, row.group) === key)
@@ -31,7 +39,10 @@ export function ComparisonTableArtifactView({
             <tr>
               <th scope="col">비교 항목</th>
               {artifact.columns.map((column) => (
-                <th key={column.key} scope="col">{column.label}</th>
+                <th key={column.key} scope="col">
+                  {column.label}
+                  <ArtifactFocusButton actions={actions} factIds={column.factIds} onAction={onAction} selectedComplexId={selectedComplexId} />
+                </th>
               ))}
             </tr>
           </thead>

@@ -10,7 +10,7 @@ import { FeatureErrorBoundary } from '../shared/FeatureErrorBoundary';
 type AppHeaderProps = {
   chatConversationStore?: IndexedDbChatConversationStore;
   onChatOpenChange?: (isOpen: boolean) => void;
-  onUiAction?: (action: ChatAction) => boolean;
+  onUiAction?: (action: ChatAction, source?: 'auto') => boolean;
   chatUiContext?: ChatUiContext;
 };
 

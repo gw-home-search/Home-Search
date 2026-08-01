@@ -27,7 +27,7 @@ import {
 
 type ChatbotPanelProps = {
   onOpenChange?: (isOpen: boolean) => void;
-  onUiAction?: (action: ChatAction) => boolean;
+  onUiAction?: (action: ChatAction, source?: 'auto') => boolean;
   store?: IndexedDbChatConversationStore;
   uiContext?: ChatUiContext;
 };
@@ -55,6 +55,7 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: Cha
   const [executedActionIds, setExecutedActionIds] = useState<Set<string>>(
     () => new Set(),
   );
+  const autoExecutedActionIds = useRef(new Set<string>());
   const requestSequenceRef = useRef(0);
   const failedRetryAssistantIdRef = useRef<string | undefined>(undefined);
   const { conversations, selected, selectedId } = workspace;
@@ -275,6 +276,15 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: Cha
         : pending.messages.map((message) =>
           message.id === replaceAssistantId ? assistantMessage : message),
     }, false);
+    const autoAction = response.actions.find(
+      (action) => action.type === 'focusComplex' && action.autoRun,
+    );
+    if (autoAction != null
+      && onUiAction != null
+      && !autoExecutedActionIds.current.has(autoAction.actionId)) {
+      autoExecutedActionIds.current.add(autoAction.actionId);
+      onUiAction(autoAction, 'auto');
+    }
   }
 
   async function retryQuestion(assistantId?: string) {
@@ -343,9 +353,13 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: Cha
   }
 
   function executeUiAction(action: ChatAction) {
-    if (executedActionIds.has(action.actionId) || onUiAction == null) return;
+    if (action.type === 'showNearbyCategory'
+      && executedActionIds.has(action.actionId)) return;
+    if (onUiAction == null) return;
     if (!onUiAction(action)) return;
-    setExecutedActionIds((current) => new Set(current).add(action.actionId));
+    if (action.type === 'showNearbyCategory') {
+      setExecutedActionIds((current) => new Set(current).add(action.actionId));
+    }
   }
 
   return (
@@ -447,6 +461,7 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: Cha
                     ? () => void retryQuestion(message.id)
                     : undefined}
                   retrying={status === 'sending'}
+                  selectedComplexId={uiContext?.selectedComplex?.complexId}
                 />
               )) : (
                 <div className="chatbot-empty">

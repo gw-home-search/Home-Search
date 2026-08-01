@@ -1,45 +1,88 @@
 import type { ChatArtifact, FactListArtifact } from './artifactContract';
+import type { ChatAction } from './actionContract';
 import { ComparisonTableArtifactView } from './ComparisonTableArtifactView';
 import { RecommendationCardsArtifactView } from './RecommendationCardsArtifactView';
 import { RecommendationTableArtifactView } from './RecommendationTableArtifactView';
 import { TradeTableArtifactView } from './TradeTableArtifactView';
 import { TrendTableArtifactView } from './TrendTableArtifactView';
 import { CandidateProfileArtifactView } from './CandidateProfileArtifactView';
+import { focusActionForFacts } from './focusActionForFacts';
 
-export function ChatArtifacts({ artifacts }: { artifacts: ChatArtifact[] }) {
+export function ChatArtifacts({
+  actions = [],
+  artifacts,
+  onAction,
+  selectedComplexId,
+}: {
+  actions?: ChatAction[];
+  artifacts: ChatArtifact[];
+  onAction?: (action: ChatAction) => void;
+  selectedComplexId?: number;
+}) {
   if (artifacts.length === 0) return null;
   return (
     <div aria-label="구조화된 답변" className="chatbot-artifacts">
       {artifacts.map((artifact) => (
         artifact.type === 'comparisonTable'
-          ? <ComparisonTableArtifactView artifact={artifact} key={artifact.artifactId} />
+          ? <ComparisonTableArtifactView actions={actions} artifact={artifact} key={artifact.artifactId} onAction={onAction} selectedComplexId={selectedComplexId} />
           : artifact.type === 'recommendationCards'
-            ? <RecommendationCardsArtifactView artifact={artifact} key={artifact.artifactId} />
+            ? <RecommendationCardsArtifactView actions={actions} artifact={artifact} key={artifact.artifactId} onAction={onAction} selectedComplexId={selectedComplexId} />
             : artifact.type === 'recommendationTable'
-              ? <RecommendationTableArtifactView artifact={artifact} key={artifact.artifactId} />
+              ? <RecommendationTableArtifactView actions={actions} artifact={artifact} key={artifact.artifactId} onAction={onAction} selectedComplexId={selectedComplexId} />
             : artifact.type === 'tradeTable'
               ? <TradeTableArtifactView artifact={artifact} key={artifact.artifactId} />
             : artifact.type === 'trendTable'
               ? <TrendTableArtifactView artifact={artifact} key={artifact.artifactId} />
               : artifact.type === 'candidateProfile'
-                ? <CandidateProfileArtifactView artifact={artifact} key={artifact.artifactId} />
-            : <FactListArtifactView artifact={artifact} key={artifact.artifactId} />
+                ? <CandidateProfileArtifactView actions={actions} artifact={artifact} key={artifact.artifactId} onAction={onAction} selectedComplexId={selectedComplexId} />
+            : <FactListArtifactView
+              actions={actions}
+              artifact={artifact}
+              key={artifact.artifactId}
+              onAction={onAction}
+              selectedComplexId={selectedComplexId}
+            />
       ))}
     </div>
   );
 }
 
-function FactListArtifactView({ artifact }: { artifact: FactListArtifact }) {
+function FactListArtifactView({
+  actions,
+  artifact,
+  onAction,
+  selectedComplexId,
+}: {
+  actions: ChatAction[];
+  artifact: FactListArtifact;
+  onAction?: (action: ChatAction) => void;
+  selectedComplexId?: number;
+}) {
   return (
     <section className="chatbot-fact-list">
       <h4>{artifact.title}</h4>
       <dl>
-        {artifact.items.map((item) => (
-          <div key={`${item.label}:${item.factIds.join(':')}`}>
-            <dt>{item.label}</dt>
-            <dd>{item.value}</dd>
-          </div>
-        ))}
+        {artifact.items.map((item) => {
+          const action = focusActionForFacts(actions, item.factIds);
+          return (
+            <div key={`${item.label}:${item.factIds.join(':')}`}>
+              {action == null ? (
+                <><dt>{item.label}</dt><dd>{item.value}</dd></>
+              ) : (
+                <button
+                  aria-disabled={onAction == null}
+                  aria-label={action.label}
+                  aria-pressed={action.complexId === selectedComplexId}
+                  className="chatbot-candidate-map-action"
+                  onClick={() => onAction?.(action)}
+                  type="button"
+                >
+                  <span>{item.label}</span><small>{item.value}</small>
+                </button>
+              )}
+            </div>
+          );
+        })}
       </dl>
     </section>
   );

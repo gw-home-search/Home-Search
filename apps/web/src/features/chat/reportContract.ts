@@ -40,7 +40,7 @@ export function readChatUiReport(
     || !Array.isArray(value.detailArtifactIds)
     || value.detailArtifactIds.length > 5
     || !Array.isArray(value.actionIds)
-    || value.actionIds.length > 4) return null;
+    || value.actionIds.length > 10) return null;
   const opening = readText(value.opening, allowedFactIds);
   const basis = value.basis.flatMap((item) => {
     const parsed = readText(item, allowedFactIds);

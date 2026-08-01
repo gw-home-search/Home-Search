@@ -2,6 +2,8 @@ mock_provider "aws" {
   mock_data "aws_caller_identity" { defaults = { account_id = "123456789012" } }
 }
 
+mock_provider "aws" { alias = "retained_ssm" }
+
 variables {
   ami_id                   = "ami-0123456789abcdef0"
   availability_zone        = "ap-northeast-2a"

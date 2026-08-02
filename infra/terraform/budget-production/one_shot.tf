@@ -244,7 +244,7 @@ resource "aws_ecs_task_definition" "one_shot" {
   for_each                 = local.data_enabled ? local.one_shot_specs : {}
   family                   = "${local.name}-${each.key}"
   cpu                      = each.key == "data-import-reconcile" ? "512" : "256"
-  memory                   = each.key == "data-import-reconcile" ? "1024" : "512"
+  memory                   = each.key == "data-import-reconcile" ? "1024" : null
   network_mode             = "bridge"
   requires_compatibilities = ["EC2"]
   execution_role_arn       = aws_iam_role.task_execution[each.key].arn
@@ -295,7 +295,8 @@ resource "aws_ecs_task_definition" "one_shot" {
     }
     stopTimeout      = 120
     logConfiguration = local.awslogs[each.key]
-    }, length(each.value.command) > 0 ? { command = each.value.command } : {},
+    }, each.key == "data-import-reconcile" ? {} : { memory = 512, memoryReservation = 256 },
+    length(each.value.command) > 0 ? { command = each.value.command } : {},
   length(each.value.entrypoint) > 0 ? { entryPoint = each.value.entrypoint } : {})])
 
   tags = {

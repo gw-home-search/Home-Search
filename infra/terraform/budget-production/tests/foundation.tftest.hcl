@@ -243,6 +243,13 @@ run "data_phase_keeps_platform_services_dark_before_secret_bootstrap" {
         for item in local.one_shot_specs["rtms-daily-refresh"].environment :
         item.value if item.name == "HOME_INSIGHT_TRADE_ENABLED"
       ]) == "true"
+      && alltrue([
+        for name, task in aws_ecs_task_definition.one_shot : task.memory == null
+        if name != "data-import-reconcile"
+      ])
+      && aws_ecs_task_definition.one_shot["data-import-reconcile"].memory == "1024"
+      && jsondecode(aws_ecs_task_definition.one_shot["secret-bootstrap"].container_definitions)[0].memoryReservation == 256
+      && jsondecode(aws_ecs_task_definition.one_shot["secret-bootstrap"].container_definitions)[0].memory == 512
       && length(aws_scheduler_schedule.rtms_daily_refresh) == 1
       && aws_scheduler_schedule.rtms_daily_refresh[0].schedule_expression == "cron(30 7 * * ? *)"
       && aws_scheduler_schedule.rtms_daily_refresh[0].schedule_expression_timezone == "Asia/Seoul"

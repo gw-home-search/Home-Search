@@ -223,6 +223,11 @@ if ! grep -Fq 'unset TF_VAR_deployment_phase TF_VAR_data_services_enabled TF_VAR
   echo '상태: Fail - terraform test가 rollout feature TF_VAR를 상속합니다.' >&2
   exit 1
 fi
+if ! grep -Fq 'mv "${runtime_tfvars}" "${isolated_runtime_tfvars}"' "${rollout_workflow}"; then
+  echo '상태: Fail - terraform test가 live service pin auto tfvars를 상속합니다.' >&2
+  exit 1
+fi
+grep -Fq 'trap '\''mv "${isolated_runtime_tfvars}" "${runtime_tfvars}"; rmdir "${isolated_runtime_dir}"'\'' EXIT' "${rollout_workflow}"
 rollout_plan_artifact_line="$(grep -nF 'name: "budget-production-incremental-plan-${{ inputs.release_tag }}"' "${rollout_workflow}" | head -1 | cut -d: -f1)"
 [[ "${rollout_plan_artifact_line}" =~ ^[0-9]+$ ]]
 rollout_plan_artifact_block="$(sed -n "$((rollout_plan_artifact_line - 2)),$((rollout_plan_artifact_line + 10))p" "${rollout_workflow}")"

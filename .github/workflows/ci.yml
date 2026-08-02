@@ -239,6 +239,12 @@ jobs:
         run: python3 -m unittest discover -s tests -v
       - name: Build exact-lock ML image
         run: docker build --tag home-search-ml:ci apps/ml
+      - name: Verify F37 Keras 2 compatibility in the runtime image
+        run: >-
+          docker run --rm --entrypoint python
+          --volume "${{ github.workspace }}/apps/ml/tests:/app/tests:ro"
+          home-search-ml:ci -m unittest discover -s /app/tests
+          -p test_f37_predictor_compatibility.py -v
       - name: Verify installed dependency graph
         run: >-
           docker run --rm --entrypoint uv home-search-ml:ci

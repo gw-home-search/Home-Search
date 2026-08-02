@@ -12,6 +12,8 @@ RUN apk add --no-cache \
 COPY --chown=10001:10001 --chmod=0555 infra/backup/home-search-db-backup.sh /usr/local/bin/home-search-db-backup
 COPY --chown=10001:10001 --chmod=0555 infra/budget/run-pg-backup.sh /usr/local/bin/run-budget-pg-backup
 COPY --chown=10001:10001 --chmod=0555 infra/budget/run-property-search-audit.sh /usr/local/bin/run-budget-property-search-audit
+COPY --chown=10001:10001 --chmod=0555 infra/budget/run-runtime-feature-audit.sh /usr/local/bin/run-budget-runtime-feature-audit
+COPY --chown=10001:10001 --chmod=0555 infra/budget/run-runtime-log-audit.sh /usr/local/bin/run-budget-runtime-log-audit
 COPY --chown=10001:10001 apps/property-data/db/migration/api /opt/home-search/apps/property-data/db/migration/api
 COPY --chown=10001:10001 apps/admin/service/migration/src/main/resources/db/migration/admin /opt/home-search/apps/admin/service/migration/src/main/resources/db/migration/admin
 COPY --chown=10001:10001 apps/user/service/db/migration/user /opt/home-search/apps/user/service/db/migration/user

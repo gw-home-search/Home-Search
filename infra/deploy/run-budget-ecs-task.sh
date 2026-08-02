@@ -55,6 +55,35 @@ if [[ -n "${command_override}" ]]; then
         exit 2
       }
       ;;
+    rtms-daily-refresh)
+      jq -e 'length == 1 and (.[0] | test("^requestId=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"))' \
+        <<<"${command_override}" >/dev/null || {
+        echo '상태: Fail - RTMS 수동 실행은 canonical requestId 하나만 허용합니다.' >&2
+        exit 2
+      }
+      ;;
+    market-news-general)
+      jq -e 'length == 1 and (.[0] | test("^requestId=BOOTSTRAP:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"))' \
+        <<<"${command_override}" >/dev/null || {
+        echo '상태: Fail - 뉴스 bootstrap은 BOOTSTRAP canonical requestId만 허용합니다.' >&2
+        exit 2
+      }
+      ;;
+    market-news-quality-sample)
+      jq -e 'length == 2
+        and (.[0] | test("^reviewSetId=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"))
+        and .[1] == "policyVersion=NEWS_V5"' <<<"${command_override}" >/dev/null || {
+        echo '상태: Fail - 뉴스 품질 표본은 canonical reviewSetId와 NEWS_V5만 허용합니다.' >&2
+        exit 2
+      }
+      ;;
+    market-news-major-selection | market-news-major-complex | market-news-retention)
+      jq -e 'length == 1 and (.[0] | test("^schedulerExecutionId=manual-[0-9a-f]{32}$"))' \
+        <<<"${command_override}" >/dev/null || {
+        echo '상태: Fail - 뉴스 수동 운영 job은 제한된 execution id만 허용합니다.' >&2
+        exit 2
+      }
+      ;;
     *)
       echo '상태: Fail - 이 budget task에는 command override를 허용하지 않습니다.' >&2
       exit 2

@@ -210,6 +210,14 @@ resource "aws_iam_role_policy" "github_budget_plan" {
         Sid      = "ReadBudgetSecretContainersForProviderRefresh", Effect = "Allow", Action = ["ssm:GetParameter"]
         Resource = ["arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/home-search/budget-production/*"]
       },
+      {
+        Sid      = "ReadReviewedF37ModelPreflight", Effect = "Allow", Action = ["s3:GetObject"]
+        Resource = ["arn:aws:s3:::home-search-budget-production-backup-${data.aws_caller_identity.current.account_id}/models/f37/deployment__F37_monthly_anchor_prev3_rolling_huber_010/*"]
+      },
+      {
+        Sid      = "ReadReviewedBootstrapEvidence", Effect = "Allow", Action = ["s3:GetObject"]
+        Resource = ["arn:aws:s3:::home-search-budget-production-backup-${data.aws_caller_identity.current.account_id}/deployment-evidence/bootstrap/*/terraform-bootstrap-plan.json"]
+      },
     ]
   })
 }
@@ -283,6 +291,36 @@ resource "aws_iam_policy" "github_budget_apply_schedules" {
           "scheduler:UpdateSchedule",
         ]
         Resource = ["arn:aws:scheduler:${var.aws_region}:${data.aws_caller_identity.current.account_id}:schedule/home-search-budget-production-backup/home-search-budget-production-logical-backup"]
+      },
+      {
+        Sid    = "ManageBudgetRuntimeScheduleGroups"
+        Effect = "Allow"
+        Action = [
+          "scheduler:CreateScheduleGroup",
+          "scheduler:DeleteScheduleGroup",
+          "scheduler:TagResource",
+          "scheduler:UntagResource",
+        ]
+        Resource = [
+          "arn:aws:scheduler:${var.aws_region}:${data.aws_caller_identity.current.account_id}:schedule-group/home-search-budget-production-data-refresh",
+          "arn:aws:scheduler:${var.aws_region}:${data.aws_caller_identity.current.account_id}:schedule-group/home-search-budget-production-market-news",
+        ]
+      },
+      {
+        Sid    = "ManageBudgetRuntimeSchedules"
+        Effect = "Allow"
+        Action = [
+          "scheduler:CreateSchedule",
+          "scheduler:DeleteSchedule",
+          "scheduler:UpdateSchedule",
+        ]
+        Resource = [
+          "arn:aws:scheduler:${var.aws_region}:${data.aws_caller_identity.current.account_id}:schedule/home-search-budget-production-data-refresh/home-search-budget-production-rtms-daily-refresh",
+          "arn:aws:scheduler:${var.aws_region}:${data.aws_caller_identity.current.account_id}:schedule/home-search-budget-production-market-news/home-search-budget-production-market-news-general",
+          "arn:aws:scheduler:${var.aws_region}:${data.aws_caller_identity.current.account_id}:schedule/home-search-budget-production-market-news/home-search-budget-production-market-news-major-selection",
+          "arn:aws:scheduler:${var.aws_region}:${data.aws_caller_identity.current.account_id}:schedule/home-search-budget-production-market-news/home-search-budget-production-market-news-morning",
+          "arn:aws:scheduler:${var.aws_region}:${data.aws_caller_identity.current.account_id}:schedule/home-search-budget-production-market-news/home-search-budget-production-market-news-retention",
+        ]
       },
     ]
   })
@@ -624,6 +662,34 @@ resource "aws_iam_role_policy" "github_budget_deploy" {
         Effect   = "Allow"
         Action   = ["s3:GetObject"]
         Resource = ["arn:aws:s3:::home-search-budget-production-backup-${data.aws_caller_identity.current.account_id}/*"]
+      },
+      {
+        Sid      = "ReadBudgetAiCanaryLogs"
+        Effect   = "Allow"
+        Action   = ["logs:GetLogEvents"]
+        Resource = ["arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/home-search/budget-production/ai:log-stream:*"]
+      },
+      {
+        Sid      = "PublishReviewedF37Model"
+        Effect   = "Allow"
+        Action   = ["s3:GetObject", "s3:PutObject"]
+        Resource = ["arn:aws:s3:::home-search-budget-production-backup-${data.aws_caller_identity.current.account_id}/models/f37/deployment__F37_monthly_anchor_prev3_rolling_huber_010/*"]
+      },
+      {
+        Sid      = "UseReviewedF37InstallDocument"
+        Effect   = "Allow"
+        Action   = ["ssm:SendCommand"]
+        Resource = ["arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:document/home-search-budget-production-install-ml-model"]
+      },
+      {
+        Sid      = "InstallModelOnBudgetHostOnly"
+        Effect   = "Allow"
+        Action   = ["ssm:SendCommand"]
+        Resource = ["arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*"]
+        Condition = { StringEquals = {
+          "ssm:resourceTag/Environment" = "budget-production"
+          "ssm:resourceTag/Service"     = "host"
+        } }
       },
       {
         Sid      = "DeleteTaggedRecoveryClone"

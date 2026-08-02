@@ -41,6 +41,17 @@ PATH="${tmp_dir}/bin:${PATH}" FAKE_PSQL_JSON="${tmp_dir}/after-input.json" FAKE_
   HOME_BACKUP_S3_URI=s3://home-search-budget-production-backup-123456789012/logical \
   bash "${script}" after v1.0.11 >/dev/null
 
+rm "${tmp_dir}/s3/before.json" "${tmp_dir}/s3/after.json"
+PATH="${tmp_dir}/bin:${PATH}" FAKE_PSQL_JSON="${tmp_dir}/after-input.json" FAKE_S3_ROOT="${tmp_dir}/s3" AUDIT_PHASE=before \
+  HOME_BACKUP_PGHOST=database HOME_BACKUP_PGPORT=5432 HOME_BACKUP_PGUSER=backup HOME_BACKUP_PGPASSWORD=password \
+  HOME_BACKUP_S3_URI=s3://home-search-budget-production-backup-123456789012/logical \
+  bash "${script}" before v1.0.12 >/dev/null
+PATH="${tmp_dir}/bin:${PATH}" FAKE_PSQL_JSON="${tmp_dir}/after-input.json" FAKE_S3_ROOT="${tmp_dir}/s3" AUDIT_PHASE=after \
+  HOME_BACKUP_PGHOST=database HOME_BACKUP_PGPORT=5432 HOME_BACKUP_PGUSER=backup HOME_BACKUP_PGPASSWORD=password \
+  HOME_BACKUP_S3_URI=s3://home-search-budget-production-backup-123456789012/logical \
+  bash "${script}" after v1.0.12 >/dev/null
+jq -e '.previous_version == 40 and .target_version == 40' "${tmp_dir}/s3/after.json" >/dev/null
+
 jq '.data.trade.rows = 41' "${tmp_dir}/after-input.json" >"${tmp_dir}/changed-input.json"
 if PATH="${tmp_dir}/bin:${PATH}" FAKE_PSQL_JSON="${tmp_dir}/changed-input.json" FAKE_S3_ROOT="${tmp_dir}/s3" AUDIT_PHASE=after \
   HOME_BACKUP_PGHOST=database HOME_BACKUP_PGPORT=5432 HOME_BACKUP_PGUSER=backup HOME_BACKUP_PGPASSWORD=password \

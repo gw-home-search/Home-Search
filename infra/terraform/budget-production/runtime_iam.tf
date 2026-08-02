@@ -1,4 +1,11 @@
 locals {
+  market_news_secret_parameters = {
+    DB_PASSWORD                   = "postgres/property-runtime-password"
+    SPRING_DATA_REDIS_PASSWORD    = "valkey/property-password"
+    HOME_NEWS_NAVER_CLIENT_ID     = "property/news/naver-client-id"
+    HOME_NEWS_NAVER_CLIENT_SECRET = "property/news/naver-client-secret"
+  }
+
   platform_secret_parameters = {
     budget-postgres = {
       POSTGRES_PASSWORD              = "postgres/superuser-password"
@@ -31,11 +38,21 @@ locals {
     admin-api = {
       ADMIN_DB_PASSWORD = "postgres/admin-runtime-password"
     }
-    user-api = {
-      USER_DB_PASSWORD          = "postgres/user-runtime-password"
-      KAKAO_OAUTH_CLIENT_ID     = "user/oauth/kakao-client-id"
-      KAKAO_OAUTH_CLIENT_SECRET = "user/oauth/kakao-client-secret"
-    }
+    user-api = merge(
+      { USER_DB_PASSWORD = "postgres/user-runtime-password" },
+      contains(var.user_oauth_enabled_providers, "google") ? {
+        GOOGLE_OAUTH_CLIENT_ID     = "user/oauth/google-client-id"
+        GOOGLE_OAUTH_CLIENT_SECRET = "user/oauth/google-client-secret"
+      } : {},
+      contains(var.user_oauth_enabled_providers, "kakao") ? {
+        KAKAO_OAUTH_CLIENT_ID     = "user/oauth/kakao-client-id"
+        KAKAO_OAUTH_CLIENT_SECRET = "user/oauth/kakao-client-secret"
+      } : {},
+      contains(var.user_oauth_enabled_providers, "naver") ? {
+        NAVER_OAUTH_CLIENT_ID     = "user/oauth/naver-client-id"
+        NAVER_OAUTH_CLIENT_SECRET = "user/oauth/naver-client-secret"
+      } : {},
+    )
     ai = {
       HOME_AI_PROPERTY_DSN           = "ai/property-dsn"
       HOME_AI_REFERENCE_DSN          = "ai/reference-dsn"
@@ -88,6 +105,10 @@ locals {
     scheduled-backup = {
       HOME_BACKUP_PGPASSWORD = "postgres/backup-password"
     }
+    runtime-feature-audit = {
+      HOME_BACKUP_PGPASSWORD = "postgres/backup-password"
+    }
+    runtime-log-audit = {}
     data-import-reconcile = {
       HOME_MIGRATION_PROPERTY_TARGET_PASSWORD  = "postgres/property-importer-password"
       HOME_MIGRATION_REFERENCE_TARGET_PASSWORD = "postgres/ai-importer-password"
@@ -97,6 +118,13 @@ locals {
       DB_PASSWORD     = "postgres/property-runtime-password"
       APT_SERVICE_KEY = "property/apt-service-key"
     }
+    market-news-general         = local.market_news_secret_parameters
+    market-news-morning         = local.market_news_secret_parameters
+    market-news-major-complex   = local.market_news_secret_parameters
+    market-news-major-selection = local.market_news_secret_parameters
+    market-news-retention       = local.market_news_secret_parameters
+    market-news-quality-sample  = local.market_news_secret_parameters
+    market-news-withdrawal      = local.market_news_secret_parameters
     runtime-grants = {
       PROPERTY_MIGRATOR_DB_PASSWORD = "postgres/property-migrator-password"
       USER_MIGRATOR_DB_PASSWORD     = "postgres/user-migrator-password"
@@ -106,18 +134,27 @@ locals {
   }
 
   one_shot_image_keys = {
-    secret-bootstrap      = "ops-bootstrap"
-    secret-readiness      = "ops-bootstrap"
-    property-flyway       = "property-flyway"
-    user-flyway           = "user-flyway"
-    admin-migration       = "admin-migration"
-    ai-migration          = "ai"
-    importer-grants       = "ops-bootstrap"
-    scheduled-backup      = "backup"
-    data-import-reconcile = "backup"
-    map-marker-projection = "property-batch"
-    rtms-daily-refresh    = "property-batch"
-    runtime-grants        = "ops-bootstrap"
+    secret-bootstrap            = "ops-bootstrap"
+    secret-readiness            = "ops-bootstrap"
+    property-flyway             = "property-flyway"
+    user-flyway                 = "user-flyway"
+    admin-migration             = "admin-migration"
+    ai-migration                = "ai"
+    importer-grants             = "ops-bootstrap"
+    scheduled-backup            = "backup"
+    runtime-feature-audit       = "backup"
+    runtime-log-audit           = "backup"
+    data-import-reconcile       = "backup"
+    map-marker-projection       = "property-batch"
+    rtms-daily-refresh          = "property-batch"
+    market-news-general         = "property-batch"
+    market-news-morning         = "property-batch"
+    market-news-major-complex   = "property-batch"
+    market-news-major-selection = "property-batch"
+    market-news-retention       = "property-batch"
+    market-news-quality-sample  = "property-batch"
+    market-news-withdrawal      = "property-batch"
+    runtime-grants              = "ops-bootstrap"
   }
 
   execution_parameter_sets = merge(
@@ -140,7 +177,7 @@ locals {
 
 resource "aws_iam_role" "task_execution" {
   for_each = local.execution_parameter_sets
-  name     = "${local.name}-${each.key}-execution"
+  name     = substr("${local.name}-${each.key}-execution", 0, 64)
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -193,7 +230,7 @@ resource "aws_iam_role_policy" "task_execution" {
 
 resource "aws_iam_role" "task_runtime" {
   for_each = local.execution_parameter_sets
-  name     = "${local.name}-${each.key}-runtime"
+  name     = substr("${local.name}-${each.key}-runtime", 0, 64)
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -295,6 +332,46 @@ resource "aws_iam_role_policy" "scheduled_backup" {
         Effect   = "Allow"
         Action   = ["s3:GetObject", "s3:PutObject"]
         Resource = ["${aws_s3_bucket.backup[0].arn}/logical/*"]
+      },
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "runtime_feature_audit" {
+  count = local.data_enabled ? 1 : 0
+  name  = "write-runtime-feature-audit-evidence"
+  role  = aws_iam_role.task_runtime["runtime-feature-audit"].id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid      = "WriteRuntimeAuditEvidence"
+      Effect   = "Allow"
+      Action   = ["s3:PutObject"]
+      Resource = ["${aws_s3_bucket.backup[0].arn}/deployment-evidence/runtime-audit/*"]
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "runtime_log_audit" {
+  count = local.data_enabled ? 1 : 0
+  name  = "read-runtime-logs-and-write-audit-evidence"
+  role  = aws_iam_role.task_runtime["runtime-log-audit"].id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ReadApplicationLogs"
+        Effect = "Allow"
+        Action = ["logs:FilterLogEvents"]
+        Resource = [for name in keys(local.application_specs) :
+          "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/home-search/budget-production/${name}:*"
+        ]
+      },
+      {
+        Sid      = "WriteRuntimeLogAuditEvidence"
+        Effect   = "Allow"
+        Action   = ["s3:PutObject"]
+        Resource = ["${aws_s3_bucket.backup[0].arn}/deployment-evidence/runtime-audit/*"]
       },
     ]
   })

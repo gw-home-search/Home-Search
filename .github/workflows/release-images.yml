@@ -83,6 +83,7 @@ jobs:
           VERSION="${VERSION#v}"
           export VERSION
           [[ -n "${KAKAO_MAP_APP_KEY}" ]]
+          [[ "${MARKET_NEWS_ENABLED}" == true ]]
           docker buildx bake --push \
             --set '*.attest=type=sbom' \
             --set '*.attest=type=provenance,mode=max'
@@ -92,6 +93,7 @@ jobs:
           REGISTRY: ${{ steps.registry.outputs.registry }}
           MARKET_NEWS_ENABLED: ${{ vars.MARKET_NEWS_ENABLED || 'false' }}
         run: |
+          [[ "${MARKET_NEWS_ENABLED}" == true ]]
           .github/scripts/test-event-contracts.sh
           mkdir -p release-evidence/sbom release-evidence/vulnerability
           infra/release/create-release-manifest.sh \

@@ -193,9 +193,18 @@ run "data_phase_keeps_platform_services_dark_before_secret_bootstrap" {
         "ai-migration",
         "importer-grants",
         "scheduled-backup",
+        "runtime-feature-audit",
+        "runtime-log-audit",
         "data-import-reconcile",
         "map-marker-projection",
         "rtms-daily-refresh",
+        "market-news-general",
+        "market-news-morning",
+        "market-news-major-complex",
+        "market-news-major-selection",
+        "market-news-retention",
+        "market-news-quality-sample",
+        "market-news-withdrawal",
         "runtime-grants",
       ])
       && length(aws_ecs_task_definition.application) == 0
@@ -283,7 +292,7 @@ run "post_cutover_enables_backup_and_public_alarms" {
       length(aws_route53_record.public) == 1
       && aws_dlm_lifecycle_policy.data[0].state == "ENABLED"
       && aws_scheduler_schedule.logical_backup[0].state == "ENABLED"
-      && aws_scheduler_schedule.rtms_daily_refresh[0].state == "ENABLED"
+      && aws_scheduler_schedule.rtms_daily_refresh[0].state == "DISABLED"
       && length(aws_cloudwatch_metric_alarm.ecs_running) == 1
       && length(aws_cloudwatch_metric_alarm.backup_age) == 1
       && length(aws_cloudwatch_metric_alarm.map_p95) == 1

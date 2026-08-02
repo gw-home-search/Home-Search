@@ -1,4 +1,21 @@
 locals {
+  market_news_common_environment = [
+    { name = "SPRING_PROFILES_ACTIVE", value = "prod" },
+    { name = "DB_JDBC_URL", value = "jdbc:postgresql://${local.host_gateway}:15432/home_search?sslmode=require" },
+    { name = "DB_USERNAME", value = "home_search_property_runtime" },
+    { name = "SPRING_DATA_REDIS_HOST", value = local.host_gateway },
+    { name = "SPRING_DATA_REDIS_PORT", value = "16379" },
+    { name = "SPRING_DATA_REDIS_USERNAME", value = "property" },
+    { name = "SPRING_DATA_REDIS_SSL_ENABLED", value = "false" },
+    { name = "HOME_NEWS_NAVER_ENABLED", value = "true" },
+    { name = "HOME_NEWS_NAVER_PROVIDER_MODE", value = "API_HUB" },
+    { name = "HOME_NEWS_CACHE_ENABLED", value = "true" },
+    { name = "HOME_NEWS_DAILY_CALL_BUDGET", value = "4000" },
+    { name = "HOME_NEWS_CACHE_TTL", value = "31d" },
+    { name = "HOME_NEWS_CONNECT_TIMEOUT", value = "2s" },
+    { name = "HOME_NEWS_READ_TIMEOUT", value = "5s" },
+  ]
+
   one_shot_specs = {
     secret-bootstrap = {
       image_key  = "ops-bootstrap"
@@ -18,7 +35,7 @@ locals {
         value = "/home-search/budget-production"
         }, {
         name  = "HOME_USER_OAUTH_ENABLED_PROVIDERS"
-        value = "kakao"
+        value = join(",", sort(tolist(var.user_oauth_enabled_providers)))
       }]
     }
     property-flyway = {
@@ -78,6 +95,26 @@ locals {
         { name = "HOME_BACKUP_KMS_KEY_ID", value = "alias/aws/s3" },
       ]
     }
+    runtime-feature-audit = {
+      image_key  = "backup"
+      command    = []
+      entrypoint = ["/usr/local/bin/run-budget-runtime-feature-audit"]
+      environment = [
+        { name = "HOME_BACKUP_PGHOST", value = local.host_gateway },
+        { name = "HOME_BACKUP_PGPORT", value = "15432" },
+        { name = "HOME_BACKUP_PGUSER", value = "home_search_backup" },
+        { name = "HOME_RUNTIME_AUDIT_S3_URI", value = local.data_enabled ? "s3://${aws_s3_bucket.backup[0].id}/deployment-evidence/runtime-audit" : "" },
+      ]
+    }
+    runtime-log-audit = {
+      image_key  = "backup"
+      command    = []
+      entrypoint = ["/usr/local/bin/run-budget-runtime-log-audit"]
+      environment = [{
+        name  = "HOME_RUNTIME_AUDIT_S3_URI"
+        value = local.data_enabled ? "s3://${aws_s3_bucket.backup[0].id}/deployment-evidence/runtime-audit" : ""
+      }]
+    }
     data-import-reconcile = {
       image_key  = "backup"
       command    = []
@@ -87,7 +124,7 @@ locals {
         { name = "PGSSLMODE", value = "require" },
         { name = "HOME_MIGRATION_ARTIFACT_S3_URI", value = var.migration_artifact_s3_uri },
         { name = "HOME_MIGRATION_MANIFEST_SHA256", value = var.migration_manifest_sha256 },
-        { name = "HOME_MIGRATION_EVIDENCE_S3_URI", value = local.data_enabled ? "s3://${aws_s3_bucket.backup[0].id}/deployment-evidence/${var.deployment_release_tag}" : "" },
+        { name = "HOME_MIGRATION_EVIDENCE_S3_URI", value = local.data_enabled ? "s3://${aws_s3_bucket.backup[0].id}/deployment-evidence/${var.data_import_preserved_release_tag != "" ? var.data_import_preserved_release_tag : var.deployment_release_tag}" : "" },
         { name = "HOME_MIGRATION_EVIDENCE_KMS_KEY_ID", value = "alias/aws/s3" },
         { name = "HOME_MIGRATION_PROPERTY_TARGET_HOST", value = local.host_gateway },
         { name = "HOME_MIGRATION_PROPERTY_TARGET_PORT", value = "15432" },
@@ -128,6 +165,62 @@ locals {
         { name = "HOME_INGEST_RTMS_ALLOW_COORDINATE_PENDING_ONLY", value = "true" },
         { name = "HOME_INSIGHT_TRADE_ENABLED", value = "true" },
       ]
+    }
+    market-news-general = {
+      image_key  = "property-batch"
+      command    = []
+      entrypoint = []
+      environment = concat(local.market_news_common_environment, [
+        { name = "SPRING_BATCH_JOB_NAME", value = "marketNewsGeneralJob" },
+      ])
+    }
+    market-news-morning = {
+      image_key  = "property-batch"
+      command    = []
+      entrypoint = []
+      environment = concat(local.market_news_common_environment, [
+        { name = "SPRING_BATCH_JOB_NAME", value = "marketNewsMorningJob" },
+      ])
+    }
+    market-news-major-complex = {
+      image_key  = "property-batch"
+      command    = []
+      entrypoint = []
+      environment = concat(local.market_news_common_environment, [
+        { name = "SPRING_BATCH_JOB_NAME", value = "marketNewsMajorComplexJob" },
+      ])
+    }
+    market-news-major-selection = {
+      image_key  = "property-batch"
+      command    = []
+      entrypoint = []
+      environment = concat(local.market_news_common_environment, [
+        { name = "SPRING_BATCH_JOB_NAME", value = "marketNewsMajorSelectionJob" },
+      ])
+    }
+    market-news-retention = {
+      image_key  = "property-batch"
+      command    = []
+      entrypoint = []
+      environment = concat(local.market_news_common_environment, [
+        { name = "SPRING_BATCH_JOB_NAME", value = "marketNewsRetentionJob" },
+      ])
+    }
+    market-news-quality-sample = {
+      image_key  = "property-batch"
+      command    = []
+      entrypoint = []
+      environment = concat(local.market_news_common_environment, [
+        { name = "SPRING_BATCH_JOB_NAME", value = "marketNewsQualitySampleJob" },
+      ])
+    }
+    market-news-withdrawal = {
+      image_key  = "property-batch"
+      command    = []
+      entrypoint = []
+      environment = concat(local.market_news_common_environment, [
+        { name = "SPRING_BATCH_JOB_NAME", value = "marketNewsWithdrawalJob" },
+      ])
     }
     runtime-grants = {
       image_key  = "ops-bootstrap"
@@ -174,8 +267,12 @@ resource "aws_ecs_task_definition" "one_shot" {
   }
 
   container_definitions = jsonencode([merge({
-    name        = each.key
-    image       = var.image_uris[each.value.image_key]
+    name = each.key
+    image = (
+      each.key == "data-import-reconcile" && var.data_import_preserved_image_uri != ""
+      ? var.data_import_preserved_image_uri
+      : var.image_uris[each.value.image_key]
+    )
     essential   = true
     environment = each.value.environment
     secrets = [for name, parameter in local.one_shot_secret_parameters[each.key] : {
@@ -201,5 +298,13 @@ resource "aws_ecs_task_definition" "one_shot" {
     }, length(each.value.command) > 0 ? { command = each.value.command } : {},
   length(each.value.entrypoint) > 0 ? { entryPoint = each.value.entrypoint } : {})])
 
-  tags = { Service = each.key, WorkloadClass = "one-shot", Release = var.deployment_release_tag }
+  tags = {
+    Service       = each.key
+    WorkloadClass = "one-shot"
+    Release = (
+      each.key == "data-import-reconcile" && var.data_import_preserved_release_tag != ""
+      ? var.data_import_preserved_release_tag
+      : var.deployment_release_tag
+    )
+  }
 }

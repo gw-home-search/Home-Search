@@ -76,7 +76,7 @@ resource "aws_iam_role_policy" "backup_scheduler" {
       {
         Effect   = "Allow"
         Action   = ["ecs:RunTask"]
-        Resource = [aws_ecs_task_definition.one_shot["scheduled-backup"].arn]
+        Resource = [var.scheduled_backup_task_definition_arn != "" ? var.scheduled_backup_task_definition_arn : aws_ecs_task_definition.one_shot["scheduled-backup"].arn]
         Condition = {
           ArnEquals = { "ecs:cluster" = aws_ecs_cluster.this[0].arn }
         }
@@ -114,7 +114,7 @@ resource "aws_scheduler_schedule" "logical_backup" {
     arn      = aws_ecs_cluster.this[0].arn
     role_arn = aws_iam_role.backup_scheduler[0].arn
     ecs_parameters {
-      task_definition_arn = aws_ecs_task_definition.one_shot["scheduled-backup"].arn
+      task_definition_arn = var.scheduled_backup_task_definition_arn != "" ? var.scheduled_backup_task_definition_arn : aws_ecs_task_definition.one_shot["scheduled-backup"].arn
       launch_type         = "EC2"
       task_count          = 1
     }
@@ -187,7 +187,7 @@ resource "aws_scheduler_schedule" "rtms_daily_refresh" {
   group_name                   = aws_scheduler_schedule_group.data_refresh[0].name
   schedule_expression          = "cron(30 7 * * ? *)"
   schedule_expression_timezone = "Asia/Seoul"
-  state                        = var.backup_schedules_enabled ? "ENABLED" : "DISABLED"
+  state                        = var.rtms_refresh_schedule_enabled ? "ENABLED" : "DISABLED"
   flexible_time_window { mode = "OFF" }
   target {
     arn      = aws_ecs_cluster.this[0].arn

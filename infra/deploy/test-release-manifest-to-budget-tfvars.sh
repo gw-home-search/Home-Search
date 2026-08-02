@@ -13,6 +13,7 @@ jq -n --argjson apps "$(printf '%s\n' "${applications[@]}" | jq -Rsc 'split("\n"
   --argjson platform "$(printf '%s\n' "${platform[@]}" | jq -Rsc 'split("\n")[:-1]')" '
   def image($name): {repository:("home-search/"+$name),digest:("sha256:"+("a"*64)),uri:("123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/"+$name+"@sha256:"+("a"*64))};
   {format_version:2,tag:"v2.0.0",commit_sha:("b"*40),build_architecture:"linux/amd64",
+   build_flags:{market_news_enabled:true},
    vulnerability_critical_gate_passed:true,vulnerability_policy_gate_passed:true,
    images:(reduce $apps[] as $name ({}; .[$name]=image($name))),
    platform_images:(reduce $platform[] as $name ({}; .[$name]=image($name)))}
@@ -25,6 +26,13 @@ jq -e '
   and .deployment_release_tag == "v2.0.0"
   and .migration_artifact_s3_uri == "s3://migration-bucket/data/v2"
 ' "${tmp_dir}/release.auto.tfvars.json" >/dev/null
+
+jq '.build_flags.market_news_enabled=false' "${tmp_dir}/manifest.json" >"${tmp_dir}/news-disabled.json"
+if "${script}" "${tmp_dir}/news-disabled.json" s3://migration-bucket/data/v2 \
+  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "${tmp_dir}/news-disabled.tfvars.json" >/dev/null 2>&1; then
+  echo '상태: Fail - market news가 비활성화된 release를 허용했습니다.' >&2
+  exit 1
+fi
 
 jq '.tag="v1.0.4"' "${tmp_dir}/manifest.json" >"${tmp_dir}/old.json"
 if "${script}" "${tmp_dir}/old.json" s3://migration-bucket/data/v2 \

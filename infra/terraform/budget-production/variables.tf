@@ -79,6 +79,49 @@ variable "backup_schedules_enabled" {
   description = "Enables daily DLM and logical backup schedules only after the approved DNS cutover."
 }
 
+variable "market_news_public_enabled" {
+  type        = bool
+  default     = false
+  description = "Exposes the read-only market-news API after bootstrap and quality gates pass."
+}
+
+variable "market_news_schedules_enabled" {
+  type        = bool
+  default     = false
+  description = "Enables the four reviewed market-news Scheduler targets independently from backups."
+}
+
+variable "rtms_refresh_schedule_enabled" {
+  type        = bool
+  default     = false
+  description = "Enables the 07:30 KST RTMS refresh independently from backup schedules."
+}
+
+variable "prediction_enabled" {
+  type        = bool
+  default     = false
+  description = "Enables the property prediction client only after ML artifact and health gates pass."
+}
+
+variable "ml_service_enabled" {
+  type        = bool
+  default     = false
+  description = "Runs exactly one ML service task when the reviewed F37 model is installed."
+}
+
+variable "user_oauth_enabled_providers" {
+  type        = set(string)
+  default     = ["kakao"]
+  description = "Exact allowlist of OAuth providers enabled in user-api and secret readiness."
+  validation {
+    condition = (
+      length(var.user_oauth_enabled_providers) > 0
+      && length(setsubtract(var.user_oauth_enabled_providers, toset(["google", "kakao", "naver"]))) == 0
+    )
+    error_message = "user_oauth_enabled_providers must contain only google, kakao, and naver."
+  }
+}
+
 variable "alarm_email" {
   type        = string
   description = "Operator email subscribed to the budget-production SNS topic."
@@ -211,6 +254,78 @@ variable "application_deployment_maximum_percents" {
       && alltrue([for value in values(var.application_deployment_maximum_percents) : contains([100, 200], value)])
     )
     error_message = "application_deployment_maximum_percents may contain only known application services with values 100 or 200."
+  }
+}
+
+variable "application_service_task_definition_arns" {
+  type        = map(string)
+  default     = {}
+  description = "Exact live or release task definition ARN pins for the eight application ECS services."
+  validation {
+    condition = (
+      length(var.application_service_task_definition_arns) == 0 || (
+        toset(keys(var.application_service_task_definition_arns)) == toset([
+          "admin-api", "admin-gateway", "ai", "chat-bff", "ml", "property-api", "public-gateway", "user-api",
+        ])
+        && alltrue([for service, arn in var.application_service_task_definition_arns :
+          can(regex("^arn:aws:ecs:ap-northeast-2:[0-9]{12}:task-definition/home-search-budget-production-${service}:[1-9][0-9]*$", arn))
+        ])
+      )
+    )
+    error_message = "application_service_task_definition_arns must be empty or pin all eight application services to their exact budget-production family revisions."
+  }
+}
+
+variable "application_service_desired_counts" {
+  type        = map(number)
+  default     = {}
+  description = "Exact live desired-count pins for the eight application ECS services."
+  validation {
+    condition = (
+      length(var.application_service_desired_counts) == 0 || (
+        toset(keys(var.application_service_desired_counts)) == toset([
+          "admin-api", "admin-gateway", "ai", "chat-bff", "ml", "property-api", "public-gateway", "user-api",
+        ])
+        && alltrue([for count in values(var.application_service_desired_counts) : count >= 0 && count == floor(count)])
+      )
+    )
+    error_message = "application_service_desired_counts must be empty or pin all eight application services to non-negative integers."
+  }
+}
+
+variable "scheduled_backup_task_definition_arn" {
+  type        = string
+  default     = ""
+  description = "Optional exact live scheduled-backup task ARN preserved by incremental application rollouts."
+  validation {
+    condition = var.scheduled_backup_task_definition_arn == "" || can(regex(
+      "^arn:aws:ecs:ap-northeast-2:[0-9]{12}:task-definition/home-search-budget-production-scheduled-backup:[0-9]+$",
+      var.scheduled_backup_task_definition_arn,
+    ))
+    error_message = "scheduled_backup_task_definition_arn must be empty or the exact budget scheduled-backup revision ARN."
+  }
+}
+
+variable "data_import_preserved_image_uri" {
+  type        = string
+  default     = ""
+  description = "Optional live immutable data-import image preserved outside the incremental rollout."
+  validation {
+    condition = var.data_import_preserved_image_uri == "" || can(regex(
+      "^[0-9]{12}[.]dkr[.]ecr[.]ap-northeast-2[.]amazonaws[.]com/home-search/backup@sha256:[0-9a-f]{64}$",
+      var.data_import_preserved_image_uri,
+    ))
+    error_message = "data_import_preserved_image_uri must be empty or an immutable Seoul backup image URI."
+  }
+}
+
+variable "data_import_preserved_release_tag" {
+  type        = string
+  default     = ""
+  description = "Optional live data-import Release tag preserved outside the incremental rollout."
+  validation {
+    condition     = var.data_import_preserved_release_tag == "" || can(regex("^v[0-9]+[.][0-9]+[.][0-9]+$", var.data_import_preserved_release_tag))
+    error_message = "data_import_preserved_release_tag must be empty or an immutable SemVer tag."
   }
 }
 

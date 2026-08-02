@@ -72,7 +72,9 @@ locals {
         { name = "SPRING_DATA_REDIS_SSL_ENABLED", value = "false" },
         { name = "HOME_MAP_MARKER_CACHE_ENABLED", value = "true" },
         { name = "HOME_PLACE_KAKAO_ENABLED", value = "true" },
-        { name = "HOME_PREDICTION_ENABLED", value = "false" },
+        { name = "HOME_NEWS_PUBLIC_ENABLED", value = tostring(var.market_news_public_enabled) },
+        { name = "HOME_PREDICTION_ENABLED", value = tostring(var.prediction_enabled) },
+        { name = "HOME_PREDICTION_CLIENT_BASE_URL", value = "http://${local.host_gateway}:18085" },
         { name = "HOME_ADMIN_INTERNAL_ENABLED", value = "true" },
         { name = "HOME_ADMIN_INTERNAL_ISSUER", value = "admin-service" },
         { name = "HOME_ADMIN_INTERNAL_AUDIENCE", value = "property-data-admin" },
@@ -129,7 +131,7 @@ locals {
         { name = "USER_JWT_ACTIVE_KID", value = "budget-production-1" },
         { name = "USER_JWT_PRIVATE_KEY_PATH", value = "/run/keys/private.pem" },
         { name = "USER_JWT_ACTIVE_PUBLIC_KEY_PATH", value = "/run/keys/public.pem" },
-        { name = "HOME_USER_OAUTH_ENABLED_PROVIDERS", value = "kakao" },
+        { name = "HOME_USER_OAUTH_ENABLED_PROVIDERS", value = join(",", sort(tolist(var.user_oauth_enabled_providers))) },
       ]
     }
     ai = {
@@ -216,7 +218,7 @@ locals {
       host_port      = 18085
       cpu            = 256
       memory         = 1280
-      desired        = 0
+      desired        = var.ml_service_enabled ? 1 : 0
       readonly_root  = false
       health         = ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3)\" || exit 1"]
       environment    = [{ name = "F37_ARTIFACT_DIR", value = "/model" }]
@@ -415,11 +417,19 @@ resource "aws_ecs_task_definition" "application" {
 }
 
 resource "aws_ecs_service" "application" {
-  for_each                           = aws_ecs_task_definition.application
-  name                               = each.key
-  cluster                            = aws_ecs_cluster.this[0].id
-  task_definition                    = each.value.arn
-  desired_count                      = local.application_specs[each.key].desired
+  for_each = aws_ecs_task_definition.application
+  name     = each.key
+  cluster  = aws_ecs_cluster.this[0].id
+  task_definition = lookup(
+    var.application_service_task_definition_arns,
+    each.key,
+    each.value.arn,
+  )
+  desired_count = lookup(
+    var.application_service_desired_counts,
+    each.key,
+    local.application_specs[each.key].desired,
+  )
   launch_type                        = "EC2"
   scheduling_strategy                = "REPLICA"
   deployment_minimum_healthy_percent = 0

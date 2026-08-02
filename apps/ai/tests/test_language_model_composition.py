@@ -10,6 +10,8 @@ from ai_service.chat import (
     _apply_presentation_rollbacks,
     _answer_outcome_metric,
     _agent_outcome_metric,
+    _agentic_request,
+    _internal_axis_count,
     ConfiguredChatbotEngine,
     ChatbotProviderUnavailable,
     get_enabled_property_capabilities,
@@ -232,6 +234,15 @@ def test_agentic_and_official_web_flags_are_independent_and_fail_closed(
 
     monkeypatch.setenv("HOME_AI_OFFICIAL_WEB_SEARCH_ENABLED", "yes")
     assert get_official_web_search_enabled() is False
+
+
+def test_internal_axis_count_prevents_research_for_well_grounded_recommendations() -> None:
+    assert _internal_axis_count(
+        "송파구 20억원 이하 전용 84㎡ 단지를 거래와 교통 기준으로 추천해줘"
+    ) >= 3
+    assert _internal_axis_count("송파구 아파트 추천해줘") == 1
+    assert _agentic_request("잠실 정비사업 최신 공고를 알려줘") is True
+    assert _agentic_request("헬리오시티 최신 실거래를 알려줘") is False
 
 
 def test_presentation_rollbacks_keep_legacy_answer_and_remove_new_artifacts(

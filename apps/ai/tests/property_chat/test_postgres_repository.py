@@ -117,6 +117,7 @@ def test_complex_lookup_escapes_like_wildcards_and_applies_region(
 
     assert [record.complex_id for record in literal_wildcard] == [2]
     assert [record.complex_id for record in exact] == [1]
+    assert exact[0].parcel_id == 101
 
 
 def test_region_context_resolves_exact_province_and_district_ancestors(

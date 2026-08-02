@@ -84,9 +84,16 @@ class FactListPresenter:
             return self._present_childcare(plan, used_facts)
         if plan.capability != "complex_identity":
             return []
-        if len(used_facts) != 1:
+        fact = next(
+            (
+                item for item in used_facts
+                if item.fact_id.startswith("property-complex-")
+                and isinstance(item.payload.get("complexId"), int)
+            ),
+            None,
+        )
+        if fact is None:
             return []
-        fact = used_facts[0]
         payload = fact.payload
         complex_id = payload.get("complexId")
         display_name = payload.get("displayName")
@@ -95,16 +102,25 @@ class FactListPresenter:
         items = [FactListItem("단지명", display_name, (fact.fact_id,))]
         self._append_text(items, "지역", payload.get("regionName"), fact.fact_id)
         self._append_text(items, "주소", payload.get("address"), fact.fact_id)
-        latitude = payload.get("latitude")
-        longitude = payload.get("longitude")
-        if isinstance(latitude, int | float) and isinstance(longitude, int | float):
+        unit_count = payload.get("unitCount")
+        if isinstance(unit_count, int) and not isinstance(unit_count, bool):
             items.append(
                 FactListItem(
-                    "위치",
-                    f"{latitude:g}, {longitude:g}",
+                    "세대수",
+                    f"{unit_count:,}세대",
                     (fact.fact_id,),
                 )
             )
+        use_date = payload.get("useDate")
+        if isinstance(use_date, str):
+            try:
+                formatted_use_date = date.fromisoformat(use_date).strftime("%Y.%m.%d")
+            except ValueError:
+                formatted_use_date = None
+            if formatted_use_date is not None:
+                items.append(FactListItem(
+                    "사용승인일", formatted_use_date, (fact.fact_id,),
+                ))
         artifact = FactListArtifact(
             artifact_id=f"fact-list-complex-{complex_id}",
             title="확인된 단지 정보",
@@ -236,14 +252,23 @@ class AnswerDocument:
         selection_reason: str | None = None,
         selection_reason_fact_ids: tuple[str, ...] = (),
     ) -> AnswerDocument:
+        draft_sections = tuple(
+            AnswerSection(sentence.text.strip(), tuple(sentence.fact_ids))
+            for sentence in draft.sentences
+        )
+        if presentation is not None:
+            lead = AnswerSection(
+                presentation.headline.text.strip(),
+                tuple(presentation.headline.fact_ids),
+            )
+            sections = (lead, *draft_sections[1:])
+        else:
+            sections = draft_sections
         return cls(
             request=request,
             request_id=request_id,
             plan=plan,
-            sections=tuple(
-                AnswerSection(sentence.text.strip(), tuple(sentence.fact_ids))
-                for sentence in draft.sentences
-            ),
+            sections=sections,
             used_facts=tuple(used_facts),
             limitations=tuple(limitations),
             readiness=readiness,
@@ -419,11 +444,28 @@ class CompoundAnswerDocument:
             if failed or evidence_status == "partial"
             else "success"
         )
-        answer = " ".join(
+        ui_summary = _compound_presentation(
+            self.fragments, succeeded, failed, facts
+        )
+        compound_lead = (
+            ui_summary["headline"]["text"]
+            if isinstance(ui_summary, dict)
+            and isinstance(ui_summary.get("headline"), dict)
+            and isinstance(ui_summary["headline"].get("text"), str)
+            else None
+        )
+        successful_first = tuple(sorted(
+            self.fragments,
+            key=lambda fragment: fragment.readiness == "unavailable",
+        ))
+        detail_text = " ".join(
             section.text
-            for fragment in self.fragments
+            for fragment in successful_first
             for section in fragment.sections
         )
+        answer = (
+            f"{compound_lead} {detail_text}" if compound_lead else detail_text
+        ).strip()
         if not answer or len(answer) > 20_000:
             raise ValueError("compound answer text exceeds the public contract")
         limitations = tuple(dict.fromkeys(
@@ -472,9 +514,7 @@ class CompoundAnswerDocument:
             "conversationMemoryPatch": _conversation_memory_patch(None, facts),
             "uiActions": list(actions),
             "uiArtifacts": list(artifacts),
-            "uiSummary": _compound_presentation(
-                self.fragments, succeeded, failed, facts
-            ),
+            "uiSummary": ui_summary,
             "requestId": self.request_id,
             "citations": citations,
             "dataAsOf": data_as_of.isoformat() if data_as_of else None,
@@ -764,11 +804,13 @@ def _compound_presentation(
     if not facts:
         return None
     fact_ids = tuple(fact.fact_id for fact in facts)
-    headline = (
-        f"{len(fragments)}개 요청을 모두 확인했습니다."
-        if failed == 0
-        else f"{len(fragments)}개 중 {succeeded}개 요청을 확인했습니다."
+    successful = tuple(
+        fragment for fragment in fragments
+        if fragment.readiness != "unavailable" and fragment.presentation is not None
     )
+    if not successful:
+        return None
+    headline = _compound_lead(successful, fragments, failed)
     presentation = AnswerPresentation(
         headline=GroundedPresentationText(headline, fact_ids),
         fragment_summaries=tuple(
@@ -787,3 +829,78 @@ def _compound_presentation(
         ),
     )
     return presentation.to_public_dict(set(fact_ids))
+
+
+def _compound_lead(
+    successful: tuple[AnswerDocument, ...],
+    fragments: tuple[AnswerDocument, ...],
+    failed: int,
+) -> str:
+    by_capability = {fragment.plan.capability: fragment for fragment in successful}
+    academy = by_capability.get("academy_lookup")
+    rail = by_capability.get("rail_station_lookup")
+    if academy is not None and rail is not None:
+        facts = _deduplicate_facts((academy, rail))
+        complex_fact = next(
+            (fact for fact in facts if fact.fact_id.startswith("property-complex-")),
+            None,
+        )
+        name = (
+            complex_fact.payload.get("displayName")
+            if complex_fact is not None else academy.plan.complex_name
+        )
+        academy_scope = next(
+            (fact for fact in facts if fact.fact_id.startswith("sbiz-academy-scope-")),
+            None,
+        )
+        rail_scope = next(
+            (fact for fact in facts if fact.fact_id.startswith("rail-scope-")),
+            None,
+        )
+        academy_count = (
+            academy_scope.payload.get("matchedCount") if academy_scope else None
+        )
+        rail_count = rail_scope.payload.get("stationCount") if rail_scope else None
+        nearest = next(
+            (fact for fact in facts if fact.fact_id.startswith("rail-station-")),
+            None,
+        )
+        station_name = nearest.payload.get("stationName") if nearest else None
+        lines = nearest.payload.get("lines") if nearest else None
+        if (
+            isinstance(name, str)
+            and isinstance(academy_count, int)
+            and isinstance(rail_count, int)
+            and isinstance(station_name, str)
+        ):
+            line_text = (
+                "·".join(lines)
+                if isinstance(lines, list) and all(isinstance(line, str) for line in lines)
+                else "노선 정보"
+            )
+            return (
+                f"{name} 주변에서 학원 위치 {academy_count}곳과 가까운 철도역 "
+                f"{rail_count}곳을 확인했습니다. 가장 가까운 역은 {station_name}이며 "
+                f"{line_text}이 운행됩니다."
+            )
+    first = successful[0].presentation
+    assert first is not None
+    headline = first.headline.text
+    if failed:
+        unavailable = next(
+            fragment for fragment in fragments if fragment.readiness == "unavailable"
+        )
+        label = {
+            "academy_lookup": "학원 위치",
+            "rail_station_lookup": "가까운 역·노선",
+            "recent_trade_lookup": "최근 실거래",
+            "price_trend": "가격 흐름",
+        }.get(unavailable.plan.capability, "나머지 정보")
+        return f"{headline} 다만 {label}은 현재 확인하지 못했습니다."
+    if len(successful) == 1:
+        return headline
+    return " ".join(
+        fragment.presentation.headline.text
+        for fragment in successful
+        if fragment.presentation is not None
+    )

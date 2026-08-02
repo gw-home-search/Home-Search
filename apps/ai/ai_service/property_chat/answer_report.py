@@ -293,6 +293,13 @@ def _opening(
     primary: dict[str, object] | None,
     facts: tuple[EvidenceFact, ...],
 ) -> dict[str, object] | None:
+    if isinstance(ui_summary, dict):
+        headline = ui_summary.get("headline")
+        if isinstance(headline, dict):
+            text, raw_ids = headline.get("text"), headline.get("factIds")
+            ids = _fact_ids(raw_ids, {fact.fact_id: fact for fact in facts})
+            if isinstance(text, str) and ids:
+                return {"text": text.strip(), "factIds": list(ids)}
     if plan.capability == "recommendation" and primary is not None:
         rows = primary.get("rows") if primary.get("type") == "recommendationTable" else primary.get("cards")
         count = len(rows) if isinstance(rows, list) else 0
@@ -308,13 +315,6 @@ def _opening(
             fact.fact_id for fact in facts if fact.fact_id.startswith("criteria-scope-")
         )
         return {"text": text, "factIds": list(scope_ids or ids[:1])}
-    if isinstance(ui_summary, dict):
-        headline = ui_summary.get("headline")
-        if isinstance(headline, dict):
-            text, raw_ids = headline.get("text"), headline.get("factIds")
-            ids = _fact_ids(raw_ids, {fact.fact_id: fact for fact in facts})
-            if isinstance(text, str) and ids:
-                return {"text": text.strip(), "factIds": list(ids)}
     return None
 
 
@@ -330,6 +330,8 @@ def _basis(
     result = []
     for item in criteria[:4]:
         if not isinstance(item, dict):
+            continue
+        if item.get("key") == "representativeSelection":
             continue
         label, value = item.get("label"), item.get("value")
         ids = item.get("factIds")

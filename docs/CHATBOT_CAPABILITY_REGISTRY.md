@@ -28,7 +28,7 @@ Slice 0 종료 시점에는 챗봇 runtime이 없으므로 `지원` Capability�
 | `price_trend` | `price_trend` | 데이터 준비 중 | 과거 관찰 집계만 허용 |
 | `comparison` | `comparison` | 제한 지원 | 부동산·철도·학교/학원과 좌표 확인 대규모점포 항목 활성 |
 | `recommendation` | `recommendation` | 제한 지원 | `CRITERIA` 4개 시설 조건과 `BUDGET` 활성; 어린이집·유치원 제외 |
-| 복합 질문 | `compound_question` | 데이터 준비 중 | 하위 Capability를 독립 검증 |
+| 복합 질문 | `compound_question` | 제한 지원 | 학원+철도, 실거래+가격 흐름 등 명시적 조합을 하위 Capability별로 독립 검증 |
 | 미래 가격·주관적 학군·개인 법률 판단 | 미지원 Capability | 미지원 | 대체 가능한 근거 질문을 안내 |
 
 ## 근거 등급
@@ -67,7 +67,7 @@ Slice 0 종료 시점에는 챗봇 runtime이 없으므로 `지원` Capability�
 | `kindergarten_location` | “주변 유치원 위치” | 데이터 준비 중 | 승인된 공식 유치원 위치·운영상태 snapshot | A 또는 B | 승인 후 위치·운영상태·직선거리 | 입학 가능 여부·교육 품질; Kakao 결과를 공식 현황으로 표현 | source 계약 승인 후 정의 | 현재는 사용자 실행형 Kakao 지도 탐색만 별도 제공 |
 | `kakao_place_search` | “지금 주변 마트·카페” | 데이터 준비 중 | Kakao Local 조회 응답 | C | 검색 시점·반경·페이지 안의 장소 | 지역 전체 개수, 완전한 상권 밀도 | 요청 시각 표시 | “지정 조건에서 확인되지 않음”으로 표현 |
 | `redevelopment_official_evidence` | “정비사업 현재 단계” | 데이터 준비 중 | 지자체·국토부 allowlist 공식 문서 | D | 원문에 명시된 단계·게시일 | 사업 확정·수익성 보장 | 문서별 게시일과 확인일 표시 | 공식 원문을 확인하지 못했다고 안내 |
-| `compound_question` | “비교+학군+교통+예산” | 데이터 준비 중 | 하위 Capability 전체 | 하위 항목 중 가장 높은 요구 | 독립 검증된 하위 결과의 교집합 | 일부 실패를 전체 성공처럼 표현 | 하위 dataset별 표시 | 성공·부분·불가 항목을 분리 |
+| `compound_question` | “실거래+가격 흐름”, “학원+철도” | 제한 지원 | 현재 `지원`·`제한 지원`인 하위 Capability 조합 | 하위 항목 중 가장 높은 요구 | 각 하위 결과의 성공 fact를 보존한 결론 | 일부 실패를 전체 성공처럼 표현하거나 성공 결과를 삭제 | 하위 dataset별 표시 | 성공한 항목은 유지하고 degraded·unavailable 항목만 분리 |
 | `region_price_ranking` | “강남구 최고가 TOP 5” | 미지원 | 현재 범위에 ranking dataset 없음 | 미지원 | 실제 거래 조회 범위 안내 | 순위표·최고 지역 단정 | 해당 없음 | 단지 또는 지역의 기간별 실거래 질문 제안 |
 | `inferred_lifestyle_recommendation` | “4인 가족에게 좋은 집” | 미지원 | 사용자의 명시 조건 없음 | 미지원 | 예산·지역·면적·시설 조건 요청 | 가족 형태만으로 선호·점수 추론 | 해당 없음 | 필수 조건을 다시 질문 |
 | `future_price_prediction` | “내년에 얼마나 오를까?” | 미지원 | 없음 | 미지원 | 과거 관찰값과 한계 안내 | 상승률·가격 예측 | 해당 없음 | 과거 거래 추이 질문 제안 |

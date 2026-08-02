@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import date
 from typing import Literal
 
 from .models import EvidenceFact, QueryPlan
@@ -167,6 +168,194 @@ class PresentationBasis:
     follow_up_options: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class ResolvedAnswerContext:
+    """Verified values used to build the immutable first answer paragraph."""
+
+    capability: str
+    subject_name: str | None
+    region_name: str | None
+    address: str | None
+    start_date: date | None
+    end_date: date | None
+    exclusive_area_square_meters: float | None
+    radius_meters: int | None
+    result_facts: tuple[EvidenceFact, ...]
+    subject_fact_ids: tuple[str, ...]
+
+
+class AnswerLeadBuilder:
+    """Build a direct, grounded lead that the model is not allowed to rewrite."""
+
+    def build(
+        self,
+        *,
+        plan: QueryPlan,
+        facts: list[EvidenceFact],
+        artifacts: list[dict[str, object]],
+    ) -> GroundedPresentationText:
+        context = self.resolve(plan=plan, facts=facts)
+        fact_ids = tuple(dict.fromkeys(fact.fact_id for fact in facts))
+        if not fact_ids:
+            raise ValueError("answer lead requires verified facts")
+        text = self._text(context, artifacts, plan)
+        return GroundedPresentationText(text, fact_ids)
+
+    @staticmethod
+    def resolve(*, plan: QueryPlan, facts: list[EvidenceFact]) -> ResolvedAnswerContext:
+        subject = next(
+            (fact for fact in facts if fact.fact_id.startswith("property-complex-")),
+            None,
+        )
+        payload = subject.payload if subject is not None else {}
+        result_facts = tuple(
+            fact for fact in facts if fact is not subject
+            and not fact.fact_id.startswith("candidate-observation-")
+        )
+        return ResolvedAnswerContext(
+            capability=plan.capability,
+            subject_name=_optional_text(payload.get("displayName")) or plan.complex_name,
+            region_name=_optional_text(payload.get("regionName")) or plan.region_name,
+            address=_optional_text(payload.get("address")),
+            start_date=plan.start_date,
+            end_date=plan.end_date,
+            exclusive_area_square_meters=plan.exclusive_area_square_meters,
+            radius_meters=plan.radius_meters,
+            result_facts=result_facts,
+            subject_fact_ids=((subject.fact_id,) if subject is not None else ()),
+        )
+
+    def _text(
+        self,
+        context: ResolvedAnswerContext,
+        artifacts: list[dict[str, object]],
+        plan: QueryPlan,
+    ) -> str:
+        name = context.subject_name or "요청한 단지"
+        if context.capability == "complex_identity":
+            location = context.address or context.region_name
+            return (
+                f"{name}{_topic_particle(name)} {location}에 있습니다."
+                if location else f"{name}의 검증된 위치 정보는 현재 확인할 수 없습니다."
+            )
+        if context.capability == "recent_trade_lookup":
+            trades = [
+                fact for fact in context.result_facts
+                if fact.fact_id.startswith("property-trade-")
+            ]
+            condition = _condition_text(context)
+            if not trades:
+                return f"{name}의 {condition}에서는 실거래가 0건으로 확인됐습니다."
+            latest = trades[0]
+            payload = latest.payload
+            date_text = payload.get("dealDate")
+            area = payload.get("exclusiveAreaSquareMeters")
+            amount = payload.get("dealAmountTenThousandKrw")
+            floor = payload.get("floor")
+            details = []
+            if isinstance(date_text, str):
+                details.append(date_text)
+            if isinstance(area, int | float) and not isinstance(area, bool):
+                details.append(f"전용 {area:g}㎡")
+            if isinstance(amount, int) and not isinstance(amount, bool):
+                details.append(_krw(amount))
+            if isinstance(floor, int) and not isinstance(floor, bool):
+                details.append(f"{floor}층")
+            latest_text = (
+                f" 가장 최근 거래는 {', '.join(details)}입니다." if details else ""
+            )
+            return (
+                f"{name}의 {condition} 실거래 {len(trades)}건을 확인했습니다."
+                f"{latest_text}"
+            )
+        if context.capability == "price_trend":
+            trends = [
+                fact for fact in context.result_facts
+                if fact.fact_id.startswith("property-trend-")
+            ]
+            condition = _condition_text(context)
+            if not trends:
+                return f"{name}의 {condition}에서는 월별 가격 관찰값이 0건으로 확인됐습니다."
+            total = sum(
+                int(fact.payload["tradeCount"])
+                for fact in trends
+                if isinstance(fact.payload.get("tradeCount"), int)
+                and not isinstance(fact.payload.get("tradeCount"), bool)
+            )
+            latest = trends[-1].payload.get("averageAmountTenThousandKrw")
+            latest_text = _krw(latest) if isinstance(latest, int) else "확인 불가"
+            return (
+                f"{name}의 {condition} 월별 관찰값은 {len(trends)}개월·총 {total}건입니다. "
+                f"최근 관찰월 평균은 {latest_text}입니다."
+            )
+        if context.capability == "academy_lookup":
+            return _facility_lead(context, "학원 위치", "facilityName")
+        if context.capability == "rail_station_lookup":
+            return _rail_lead(context)
+        if context.capability == "school_location":
+            return _facility_lead(context, "운영 학교", "schoolName")
+        if context.capability == "retail_location":
+            return _facility_lead(context, "대규모점포", "facilityName")
+        if context.capability == "childcare_lookup":
+            return _facility_lead(context, "어린이집", "centerName")
+        if context.capability == "comparison":
+            table = next(
+                (item for item in artifacts if item.get("type") == "comparisonTable"),
+                None,
+            )
+            columns = table.get("columns") if isinstance(table, dict) else None
+            rows = table.get("rows") if isinstance(table, dict) else None
+            names = [
+                column.get("label") for column in columns
+                if isinstance(column, dict) and isinstance(column.get("label"), str)
+            ] if isinstance(columns, list) else list(plan.complex_names)
+            difference = None
+            if isinstance(rows, list):
+                for row in rows:
+                    if not isinstance(row, dict) or not isinstance(row.get("label"), str):
+                        continue
+                    cells = row.get("cells")
+                    available = [
+                        cell for cell in cells
+                        if isinstance(cell, dict) and cell.get("availability") == "available"
+                    ] if isinstance(cells, list) else []
+                    if len(available) >= 2 and available[0].get("value") != available[1].get("value"):
+                        difference = (
+                            f"{row['label']}{_topic_particle(row['label'])} "
+                            f"{names[0]} {available[0].get('value')}, "
+                            f"{names[1]} {available[1].get('value')}"
+                        )
+                        break
+            conditions = _condition_text(context)
+            pair = "와 ".join(str(item) for item in names[:2]) or name
+            return (
+                f"{conditions}에서 {pair}를 비교하면 {difference}입니다."
+                if difference else f"{conditions}에서 {pair}의 검증 가능한 항목을 비교했습니다."
+            )
+        if context.capability == "recommendation":
+            table = next(
+                (item for item in artifacts if item.get("type") in {
+                    "recommendationTable", "recommendationCards",
+                }),
+                None,
+            )
+            rows = (
+                table.get("rows")
+                if isinstance(table, dict) and table.get("type") == "recommendationTable"
+                else table.get("cards") if isinstance(table, dict) else None
+            )
+            first = rows[0] if isinstance(rows, list) and rows else None
+            first_name = first.get("complexName") if isinstance(first, dict) else None
+            count = len(rows) if isinstance(rows, list) else 0
+            scope = context.region_name or name
+            return (
+                f"{scope} 조건을 적용해 {count}곳을 확인했으며 먼저 볼 곳은 {first_name}입니다."
+                if isinstance(first_name, str) and count
+                else f"{scope} 조건에서 검증된 후보를 확인했습니다."
+            )
+        return f"{name}의 요청 조건에서 검증된 정보를 확인했습니다."
+
+
 class PresentationAssembler:
     def present(
         self,
@@ -179,36 +368,49 @@ class PresentationAssembler:
         if readiness == "unavailable" or not used_facts:
             return None, artifacts
         fact_ids = tuple(fact.fact_id for fact in used_facts)
+        lead = AnswerLeadBuilder().build(
+            plan=plan, facts=used_facts, artifacts=artifacts,
+        )
         if plan.capability == "complex_identity":
-            return self._identity(plan, used_facts), artifacts
+            return self._identity(plan, used_facts, lead), artifacts
         if plan.capability == "recent_trade_lookup":
-            artifact = _trade_table(used_facts, plan)
-            return self._trade(plan, used_facts), [*artifacts, *([artifact] if artifact else [])]
+            artifact = _trade_table([
+                fact for fact in used_facts
+                if fact.fact_id.startswith("property-trade-")
+            ], plan)
+            return self._trade(plan, used_facts, lead), [*artifacts, *([artifact] if artifact else [])]
         if plan.capability == "price_trend":
-            artifact = _trend_table(used_facts, plan)
-            return self._trend(plan, used_facts), [*artifacts, *([artifact] if artifact else [])]
+            artifact = _trend_table([
+                fact for fact in used_facts
+                if fact.fact_id.startswith("property-trend-")
+            ], plan)
+            return self._trend(plan, used_facts, lead), [*artifacts, *([artifact] if artifact else [])]
         if plan.capability == "comparison":
-            return self._comparison(plan, used_facts, artifacts), artifacts
+            return self._comparison(plan, used_facts, artifacts, lead), artifacts
         if plan.capability == "recommendation":
             if any(item.get("type") == "recommendationTable" for item in artifacts):
-                return self._criteria_recommendation(plan, used_facts, artifacts), artifacts
-            return self._recommendation(plan, used_facts), artifacts
+                return self._criteria_recommendation(
+                    plan, used_facts, artifacts, lead,
+                ), artifacts
+            return self._recommendation(plan, used_facts, lead), artifacts
         presentation = AnswerPresentation(
             scope_notice=ScopeNotice(
                 f"‘{plan.complex_name}’ 단지를 기준으로 확인했습니다.", fact_ids
             ),
-            headline=GroundedPresentationText(
-                "요청한 범위에서 확인된 정보를 정리했습니다.", fact_ids
-            ),
+            headline=lead,
             criteria=_reference_criteria(plan, fact_ids),
             interpretations=(),
-            follow_up=FollowUpPrompt("반경이나 시설 조건을 바꿔 다시 확인할 수 있습니다."),
+            follow_up=_follow_up(plan, used_facts),
         )
         reference_artifact = _reference_fact_list(plan, used_facts)
         return presentation, [*artifacts, *([reference_artifact] if reference_artifact else [])]
 
     @staticmethod
-    def _identity(plan: QueryPlan, facts: list[EvidenceFact]) -> AnswerPresentation:
+    def _identity(
+        plan: QueryPlan,
+        facts: list[EvidenceFact],
+        lead: GroundedPresentationText,
+    ) -> AnswerPresentation:
         fact = facts[0]
         display_name = fact.payload.get("displayName")
         if not isinstance(display_name, str) or not display_name.strip():
@@ -218,25 +420,22 @@ class PresentationAssembler:
                 f"‘{plan.complex_name}’ 단지를 기준으로 확인했습니다.",
                 (fact.fact_id,),
             ),
-            headline=GroundedPresentationText(
-                f"{display_name}의 확인된 단지 정보를 정리했습니다.",
-                (fact.fact_id,),
-            ),
-            follow_up=FollowUpPrompt(
-                "최근 실거래, 가격 흐름 또는 주변 시설을 이어서 확인할 수 있습니다."
-            ),
+            headline=lead,
+            follow_up=_follow_up(plan, facts),
         )
 
     @staticmethod
-    def _trade(plan: QueryPlan, facts: list[EvidenceFact]) -> AnswerPresentation:
+    def _trade(
+        plan: QueryPlan,
+        facts: list[EvidenceFact],
+        lead: GroundedPresentationText,
+    ) -> AnswerPresentation:
         ids = tuple(fact.fact_id for fact in facts)
         return AnswerPresentation(
             scope_notice=ScopeNotice(
                 f"‘{plan.complex_name}’ 단지의 실거래를 기준으로 확인했습니다.", ids
             ),
-            headline=GroundedPresentationText(
-                f"요청한 조건에서 최근 실거래 {len(facts)}건을 확인했습니다.", ids
-            ),
+            headline=lead,
             criteria=_trade_criteria(plan, ids),
             interpretations=(Interpretation(
                 "OBSERVED_TRADES",
@@ -244,19 +443,21 @@ class PresentationAssembler:
                 "표에 표시된 거래는 현재 데이터 기준으로 확인된 신고 거래입니다.",
                 ids,
             ),),
-            follow_up=FollowUpPrompt("기간이나 전용면적을 바꿔 다시 확인할 수 있습니다."),
+            follow_up=_follow_up(plan, facts),
         )
 
     @staticmethod
-    def _trend(plan: QueryPlan, facts: list[EvidenceFact]) -> AnswerPresentation:
+    def _trend(
+        plan: QueryPlan,
+        facts: list[EvidenceFact],
+        lead: GroundedPresentationText,
+    ) -> AnswerPresentation:
         ids = tuple(fact.fact_id for fact in facts)
         return AnswerPresentation(
             scope_notice=ScopeNotice(
                 f"‘{plan.complex_name}’ 단지의 월별 거래 관찰값을 기준으로 확인했습니다.", ids
             ),
-            headline=GroundedPresentationText(
-                f"요청한 기간에서 월별 관찰값 {len(facts)}개를 정리했습니다.", ids
-            ),
+            headline=lead,
             criteria=_trade_criteria(plan, ids),
             interpretations=(Interpretation(
                 "OBSERVED_TREND",
@@ -264,7 +465,7 @@ class PresentationAssembler:
                 "월별 평균·최솟값·최댓값과 거래 수를 과거 관찰값으로 비교할 수 있습니다.",
                 ids,
             ),),
-            follow_up=FollowUpPrompt("기간이나 전용면적을 바꿔 과거 관찰값을 다시 확인할 수 있습니다."),
+            follow_up=_follow_up(plan, facts),
         )
 
     @staticmethod
@@ -272,9 +473,9 @@ class PresentationAssembler:
         plan: QueryPlan,
         facts: list[EvidenceFact],
         artifacts: list[dict[str, object]],
+        lead: GroundedPresentationText,
     ) -> AnswerPresentation:
         ids = tuple(fact.fact_id for fact in facts)
-        count = len(plan.complex_names)
         interpretations: list[Interpretation] = []
         table = next((item for item in artifacts if item.get("type") == "comparisonTable"), None)
         if table is not None:
@@ -301,24 +502,24 @@ class PresentationAssembler:
                         row_ids,
                     ))
         return AnswerPresentation(
-            headline=GroundedPresentationText(
-                f"동일 기준으로 {count}개 단지의 항목별 차이를 정리했습니다.", ids
-            ),
+            headline=lead,
             criteria=_trade_criteria(plan, ids),
             interpretations=tuple(interpretations[:3]),
-            follow_up=FollowUpPrompt("가격·교통·시설 중 중요하게 보는 조건을 알려주면 해당 항목부터 설명할 수 있습니다."),
+            follow_up=_follow_up(plan, facts),
         )
 
     @staticmethod
-    def _recommendation(plan: QueryPlan, facts: list[EvidenceFact]) -> AnswerPresentation:
+    def _recommendation(
+        plan: QueryPlan,
+        facts: list[EvidenceFact],
+        lead: GroundedPresentationText,
+    ) -> AnswerPresentation:
         ids = tuple(fact.fact_id for fact in facts)
         return AnswerPresentation(
             scope_notice=ScopeNotice(
                 f"‘{plan.region_name}’ 지역과 사용자가 지정한 조건을 기준으로 확인했습니다.", ids
             ) if plan.region_name else None,
-            headline=GroundedPresentationText(
-                "최근 거래와 확인 가능한 생활 조건으로 후보를 정리했습니다.", ids
-            ),
+            headline=lead,
             criteria=_recommendation_criteria(plan, ids),
             interpretations=(Interpretation(
                 "CONDITION_FIT",
@@ -326,9 +527,7 @@ class PresentationAssembler:
                 "최근 거래와 단지·생활 인프라의 확인 가능한 수치를 함께 비교했습니다.",
                 ids,
             ),),
-            follow_up=FollowUpPrompt(
-                "상위 후보의 최근 실거래나 교육·교통 차이를 이어서 비교할 수 있어요."
-            ),
+            follow_up=_follow_up(plan, facts),
         )
 
     @staticmethod
@@ -336,6 +535,7 @@ class PresentationAssembler:
         plan: QueryPlan,
         facts: list[EvidenceFact],
         artifacts: list[dict[str, object]],
+        lead: GroundedPresentationText,
     ) -> AnswerPresentation:
         ids = tuple(fact.fact_id for fact in facts)
         scope_fact = next(
@@ -350,12 +550,6 @@ class PresentationAssembler:
             None,
         )
         rows = table.get("rows", []) if isinstance(table, dict) else []
-        row_count = len(rows) if isinstance(rows, list) else 0
-        headline = (
-            f"요청한 조건을 적용한 후보 {row_count}곳을 정리했습니다."
-            if row_count > 1
-            else "요청한 조건에서 확인된 후보를 정리했습니다."
-        )
         if plan.recommendation_mode == "BUDGET":
             criteria = list(_recommendation_criteria(plan, ids))
         else:
@@ -417,13 +611,57 @@ class PresentationAssembler:
             scope_notice=ScopeNotice(
                 f"‘{scope_label}’ 기준으로 해석했습니다.", (scope_fact.fact_id,)
             ),
-            headline=GroundedPresentationText(headline, ids),
+            headline=lead,
             criteria=tuple(criteria[:8]),
             interpretations=tuple(interpretations),
-            follow_up=FollowUpPrompt(
-                "상위 후보의 최근 실거래를 보거나 교육·교통 기준으로 다시 정렬할 수 있어요."
-            ),
+            follow_up=_follow_up(plan, facts),
         )
+
+
+def _follow_up(plan: QueryPlan, facts: list[EvidenceFact]) -> FollowUpPrompt:
+    subject = next(
+        (
+            fact.payload.get("displayName")
+            for fact in facts
+            if fact.fact_id.startswith("property-complex-")
+            and isinstance(fact.payload.get("displayName"), str)
+        ),
+        None,
+    )
+    name = subject or plan.complex_name or plan.region_name or "요청한 조건"
+    area = (
+        f" 전용 {plan.exclusive_area_square_meters:g}㎡"
+        if plan.exclusive_area_square_meters is not None else ""
+    )
+    by_capability = {
+        "complex_identity": (
+            f"{name}{area} 최근 실거래 5건을 알려줘",
+            f"{name}{area} 최근 1년 가격 흐름과 거래량을 보여줘",
+            f"{name} 주변 학원 위치와 가까운 역·노선을 알려줘",
+        ),
+        "recent_trade_lookup": (
+            f"{name}{area} 최근 1년 가격 흐름과 거래량을 보여줘",
+            f"{name} 위치와 세대수·사용승인일을 알려줘",
+            f"{name} 주변 학원 위치와 가까운 역·노선을 알려줘",
+        ),
+        "price_trend": (
+            f"{name}{area} 최근 실거래 5건을 알려줘",
+            f"{name} 위치와 세대수·사용승인일을 알려줘",
+        ),
+        "comparison": (
+            "두 단지의 최근 실거래를 같은 면적으로 비교해줘",
+            "두 단지의 학원과 역 접근성을 비교해줘",
+        ),
+        "recommendation": (
+            "첫 번째 후보의 최근 실거래를 알려줘",
+            "상위 후보의 학원과 역 접근성을 비교해줘",
+        ),
+    }
+    prompts = by_capability.get(plan.capability, (
+        f"{name} 주변 반경을 넓혀 다시 확인해줘",
+        f"{name} 위치와 세대수·사용승인일을 알려줘",
+    ))
+    return FollowUpPrompt(" · ".join(dict.fromkeys(prompts)))
 
 
 def _criteria_candidate_interpretation(
@@ -458,6 +696,109 @@ def _criteria_candidate_interpretation(
     if isinstance(value, int):
         return label, f"{name}: {label} 기준 직선거리 {value:,}m로 확인됐습니다."
     return label, f"{name}: {label} 관찰값이 확인된 후보입니다."
+
+
+def _optional_text(value: object) -> str | None:
+    return value.strip() if isinstance(value, str) and value.strip() else None
+
+
+def _topic_particle(value: str) -> str:
+    last = value[-1]
+    code = ord(last)
+    return "은" if 0xAC00 <= code <= 0xD7A3 and (code - 0xAC00) % 28 else "는"
+
+
+def _subject_particle(value: str) -> str:
+    last = value[-1]
+    code = ord(last)
+    return "이" if 0xAC00 <= code <= 0xD7A3 and (code - 0xAC00) % 28 else "가"
+
+
+def _condition_text(context: ResolvedAnswerContext) -> str:
+    parts: list[str] = []
+    if context.start_date is not None and context.end_date is not None:
+        parts.append(f"{context.start_date.isoformat()}~{context.end_date.isoformat()}")
+    if context.exclusive_area_square_meters is not None:
+        parts.append(f"전용 {context.exclusive_area_square_meters:g}㎡")
+    return "·".join(parts) if parts else "요청 조건"
+
+
+def _krw(amount_ten_thousand_krw: int) -> str:
+    eok, manwon = divmod(amount_ten_thousand_krw, 10_000)
+    if eok and manwon:
+        return f"{eok:,}억 {manwon:,}만원"
+    if eok:
+        return f"{eok:,}억원"
+    return f"{manwon:,}만원"
+
+
+def _facility_lead(
+    context: ResolvedAnswerContext,
+    facility_label: str,
+    name_key: str,
+) -> str:
+    name = context.subject_name or "요청한 단지"
+    facilities = [
+        fact for fact in context.result_facts
+        if isinstance(fact.payload.get(name_key), str)
+        and isinstance(fact.payload.get("distanceMeters"), int)
+    ]
+    radius = (
+        f" 중심 {context.radius_meters:,}m에서"
+        if context.radius_meters else " 주변에서"
+    )
+    if not facilities:
+        verified_zero = any(
+            fact.payload.get("verifiedZero") is True
+            for fact in context.result_facts
+        )
+        if verified_zero:
+            return (
+                f"{name}{radius} {facility_label}{_subject_particle(facility_label)} "
+                "0곳으로 확인됐습니다."
+            )
+        return f"{name}의 {facility_label}은 현재 검증 가능한 근거가 없어 답할 수 없습니다."
+    nearest = min(
+        facilities,
+        key=lambda fact: int(fact.payload["distanceMeters"]),
+    )
+    nearest_name = nearest.payload[name_key]
+    distance = nearest.payload["distanceMeters"]
+    return (
+        f"{name}{radius} {facility_label} {len(facilities)}곳을 확인했습니다. "
+        f"가장 가까운 곳은 {nearest_name}, 직선거리 {distance:,}m입니다."
+    )
+
+
+def _rail_lead(context: ResolvedAnswerContext) -> str:
+    name = context.subject_name or "요청한 단지"
+    stations = [
+        fact for fact in context.result_facts
+        if isinstance(fact.payload.get("stationName"), str)
+        and isinstance(fact.payload.get("distanceMeters"), int)
+    ]
+    radius = (
+        f" 중심 {context.radius_meters:,}m에서"
+        if context.radius_meters else " 주변에서"
+    )
+    if not stations:
+        return f"{name}의 가까운 철도역·노선은 현재 검증 가능한 근거가 없어 답할 수 없습니다."
+    nearest = min(
+        stations,
+        key=lambda fact: int(fact.payload["distanceMeters"]),
+    )
+    station_name = nearest.payload["stationName"]
+    distance = nearest.payload["distanceMeters"]
+    lines = nearest.payload.get("lines")
+    line_text = (
+        "·".join(lines)
+        if isinstance(lines, list) and lines and all(isinstance(line, str) for line in lines)
+        else "노선 정보 확인 불가"
+    )
+    return (
+        f"{name}{radius} 철도역 {len(stations)}곳을 확인했습니다. 가장 가까운 역은 "
+        f"{station_name}, 직선거리 {distance:,}m이며 {line_text}이 운행됩니다."
+    )
 
 
 def _trade_criteria(plan: QueryPlan, fact_ids: tuple[str, ...]) -> tuple[AppliedCriterion, ...]:

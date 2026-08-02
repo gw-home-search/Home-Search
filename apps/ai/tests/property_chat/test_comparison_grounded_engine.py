@@ -191,7 +191,7 @@ def _query(
     academy_repository=None,
     childcare_repository=None,
     answer_first_enabled: bool = False,
-    question: str = "잠실엘스와 헬리오시티 84㎡ 비교",
+    question: str = "잠실엘스와 헬리오시티 전용 84㎡ 최근 실거래를 비교해줘",
 ):
     property_repository = property_repository or PropertyRepository()
     rail_repository = None if without_references else rail_repository or RailRepository()
@@ -214,6 +214,53 @@ def _query(
         request_id="request-comparison",
     ))
     return response, property_repository, rail_repository, retail_repository
+
+
+def test_mapo_complex_information_comparison_example_runs_through_engine() -> None:
+    names = ("마포래미안푸르지오1단지", "마포래미안푸르지오4단지")
+
+    class MapoRepository(PropertyRepository):
+        def __init__(self) -> None:
+            super().__init__()
+            self.complexes = {
+                names[0]: (_complex(601, names[0], 37.55, 126.95),),
+                names[1]: (_complex(604, names[1], 37.56, 126.96),),
+            }
+
+        def find_complexes_batch(self, requested_names, region_name, limit_per_name):
+            self.batch_lookup_calls += 1
+            assert (requested_names, region_name, limit_per_name) == (names, None, 6)
+            return self.complexes
+
+        def recent_trades_batch(self, ids, start, end, area, limit):
+            self.batch_trade_calls += 1
+            assert (ids, area, limit) == ((601, 604), None, 3)
+            return {
+                601: (TradeRecord(6011, 601, end, 180_000, 84.0, 10),),
+                604: (TradeRecord(6041, 604, end, 175_000, 84.0, 8),),
+            }
+
+    class MapoLanguageModel(LanguageModel):
+        async def plan_query(self, _request):
+            return QueryPlan(
+                capability="comparison", complex_name=names[0],
+                complex_names=names,
+            )
+
+    response, *_ = _query(
+        model=MapoLanguageModel(), property_repository=MapoRepository(),
+        without_references=True, answer_first_enabled=True,
+        question="마포래미안푸르지오1단지와 4단지를 세대수·사용승인일로 비교해줘",
+    )
+
+    assert response["success"] is True
+    assert all(name in response["uiSummary"]["headline"]["text"] for name in names)
+    table = next(
+        artifact for artifact in response["uiArtifacts"]
+        if artifact["type"] == "comparisonTable"
+    )
+    assert [column["label"] for column in table["columns"]] == list(names)
+    assert {row["key"] for row in table["rows"]} >= {"unitCount", "useDate"}
 
 
 def test_comparison_uses_batch_queries_and_keeps_partial_price_cells() -> None:

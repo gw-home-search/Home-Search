@@ -269,11 +269,7 @@ class QueryPlanBundle:
             merged[plan.capability] = (
                 plan if existing is None else _merge_duplicate_plan(existing, plan)
             )
-        object.__setattr__(self, "fragments", tuple(
-            merged[capability]
-            for capability in CAPABILITY_EXECUTION_ORDER
-            if capability in merged
-        ))
+        object.__setattr__(self, "fragments", tuple(merged.values()))
 
 
 def _merge_duplicate_plan(left: QueryPlan, right: QueryPlan) -> QueryPlan:

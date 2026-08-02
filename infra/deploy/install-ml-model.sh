@@ -9,6 +9,18 @@ owner="${4:-10001:10001}"
 expected_version='deployment__F37_monthly_anchor_prev3_rolling_huber_010'
 expected_names='["_SUCCESS","eval_metrics.csv","feature_schema.json","keras_model.keras","metadata.json","numeric_medians.json","sample_input.json"]'
 
+sha256_file() {
+  local path="$1"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "${path}" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "${path}" | awk '{print $1}'
+  else
+    echo '상태: Fail - SHA-256 checksum command가 없습니다.' >&2
+    return 127
+  fi
+}
+
 [[ -f "${manifest}" && ! -L "${manifest}" && -d "${source_dir}" && ! -L "${source_dir}" ]]
 [[ "${target_dir}" == /* && "${target_dir}" != / && "${target_dir}" != /srv && "${target_dir}" != /srv/home-search ]]
 jq -e --arg version "${expected_version}" --argjson names "${expected_names}" '
@@ -23,7 +35,7 @@ while IFS= read -r name; do
   path="${source_dir}/${name}"
   [[ -f "${path}" && ! -L "${path}" ]] || { echo "상태: Fail - regular model file이 아닙니다: ${name}" >&2; exit 1; }
   expected="$(jq -er --arg name "${name}" '.files[$name]' "${manifest}")"
-  actual="$(shasum -a 256 "${path}" | awk '{print $1}')"
+  actual="$(sha256_file "${path}")"
   [[ "${actual}" == "${expected}" ]] || { echo "상태: Fail - model checksum 불일치: ${name}" >&2; exit 1; }
 done < <(jq -r '.files | keys[]' "${manifest}")
 

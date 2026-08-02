@@ -50,7 +50,7 @@ locals {
     "events:DeleteRule", "events:PutRule", "events:PutTargets", "events:RemoveTargets", "events:TagResource", "events:UntagResource",
     "logs:CreateLogGroup", "logs:DeleteLogGroup", "logs:DeleteMetricFilter", "logs:PutMetricFilter", "logs:PutRetentionPolicy", "logs:TagResource", "logs:UntagResource",
     "sns:CreateTopic", "sns:DeleteTopic", "sns:SetTopicAttributes", "sns:Subscribe", "sns:TagResource", "sns:Unsubscribe", "sns:UntagResource",
-    "ssm:AddTagsToResource", "ssm:CreateAssociation", "ssm:CreateDocument", "ssm:DeleteAssociation", "ssm:DeleteDocument", "ssm:DeleteParameter", "ssm:PutParameter", "ssm:RemoveTagsFromResource", "ssm:UpdateAssociation", "ssm:UpdateDocument",
+    "ssm:AddTagsToResource", "ssm:CreateAssociation", "ssm:CreateDocument", "ssm:DeleteAssociation", "ssm:DeleteDocument", "ssm:DeleteParameter", "ssm:PutParameter", "ssm:RemoveTagsFromResource", "ssm:UpdateAssociation",
   ]
   budget_apply_explicit_deny_actions = [
     "ec2:DeleteVolume", "ec2:DetachVolume", "s3:DeleteBucket", "ssm:DeleteParameter",
@@ -331,6 +331,36 @@ resource "aws_iam_policy" "github_budget_apply_schedules" {
   }
 }
 
+resource "aws_iam_policy" "github_budget_apply_ssm_documents" {
+  name = "home-search-budget-production-ssm-documents"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ManageBudgetMlModelInstallerDocument"
+        Effect = "Allow"
+        Action = ["ssm:UpdateDocument", "ssm:UpdateDocumentDefaultVersion"]
+        Resource = [
+          "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:document/home-search-budget-production-install-ml-model",
+        ]
+      },
+      {
+        Sid    = "DenyCrossEnvironmentSsmDocumentMutation"
+        Effect = "Deny"
+        Action = ["ssm:UpdateDocument", "ssm:UpdateDocumentDefaultVersion"]
+        NotResource = [
+          "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:document/home-search-budget-production-install-ml-model",
+        ]
+      },
+    ]
+  })
+  tags = {
+    Project     = "home-search"
+    Environment = "budget-production"
+    ManagedBy   = "terraform"
+  }
+}
+
 resource "aws_iam_role_policy_attachment" "github_budget_apply_regional" {
   role       = aws_iam_role.github_budget_production_apply.name
   policy_arn = aws_iam_policy.github_budget_apply_regional.arn
@@ -346,12 +376,18 @@ resource "aws_iam_role_policy_attachment" "github_budget_apply_schedules" {
   policy_arn = aws_iam_policy.github_budget_apply_schedules.arn
 }
 
+resource "aws_iam_role_policy_attachment" "github_budget_apply_ssm_documents" {
+  role       = aws_iam_role.github_budget_production_apply.name
+  policy_arn = aws_iam_policy.github_budget_apply_ssm_documents.arn
+}
+
 resource "aws_iam_role_policy" "github_budget_apply" {
   name = "budget-production-reviewed-apply"
   role = aws_iam_role.github_budget_production_apply.id
   depends_on = [
     aws_iam_role_policy_attachment.github_budget_apply_regional,
     aws_iam_role_policy_attachment.github_budget_apply_service_linked_roles,
+    aws_iam_role_policy_attachment.github_budget_apply_ssm_documents,
   ]
   policy = jsonencode({
     Version = "2012-10-17"
@@ -464,7 +500,7 @@ resource "aws_iam_role_policy" "github_budget_apply" {
       {
         Sid    = "DenyCrossEnvironmentControlPlaneMutation"
         Effect = "Deny"
-        Action = ["cloudwatch:DeleteAlarms", "cloudwatch:PutMetricAlarm", "logs:CreateLogGroup", "logs:DeleteLogGroup", "logs:DeleteMetricFilter", "logs:PutMetricFilter", "logs:PutRetentionPolicy", "logs:TagResource", "logs:UntagResource", "events:DeleteRule", "events:PutRule", "events:PutTargets", "events:RemoveTargets", "events:TagResource", "events:UntagResource", "sns:CreateTopic", "sns:DeleteTopic", "sns:SetTopicAttributes", "sns:Subscribe", "sns:TagResource", "sns:Unsubscribe", "sns:UntagResource", "ssm:AddTagsToResource", "ssm:CreateAssociation", "ssm:CreateDocument", "ssm:DeleteAssociation", "ssm:DeleteDocument", "ssm:DeleteParameter", "ssm:PutParameter", "ssm:RemoveTagsFromResource", "ssm:UpdateAssociation", "ssm:UpdateDocument"]
+        Action = ["cloudwatch:DeleteAlarms", "cloudwatch:PutMetricAlarm", "logs:CreateLogGroup", "logs:DeleteLogGroup", "logs:DeleteMetricFilter", "logs:PutMetricFilter", "logs:PutRetentionPolicy", "logs:TagResource", "logs:UntagResource", "events:DeleteRule", "events:PutRule", "events:PutTargets", "events:RemoveTargets", "events:TagResource", "events:UntagResource", "sns:CreateTopic", "sns:DeleteTopic", "sns:SetTopicAttributes", "sns:Subscribe", "sns:TagResource", "sns:Unsubscribe", "sns:UntagResource", "ssm:AddTagsToResource", "ssm:CreateAssociation", "ssm:CreateDocument", "ssm:DeleteAssociation", "ssm:DeleteDocument", "ssm:DeleteParameter", "ssm:PutParameter", "ssm:RemoveTagsFromResource", "ssm:UpdateAssociation"]
         NotResource = [
           "arn:aws:cloudwatch:${var.aws_region}:${data.aws_caller_identity.current.account_id}:alarm:home-search-budget-production-*",
           "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*",

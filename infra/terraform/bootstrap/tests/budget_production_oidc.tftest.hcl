@@ -170,6 +170,33 @@ run "budget_roles_are_separated_and_state_isolated" {
 
   assert {
     condition = (
+      !contains(local.budget_apply_actions, "ssm:UpdateDocument")
+      && !contains(local.budget_apply_actions, "ssm:UpdateDocumentDefaultVersion")
+      && aws_iam_role_policy_attachment.github_budget_apply_ssm_documents.role == aws_iam_role.github_budget_production_apply.name
+      && anytrue([
+        for statement in jsondecode(aws_iam_policy.github_budget_apply_ssm_documents.policy).Statement :
+        statement.Sid == "ManageBudgetMlModelInstallerDocument"
+        && toset(statement.Action) == toset([
+          "ssm:UpdateDocument",
+          "ssm:UpdateDocumentDefaultVersion",
+        ])
+        && statement.Resource == ["arn:aws:ssm:ap-northeast-2:123456789012:document/home-search-budget-production-install-ml-model"]
+      ])
+      && anytrue([
+        for statement in jsondecode(aws_iam_policy.github_budget_apply_ssm_documents.policy).Statement :
+        statement.Sid == "DenyCrossEnvironmentSsmDocumentMutation"
+        && toset(statement.Action) == toset([
+          "ssm:UpdateDocument",
+          "ssm:UpdateDocumentDefaultVersion",
+        ])
+        && statement.NotResource == ["arn:aws:ssm:ap-northeast-2:123456789012:document/home-search-budget-production-install-ml-model"]
+      ])
+    )
+    error_message = "Budget apply must set the reviewed SSM document default version while retaining the cross-environment explicit deny boundary."
+  }
+
+  assert {
+    condition = (
       contains(local.budget_read_actions, "scheduler:GetSchedule")
       && contains(local.budget_read_actions, "scheduler:GetScheduleGroup")
       && contains(local.budget_read_actions, "scheduler:ListTagsForResource")
@@ -429,6 +456,7 @@ run "budget_roles_are_separated_and_state_isolated" {
       && length(aws_iam_policy.github_budget_apply_regional.policy) <= 6144
       && length(aws_iam_policy.github_budget_apply_service_linked_roles.policy) <= 6144
       && length(aws_iam_policy.github_budget_apply_schedules.policy) <= 6144
+      && length(aws_iam_policy.github_budget_apply_ssm_documents.policy) <= 6144
       && aws_iam_role_policy_attachment.github_budget_apply_regional.role == aws_iam_role.github_budget_production_apply.name
       && one(jsondecode(aws_iam_policy.github_budget_apply_regional.policy).Statement).Sid == "ManageTaggedBudgetResources"
       && one(jsondecode(aws_iam_policy.github_budget_apply_regional.policy).Statement).Action == local.budget_apply_actions

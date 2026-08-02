@@ -10,6 +10,11 @@ cleanup() { find "${tmp_dir}" -depth -delete 2>/dev/null || true; }
 trap cleanup EXIT
 
 [[ -x "${installer}" ]] || { echo '상태: Fail - F37 model installer가 없습니다.' >&2; exit 1; }
+if grep -Fq 'runuser -u "#${owner_uid}"' "${installer}"; then
+  echo '상태: Fail - model installer가 host passwd에 없는 numeric UID를 runuser로 실행합니다.' >&2; exit 1
+fi
+grep -Fq "stat -c '%u:%g:%a'" "${installer}" \
+  || { echo '상태: Fail - model installer가 numeric UID/GID/mode를 검증하지 않습니다.' >&2; exit 1; }
 grep -Fq 'command -v sha256sum' "${ssm_document}" \
   || { echo '상태: Fail - SSM wrapper가 Linux sha256sum을 사용하지 않습니다.' >&2; exit 1; }
 grep -Fq 'command -v shasum' "${ssm_document}" \

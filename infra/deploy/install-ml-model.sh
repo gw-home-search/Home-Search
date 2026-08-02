@@ -21,8 +21,21 @@ sha256_file() {
   fi
 }
 
+numeric_owner_and_mode() {
+  local path="$1"
+  if stat -c '%u:%g:%a' "${path}" >/dev/null 2>&1; then
+    stat -c '%u:%g:%a' "${path}"
+  elif stat -f '%u:%g:%Lp' "${path}" >/dev/null 2>&1; then
+    stat -f '%u:%g:%Lp' "${path}"
+  else
+    echo '상태: Fail - numeric UID/GID/mode를 확인할 stat 형식이 없습니다.' >&2
+    return 127
+  fi
+}
+
 [[ -f "${manifest}" && ! -L "${manifest}" && -d "${source_dir}" && ! -L "${source_dir}" ]]
 [[ "${target_dir}" == /* && "${target_dir}" != / && "${target_dir}" != /srv && "${target_dir}" != /srv/home-search ]]
+[[ "${owner}" =~ ^[0-9]+:[0-9]+$ ]]
 jq -e --arg version "${expected_version}" --argjson names "${expected_names}" '
   .model_version == $version and (.files | type == "object")
   and ((.files | keys | sort) == $names)
@@ -58,12 +71,9 @@ chown -R "${owner}" "${staging}"
 chmod 0750 "${staging}"
 find "${staging}" -mindepth 1 -maxdepth 1 -type f -exec chmod 0440 {} +
 owner_uid="${owner%%:*}"
-if [[ "${owner_uid}" == "$(id -u)" ]]; then
-  [[ -r "${staging}/keras_model.keras" ]]
-else
-  command -v runuser >/dev/null
-  runuser -u "#${owner_uid}" -- test -r "${staging}/keras_model.keras"
-fi
+owner_gid="${owner#*:}"
+[[ "$(numeric_owner_and_mode "${staging}")" == "${owner_uid}:${owner_gid}:750" ]]
+[[ "$(numeric_owner_and_mode "${staging}/keras_model.keras")" == "${owner_uid}:${owner_gid}:440" ]]
 if [[ -e "${target_dir}" ]]; then
   [[ -d "${target_dir}" && ! -L "${target_dir}" ]]
   previous="${target_dir}.previous.$(date -u +%Y%m%dT%H%M%SZ)"

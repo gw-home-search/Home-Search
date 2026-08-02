@@ -219,7 +219,10 @@ require_absent_literal '| one' "${rollout_workflow}"
 grep -Fq 'infra/deploy/verify-budget-production-rollout-plan.sh' "${rollout_workflow}"
 grep -Fq 'deployment-evidence/rollout-plan.json deployment-evidence/live-application-settings.json prep' "${rollout_workflow}"
 grep -Fq 'deployment-evidence/remaining-plan.json deployment-evidence/live-application-settings.json final' "${rollout_workflow}"
-grep -Fq 'unset TF_VAR_deployment_phase TF_VAR_data_services_enabled TF_VAR_public_dns_enabled TF_VAR_backup_schedules_enabled' "${rollout_workflow}"
+if ! grep -Fq 'unset TF_VAR_deployment_phase TF_VAR_data_services_enabled TF_VAR_public_dns_enabled TF_VAR_backup_schedules_enabled TF_VAR_market_news_public_enabled TF_VAR_market_news_schedules_enabled TF_VAR_rtms_refresh_schedule_enabled TF_VAR_prediction_enabled TF_VAR_ml_service_enabled TF_VAR_user_oauth_enabled_providers' "${rollout_workflow}"; then
+  echo '상태: Fail - terraform test가 rollout feature TF_VAR를 상속합니다.' >&2
+  exit 1
+fi
 rollout_plan_artifact_line="$(grep -nF 'name: "budget-production-incremental-plan-${{ inputs.release_tag }}"' "${rollout_workflow}" | head -1 | cut -d: -f1)"
 [[ "${rollout_plan_artifact_line}" =~ ^[0-9]+$ ]]
 rollout_plan_artifact_block="$(sed -n "$((rollout_plan_artifact_line - 2)),$((rollout_plan_artifact_line + 10))p" "${rollout_workflow}")"

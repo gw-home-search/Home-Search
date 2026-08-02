@@ -330,6 +330,10 @@ run "private_phase_uses_fixed_bridge_ports_and_least_privilege_roles" {
       && strcontains(file("runtime.tf"), "systemControls         = []")
       && strcontains(file("runtime.tf"), "volumesFrom            = []")
       && strcontains(file("runtime.tf"), "capabilities       = { add = [], drop = [\"NET_RAW\"] }")
+      && strcontains(
+        file("runtime.tf"),
+        "name                   = \"key-materializer\"\n      user                   = \"0:0\"",
+      )
       && aws_ecs_service.application["public-gateway"].desired_count == 0
       && aws_ecs_service.application["property-api"].desired_count == 1
       && aws_ecs_service.application["user-api"].desired_count == 1

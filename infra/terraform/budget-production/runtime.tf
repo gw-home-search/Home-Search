@@ -394,6 +394,7 @@ resource "aws_ecs_task_definition" "application" {
     }],
     length(local.application_key_parameters[each.key]) > 0 ? [{
       name                   = "key-materializer"
+      user                   = "0:0"
       image                  = var.image_uris["ops-bootstrap"]
       essential              = false
       command                = ["materialize-keys"]

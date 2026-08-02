@@ -22,6 +22,8 @@ grep -Fq 'command -v shasum' "${ssm_document}" \
 if grep -Fq 'test \"$(shasum -a 256' "${ssm_document}"; then
   echo '상태: Fail - SSM wrapper가 shasum을 직접 요구합니다.' >&2; exit 1
 fi
+grep -Fq -- '--log-driver none' "${ssm_document}" \
+  || { echo '상태: Fail - F37 one-shot smoke가 host 기본 awslogs driver를 우회하지 않습니다.' >&2; exit 1; }
 jq -e '.model_version == "deployment__F37_monthly_anchor_prev3_rolling_huber_010"
   and (.files | keys | sort) == ["_SUCCESS","eval_metrics.csv","feature_schema.json","keras_model.keras","metadata.json","numeric_medians.json","sample_input.json"]
   and all(.files[]; test("^[0-9a-f]{64}$"))' "${manifest}" >/dev/null

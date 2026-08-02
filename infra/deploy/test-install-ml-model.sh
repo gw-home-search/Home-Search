@@ -4,11 +4,19 @@ set -Eeuo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 installer="${root}/infra/deploy/install-ml-model.sh"
 manifest="${root}/infra/deploy/f37-model-manifest.json"
+ssm_document="${root}/infra/terraform/budget-production/model_install.tf"
 tmp_dir="$(mktemp -d)"
 cleanup() { find "${tmp_dir}" -depth -delete 2>/dev/null || true; }
 trap cleanup EXIT
 
 [[ -x "${installer}" ]] || { echo '상태: Fail - F37 model installer가 없습니다.' >&2; exit 1; }
+grep -Fq 'command -v sha256sum' "${ssm_document}" \
+  || { echo '상태: Fail - SSM wrapper가 Linux sha256sum을 사용하지 않습니다.' >&2; exit 1; }
+grep -Fq 'command -v shasum' "${ssm_document}" \
+  || { echo '상태: Fail - SSM wrapper의 macOS shasum fallback이 없습니다.' >&2; exit 1; }
+if grep -Fq 'test \"$(shasum -a 256' "${ssm_document}"; then
+  echo '상태: Fail - SSM wrapper가 shasum을 직접 요구합니다.' >&2; exit 1
+fi
 jq -e '.model_version == "deployment__F37_monthly_anchor_prev3_rolling_huber_010"
   and (.files | keys | sort) == ["_SUCCESS","eval_metrics.csv","feature_schema.json","keras_model.keras","metadata.json","numeric_medians.json","sample_input.json"]
   and all(.files[]; test("^[0-9a-f]{64}$"))' "${manifest}" >/dev/null

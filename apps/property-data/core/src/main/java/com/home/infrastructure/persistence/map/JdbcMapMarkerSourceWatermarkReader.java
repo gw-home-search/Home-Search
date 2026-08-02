@@ -8,6 +8,10 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class JdbcMapMarkerSourceWatermarkReader implements MapMarkerSourceWatermarkReader {
 
+    static final String CURRENT_WATERMARK_SQL = """
+			SELECT format('wal=%s', pg_current_wal_lsn())
+			""";
+
     private final JdbcClient jdbcClient;
 
     public JdbcMapMarkerSourceWatermarkReader(JdbcClient jdbcClient) {
@@ -16,15 +20,6 @@ public class JdbcMapMarkerSourceWatermarkReader implements MapMarkerSourceWaterm
 
     @Override
     public String currentWatermark() {
-        return jdbcClient.sql("""
-				SELECT format(
-				    'wal=%s;raw=%s;trade=%s;deleted=%s;complex=%s',
-				    pg_current_wal_lsn(),
-				    COALESCE((SELECT max(id) FROM raw_trade_ingest), 0),
-				    COALESCE((SELECT max(id) FROM trade), 0),
-				    COALESCE((SELECT max(deleted_at) FROM trade)::text, '-'),
-				    COALESCE((SELECT max(updated_at) FROM complex)::text, '-')
-				)
-				""").query(String.class).single();
+        return jdbcClient.sql(CURRENT_WATERMARK_SQL).query(String.class).single();
     }
 }

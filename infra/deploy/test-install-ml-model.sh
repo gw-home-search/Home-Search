@@ -37,6 +37,37 @@ jq -n --arg version 'deployment__F37_monthly_anchor_prev3_rolling_huber_010' --a
 bash "${installer}" "${fixture_manifest}" "${source_dir}" "${install_root}/ml-model" "$(id -u):$(id -g)"
 [[ -f "${install_root}/ml-model/keras_model.keras" && ! -L "${install_root}/ml-model" ]]
 
+linux_bin="${tmp_dir}/linux-bin"
+mkdir "${linux_bin}"
+if command -v sha256sum >/dev/null 2>&1; then
+  sha256_backend="$(command -v sha256sum)"
+  sha256_backend_kind=sha256sum
+else
+  sha256_backend="$(command -v shasum)"
+  sha256_backend_kind=shasum
+fi
+cat >"${linux_bin}/sha256sum" <<'SCRIPT'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+case "${TEST_SHA256_BACKEND_KIND:?}" in
+  sha256sum) exec "${TEST_SHA256_BACKEND:?}" "$@" ;;
+  shasum) exec "${TEST_SHA256_BACKEND:?}" -a 256 "$@" ;;
+  *) exit 64 ;;
+esac
+SCRIPT
+cat >"${linux_bin}/shasum" <<'SCRIPT'
+#!/usr/bin/env bash
+echo 'shasum is unavailable on the Linux host fixture' >&2
+exit 127
+SCRIPT
+chmod 0755 "${linux_bin}/sha256sum" "${linux_bin}/shasum"
+PATH="${linux_bin}:${PATH}" \
+  TEST_SHA256_BACKEND="${sha256_backend}" \
+  TEST_SHA256_BACKEND_KIND="${sha256_backend_kind}" \
+  bash "${installer}" "${fixture_manifest}" "${source_dir}" \
+    "${install_root}/linux-host-target" "$(id -u):$(id -g)"
+[[ -f "${install_root}/linux-host-target/keras_model.keras" ]]
+
 printf 'unexpected' >"${source_dir}/extra.bin"
 if bash "${installer}" "${fixture_manifest}" "${source_dir}" "${install_root}/extra-target" "$(id -u):$(id -g)" >/dev/null 2>&1; then
   echo '상태: Fail - allowlist 밖 추가 파일을 허용했습니다.' >&2; exit 1

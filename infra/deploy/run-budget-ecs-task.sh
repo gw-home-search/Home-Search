@@ -101,10 +101,21 @@ jq -e '.failures | length == 0' <<<"${result}" >/dev/null || {
 task_arn="$(jq -er '.tasks | select(length == 1) | .[0].taskArn' <<<"${result}")"
 [[ "${task_arn}" =~ ^arn:aws:ecs:ap-northeast-2:[0-9]{12}:task/home-search-budget-production/ ]]
 
-timeout 7200 aws ecs wait tasks-stopped --region ap-northeast-2 \
-  --cluster "${cluster}" --tasks "${task_arn}"
-description="$(aws ecs describe-tasks --region ap-northeast-2 --cluster "${cluster}" \
-  --tasks "${task_arn}" --output json)"
+deadline=$((SECONDS + 7200))
+last_status=''
+description=''
+while ((SECONDS < deadline)); do
+  description="$(aws ecs describe-tasks --region ap-northeast-2 --cluster "${cluster}" \
+    --tasks "${task_arn}" --output json)"
+  jq -e '(.failures | length) == 0 and (.tasks | length) == 1' <<<"${description}" >/dev/null
+  last_status="$(jq -er '.tasks[0].lastStatus' <<<"${description}")"
+  [[ "${last_status}" != STOPPED ]] || break
+  sleep 15
+done
+if [[ "${last_status}" != STOPPED ]]; then
+  echo '상태: Fail - budget one-shot task가 7200초 안에 종료되지 않았습니다.' >&2
+  exit 1
+fi
 jq -e '
   (.failures | length) == 0
   and (.tasks | length) == 1

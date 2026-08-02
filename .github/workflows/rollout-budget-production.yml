@@ -66,6 +66,11 @@ on:
         description: "S3 URI populated after three real provider logins"
         required: true
         type: string
+      rtms_resume_request_id:
+        description: "Optional failed RTMS requestId to restart completed Spring Batch steps in place"
+        required: false
+        default: ""
+        type: string
 
 permissions: { contents: read, actions: read, id-token: write }
 concurrency: { group: deploy-budget-production, cancel-in-progress: false }
@@ -105,6 +110,7 @@ jobs:
           SECURITY_AUDIT_RESULT: "${{ inputs.security_audit_result }}"
           BOOTSTRAP_PLAN_EVIDENCE_URI: "${{ inputs.bootstrap_plan_evidence_uri }}"
           OAUTH_ACCEPTANCE_EVIDENCE_URI: "${{ inputs.oauth_acceptance_evidence_uri }}"
+          RTMS_RESUME_REQUEST_ID: "${{ inputs.rtms_resume_request_id }}"
         run: |
           set -Eeuo pipefail
           [[ "${RELEASE_TAG}" =~ ^v[0-9]+[.][0-9]+[.][0-9]+$ && "${RELEASE_TAG}" != v1.0.4 ]]
@@ -117,6 +123,7 @@ jobs:
           [[ '${{ inputs.enable_ml_service }}' == true ]]
           [[ "${OAUTH_ENABLED_PROVIDERS}" == google,kakao,naver ]]
           [[ "${SECURITY_AUDIT_RESULT}" == none ]]
+          [[ -z "${RTMS_RESUME_REQUEST_ID}" || "${RTMS_RESUME_REQUEST_ID}" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]
           [[ "${BOOTSTRAP_PLAN_EVIDENCE_URI}" =~ ^s3://home-search-budget-production-backup-[0-9]{12}/deployment-evidence/bootstrap/[0-9a-f]{40}/terraform-bootstrap-plan[.]json$ ]]
           [[ "${OAUTH_ACCEPTANCE_EVIDENCE_URI}" =~ ^s3://home-search-budget-production-backup-[0-9]{12}/deployment-evidence/oauth/[0-9a-f]{40}/oauth-smoke[.]json$ ]]
           [[ "${GITHUB_SHA}" == "${RELEASE_SHA}" ]]
@@ -710,12 +717,17 @@ jobs:
         env:
           RELEASE_TAG: "${{ inputs.release_tag }}"
           RELEASE_SHA: "${{ inputs.release_sha }}"
+          RTMS_RESUME_REQUEST_ID: "${{ inputs.rtms_resume_request_id }}"
         run: |
           set -Eeuo pipefail
           cluster="$(jq -er '.ecs_cluster_name.value' deployment-evidence/rollout-outputs.json)"
           tasks="$(jq -ec '.one_shot_task_definition_arns.value' deployment-evidence/rollout-outputs.json)"
           started_by="budget-${GITHUB_RUN_ID}"
-          rtms_id="$(tr 'A-F' 'a-f' </proc/sys/kernel/random/uuid)"
+          if [[ -n "${RTMS_RESUME_REQUEST_ID}" ]]; then
+            rtms_id="${RTMS_RESUME_REQUEST_ID}"
+          else
+            rtms_id="$(tr 'A-F' 'a-f' </proc/sys/kernel/random/uuid)"
+          fi
           rtms_repeat_id="$(tr 'A-F' 'a-f' </proc/sys/kernel/random/uuid)"
           infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["rtms-daily-refresh"]' <<<"${tasks}")" "${started_by}" \
             "$(jq -cn --arg id "${rtms_id}" '["requestId="+$id]')" >/dev/null

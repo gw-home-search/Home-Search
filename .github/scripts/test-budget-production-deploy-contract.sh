@@ -154,6 +154,7 @@ for required in \
   'security_audit_result:' \
   'bootstrap_plan_evidence_uri:' \
   'oauth_acceptance_evidence_uri:' \
+  'rtms_resume_request_id:' \
   'runtime-feature-audit' \
   'environment: budget-production-plan' \
   'environment: budget-production' \
@@ -174,6 +175,10 @@ for required in \
   'BUDGET_PRODUCTION_INCREMENTAL_READY.json'; do
   grep -Fq -- "${required}" "${rollout_workflow}"
 done
+grep -Fq 'RTMS_RESUME_REQUEST_ID: "${{ inputs.rtms_resume_request_id }}"' "${rollout_workflow}"
+grep -Fq '[[ -z "${RTMS_RESUME_REQUEST_ID}" || "${RTMS_RESUME_REQUEST_ID}" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]' "${rollout_workflow}"
+grep -Fq 'if [[ -n "${RTMS_RESUME_REQUEST_ID}" ]]; then' "${rollout_workflow}"
+grep -Fq 'rtms_id="${RTMS_RESUME_REQUEST_ID}"' "${rollout_workflow}"
 for forbidden in \
   'run-recovery-rehearsal.sh' \
   'modify-instance-credit-specification' \

@@ -228,6 +228,11 @@ if ! grep -Fq 'mv "${runtime_tfvars}" "${isolated_runtime_tfvars}"' "${rollout_w
   exit 1
 fi
 grep -Fq 'trap '\''mv "${isolated_runtime_tfvars}" "${runtime_tfvars}"; rmdir "${isolated_runtime_dir}"'\'' EXIT' "${rollout_workflow}"
+if ! grep -Fq 'aws scheduler get-schedule --name home-search-budget-production-logical-backup --group-name home-search-budget-production-backup' "${rollout_workflow}"; then
+  echo '상태: Fail - incremental rollout이 live backup schedule target ARN을 pin하지 않습니다.' >&2
+  exit 1
+fi
+require_absent_literal 'live_scheduled_backup_task_definition="$(terraform -chdir=infra/terraform/budget-production output -json one_shot_task_definition_arns' "${rollout_workflow}"
 rollout_plan_artifact_line="$(grep -nF 'name: "budget-production-incremental-plan-${{ inputs.release_tag }}"' "${rollout_workflow}" | head -1 | cut -d: -f1)"
 [[ "${rollout_plan_artifact_line}" =~ ^[0-9]+$ ]]
 rollout_plan_artifact_block="$(sed -n "$((rollout_plan_artifact_line - 2)),$((rollout_plan_artifact_line + 10))p" "${rollout_workflow}")"

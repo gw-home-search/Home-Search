@@ -3,6 +3,7 @@ import type { Ref } from 'react';
 import type { ChatAction } from './actionContract';
 import { ChatMessageBody } from './ChatMessageBody';
 import type { ChatMessage } from './storage/chatConversationStore';
+import type { DetailRequestState } from '../../app/mapAppTypes';
 
 type ChatThreadMessageProps = {
   executedActionIds?: ReadonlySet<string>;
@@ -12,6 +13,9 @@ type ChatThreadMessageProps = {
   onRetry?: () => void;
   retrying?: boolean;
   selectedComplexId?: number;
+  detailState?: DetailRequestState;
+  onFollowUp?: (question: string) => void;
+  focusActionStatuses?: ReadonlyMap<string, 'moving' | 'failed'>;
 };
 
 export function ChatThreadMessage({
@@ -22,6 +26,9 @@ export function ChatThreadMessage({
   onRetry,
   retrying = false,
   selectedComplexId,
+  detailState,
+  onFollowUp,
+  focusActionStatuses,
 }: ChatThreadMessageProps) {
   const isUser = message.role === 'user';
   return (
@@ -37,7 +44,10 @@ export function ChatThreadMessage({
           executedActionIds={executedActionIds}
           message={message}
           onUiAction={onUiAction}
+          onFollowUp={onFollowUp}
           selectedComplexId={selectedComplexId}
+          detailState={detailState}
+          focusActionStatuses={focusActionStatuses}
         />
       )}
       {!isUser && onRetry ? (

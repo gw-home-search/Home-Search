@@ -5,6 +5,26 @@ import { ChatMessageBody } from './ChatMessageBody';
 import type { ChatMessage } from './storage/chatConversationStore';
 
 describe('복합 구조화 답변', () => {
+  it('직접 결론을 범위 안내보다 먼저 보이고 후속 질문을 칩으로 나눈다', () => {
+    const message: ChatMessage = {
+      id: 'message-direct', role: 'assistant', content: 'fallback',
+      createdAt: '2026-08-03T00:00:00Z',
+      summary: {
+        version: 1,
+        scopeNotice: { text: '‘잠실엘스’를 기준으로 확인했습니다.', factIds: ['fact-1'] },
+        headline: { text: '잠실엘스는 송파구 잠실동에 있습니다.', factIds: ['fact-1'] },
+        criteria: [], interpretations: [], fragmentSummaries: [],
+        followUp: '잠실엘스 최근 실거래를 알려줘 · 잠실엘스 주변 역·노선을 알려줘',
+      },
+    };
+
+    const html = renderToStaticMarkup(<ChatMessageBody message={message} />);
+
+    expect(html.indexOf('잠실엘스는')).toBeLessThan(html.indexOf('‘잠실엘스’를 기준'));
+    expect(html.match(/chatbot-follow-up-prompts/g)).toHaveLength(1);
+    expect(html).toContain('주변 역·노선을 알려줘</button>');
+  });
+
   it('artifact를 실제 fragment id 아래에 한 번만 표시한다', () => {
     const message: ChatMessage = {
       id: 'message-1', role: 'assistant', content: 'text fallback',
@@ -63,7 +83,7 @@ describe('복합 구조화 답변', () => {
 
     const html = renderToStaticMarkup(<ChatMessageBody message={message} />);
 
-    expect(html).toContain('참고');
+    expect(html).toContain('데이터 참고');
     expect(html).toContain('신고 지연으로 실제 거래와 차이가 있을 수 있습니다.');
     expect(html).not.toContain('답변 출처');
     expect(html).not.toContain('답변 근거');
@@ -94,8 +114,8 @@ describe('복합 구조화 답변', () => {
     const html = renderToStaticMarkup(<ChatMessageBody message={message} />);
 
     expect(html.match(new RegExp(repeated, 'g'))).toHaveLength(1);
-    expect(html).not.toContain('참고');
-    expect(html).not.toContain('확인하지 못한 항목');
+    expect(html).not.toContain('데이터 참고');
+    expect(html).not.toContain('확인하지 못한 정보');
   });
 
   it('의사결정 리포트에서는 성공 설명을 경고로 반복하지 않고 실제 제한만 표시한다', () => {
@@ -124,7 +144,7 @@ describe('복합 구조화 답변', () => {
 
     expect(html).not.toContain('요청한 조건을 적용한 후보를 정리했습니다.');
     expect(html).toContain('일부 학교 자료를 확인하지 못해 해당 기준은 제외했습니다.');
-    expect(html.match(/확인할 점/g)).toHaveLength(1);
+    expect(html.match(/확인하지 못한 정보/g)).toHaveLength(1);
   });
 
   it('의사결정 리포트가 있어도 검증된 후속 질문을 표시한다', () => {

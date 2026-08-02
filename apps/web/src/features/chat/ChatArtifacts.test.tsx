@@ -295,7 +295,7 @@ describe('조건 추천표 artifact UI', () => {
     expect(html.match(/1\. 나단지/g)).toHaveLength(1);
     expect(html.match(/2\. 가단지/g)).toHaveLength(1);
     expect(html.match(/규모가 확인됩니다\./g)).toHaveLength(1);
-    expect(html).toContain('적용 기준 · 송파구 · 균형 비교(BALANCED_V1)');
+    expect(html).toContain('조회 조건 · 송파구 · 균형 비교(BALANCED_V1)');
     expect(html).not.toContain('조건 기반 후보');
     expect(html).not.toContain('먼저 볼 후보');
   });

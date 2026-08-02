@@ -15,9 +15,9 @@ export function AnswerSources({ citations }: { citations: readonly ChatCitation[
   return (
     <div aria-label="답변 출처" className="chatbot-answer-sources">
       <span className="chatbot-answer-sources-label">출처</span>
-      {visible.map((source) => (
+      {visible.map((source, index) => (
         <span className="chatbot-answer-source" key={source.key}>
-          <span aria-hidden="true">·</span>
+          {index > 0 ? <span aria-hidden="true">·</span> : null}
           {source.url ? (
             <a href={source.url} rel="noreferrer noopener" target="_blank">{source.name}</a>
           ) : <span>{source.name}</span>}

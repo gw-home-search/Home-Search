@@ -423,6 +423,7 @@ describe('챗봇 패널', () => {
   });
 
   it('새 focusComplex 답변은 저장 후 한 번 자동 실행하고 버튼은 반복 실행한다', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1440 });
     const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-focus-action');
     const onUiAction = vi.fn((_action: ChatAction) => true);
     const action = {
@@ -459,6 +460,7 @@ describe('챗봇 패널', () => {
     await click(actionButton);
     await click(actionButton);
     expect(onUiAction).toHaveBeenCalledTimes(3);
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 });
   });
 
   it('저장된 대화를 복원할 때 focusComplex를 자동 실행하지 않는다', async () => {
@@ -626,6 +628,35 @@ describe('챗봇 패널', () => {
     await click(host.querySelector<HTMLButtonElement>(`button[aria-label="${recentTradeQuestion}"]`));
     expect(host.querySelector<HTMLTextAreaElement>('textarea[name="chatbot-question"]')?.value)
       .toBe(recentTradeQuestion);
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-example-cycle'));
+    expect(host.querySelectorAll('.chatbot-example-questions button')).toHaveLength(3);
+    const groups = [
+      [
+        '헬리오시티 위치와 세대수·사용승인일을 알려줘',
+        '잠실엘스와 헬리오시티 전용 84㎡ 최근 실거래를 비교해줘',
+        '영등포구 500세대 이상 중 학원과 역 접근성을 우선한 후보 3곳을 알려줘',
+      ],
+      [
+        '잠실엘스 전용 84㎡ 최근 실거래 3건과 1년 가격 흐름을 함께 보여줘',
+        '래미안대치팰리스 주변 운영 중 초등학교와 가까운 역을 거리순으로 알려줘',
+        '마포래미안푸르지오1단지와 4단지를 세대수·사용승인일로 비교해줘',
+      ],
+      [
+        '송파구 20억원 이하 전용 84㎡ 단지 3곳을 거래와 교통 기준으로 추천해줘',
+        '반포자이 주변 대규모점포 위치와 가까운 역·노선을 알려줘',
+        '올림픽파크포레온 위치와 세대수·최근 실거래를 함께 알려줘',
+      ],
+    ];
+    for (const [index, group] of groups.entries()) {
+      if (index > 0) await click(host.querySelector<HTMLButtonElement>('.chatbot-example-cycle'));
+      expect([...host.querySelectorAll<HTMLButtonElement>('.chatbot-example-questions button')]
+        .map(({ ariaLabel }) => ariaLabel)).toEqual(group);
+    }
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-example-cycle'));
+    expect([...host.querySelectorAll<HTMLButtonElement>('.chatbot-example-questions button')]
+      .map(({ ariaLabel }) => ariaLabel)).toEqual([
+        recentTradeQuestion, priceTrendQuestion, lifestyleQuestion,
+      ]);
   });
 
   it('긴 질문은 네 줄까지 입력창 높이를 늘리고 이후에는 내부 스크롤로 전환한다', async () => {

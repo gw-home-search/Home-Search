@@ -12,7 +12,7 @@
 }
 
 .chatbot-map-action {
-  min-height: 32px;
+  min-height: 40px;
   border: 1px solid var(--hs-map-color-action);
   border-radius: var(--hs-map-radius-control);
   padding: 0 10px;
@@ -24,6 +24,15 @@
   font-weight: 750;
 }
 
+.chatbot-action-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .chatbot-map-action[aria-disabled="true"] {
   border-color: var(--hs-map-color-line);
   color: var(--hs-map-color-muted);
@@ -33,6 +42,18 @@
 .chatbot-fact-list {
   min-width: 0;
 }
+
+.chatbot-alternative-complexes > summary,
+.chatbot-selection-basis > summary {
+  min-height: 40px;
+  color: var(--hs-map-color-action);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 40px;
+}
+
+.chatbot-selection-basis p { margin: 0; color: var(--hs-map-color-muted); font-size: 13px; }
 
 .chatbot-fact-list h4 {
   margin: 0 0 8px;
@@ -122,6 +143,9 @@
 }
 
 @media (max-width: 720px) {
+  .chatbot-map-action,
+  .chatbot-alternative-complexes > summary,
+  .chatbot-selection-basis > summary,
   .chatbot-candidate-map-action,
   .chatbot-artifact-map-action { min-height: 44px; }
 }

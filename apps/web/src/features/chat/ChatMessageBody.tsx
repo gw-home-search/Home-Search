@@ -5,19 +5,28 @@ import type { ChatAction } from './actionContract';
 import type { ChatMessage } from './storage/chatConversationStore';
 import type { ChatUiSummary } from './summaryContract';
 import { DecisionAnswerReport } from './DecisionAnswerReport';
+import { FollowUpPrompts } from './FollowUpPrompts';
+import type { DetailRequestState } from '../../app/mapAppTypes';
+import { isDataNote, isWarningLimitation } from './limitationPresentation';
 
 type ChatMessageBodyProps = {
   message: ChatMessage;
   executedActionIds?: ReadonlySet<string>;
   onUiAction?: (action: ChatAction) => void;
+  onFollowUp?: (question: string) => void;
   selectedComplexId?: number;
+  detailState?: DetailRequestState;
+  focusActionStatuses?: ReadonlyMap<string, 'moving' | 'failed'>;
 };
 
 export function ChatMessageBody({
   message,
   executedActionIds = EMPTY_ACTION_IDS,
   onUiAction,
+  onFollowUp,
   selectedComplexId,
+  detailState,
+  focusActionStatuses,
 }: ChatMessageBodyProps) {
   const supportingDetails = visibleSupportingDetails(message);
   const artifactActions = message.actions?.filter((action) => (
@@ -44,7 +53,10 @@ export function ChatMessageBody({
           limitations={supportingDetails.limitations}
           message={message}
           onAction={onUiAction}
+          onFollowUp={onFollowUp}
           selectedComplexId={selectedComplexId}
+          detailState={detailState}
+          focusActionStatuses={focusActionStatuses}
         />
       ) : message.summary ? (
         <StructuredAnswer
@@ -54,8 +66,11 @@ export function ChatMessageBody({
           limitations={supportingDetails.limitations}
           message={message}
           onAction={onUiAction}
+          onFollowUp={onFollowUp}
           selectedComplexId={selectedComplexId}
           summary={message.summary}
+          detailState={detailState}
+          focusActionStatuses={focusActionStatuses}
         />
       ) : (
         <>
@@ -65,6 +80,8 @@ export function ChatMessageBody({
             executedActionIds={executedActionIds}
             onExecute={onUiAction}
             selectedComplexId={selectedComplexId}
+            detailState={detailState}
+            focusActionStatuses={focusActionStatuses}
           />
           {message.artifacts ? <ChatArtifacts
             actions={artifactActions}
@@ -80,11 +97,13 @@ export function ChatMessageBody({
           executedActionIds={executedActionIds}
           onExecute={onUiAction}
           selectedComplexId={selectedComplexId}
+          detailState={detailState}
+          focusActionStatuses={focusActionStatuses}
         />
       ) : null}
       {message.summary == null && message.report == null && supportingDetails.limitations.length ? (
         <section className="chatbot-answer-limitations">
-          <h4>참고</h4>
+          <h4>데이터 참고</h4>
           {supportingDetails.limitations.map((limitation) => <p key={limitation}>{limitation}</p>)}
         </section>
       ) : null}
@@ -105,8 +124,11 @@ function StructuredAnswer({
   limitations,
   message,
   onAction,
+  onFollowUp,
   selectedComplexId,
   summary,
+  detailState,
+  focusActionStatuses,
 }: {
   actions: ChatAction[];
   executedActionIds: ReadonlySet<string>;
@@ -114,20 +136,27 @@ function StructuredAnswer({
   limitations: string[];
   message: ChatMessage;
   onAction?: (action: ChatAction) => void;
+  onFollowUp?: (question: string) => void;
   selectedComplexId?: number;
   summary: ChatUiSummary;
+  detailState?: DetailRequestState;
+  focusActionStatuses?: ReadonlyMap<string, 'moving' | 'failed'>;
 }) {
   const hasFragmentGroups = summary.fragmentSummaries.length > 0
     && (message.fragments?.length ?? 0) > 0;
+  const warnings = limitations.filter(isWarningLimitation);
+  const dataNotes = limitations.filter((item) => isDataNote(item) && !isWarningLimitation(item));
   return (
     <div className="chatbot-structured-answer">
-      {summary.scopeNotice ? <p className="chatbot-scope-notice">{summary.scopeNotice.text}</p> : null}
       <h3>{summary.headline.text}</h3>
+      {summary.scopeNotice ? <p className="chatbot-scope-notice">{summary.scopeNotice.text}</p> : null}
       <ChatActions
         actions={headerActions}
         executedActionIds={executedActionIds}
         onExecute={onAction}
         selectedComplexId={selectedComplexId}
+        detailState={detailState}
+        focusActionStatuses={focusActionStatuses}
       />
       {summary.fragmentSummaries.length > 0 ? (
         <div aria-label="요청별 확인 결과" className="chatbot-fragment-summaries">
@@ -159,13 +188,19 @@ function StructuredAnswer({
           ))}
         </div>
       ) : null}
-      {summary.criteria.length > 0 ? (
+      {summary.criteria.some(({ key }) => key !== 'representativeSelection') ? (
         <section className="chatbot-summary-criteria">
-          <h4>적용 조건</h4>
-          <dl>{summary.criteria.map((criterion) => (
+          <h4>조회 조건</h4>
+          <dl>{summary.criteria.filter(({ key }) => key !== 'representativeSelection').map((criterion) => (
             <div key={criterion.key}><dt>{criterion.label}</dt><dd>{criterion.value}</dd></div>
           ))}</dl>
         </section>
+      ) : null}
+      {summary.criteria.find(({ key }) => key === 'representativeSelection') ? (
+        <details className="chatbot-selection-basis">
+          <summary>단지 선택 기준</summary>
+          <p>{summary.criteria.find(({ key }) => key === 'representativeSelection')?.value}</p>
+        </details>
       ) : null}
       {!hasFragmentGroups && message.artifacts
         ? <ChatArtifacts actions={actions} artifacts={message.artifacts} onAction={onAction} selectedComplexId={selectedComplexId} />
@@ -173,18 +208,24 @@ function StructuredAnswer({
       {summary.interpretations.length > 0 ? (
         <section className="chatbot-summary-interpretations">
           <h4>조건별 해석</h4>
-          {summary.interpretations.map((item) => (
+          {summary.interpretations.slice(0, 2).map((item) => (
             <div key={item.key}><strong>{item.label}</strong><p>{item.text}</p></div>
           ))}
         </section>
       ) : null}
-      {limitations.length ? (
+      {dataNotes.length ? (
         <section className="chatbot-summary-limitations">
-          <h4>참고</h4>
-          {limitations.map((limitation) => <p key={limitation}>{limitation}</p>)}
+          <h4>데이터 참고</h4>
+          {dataNotes.map((limitation) => <p key={limitation}>{limitation}</p>)}
         </section>
       ) : null}
-      {summary.followUp ? <p className="chatbot-summary-follow-up">{summary.followUp}</p> : null}
+      {warnings.length ? (
+        <section className="chatbot-summary-warnings">
+          <h4>확인하지 못한 정보</h4>
+          {warnings.map((limitation) => <p key={limitation}>{limitation}</p>)}
+        </section>
+      ) : null}
+      {summary.followUp ? <FollowUpPrompts onSelect={onFollowUp} value={summary.followUp} /> : null}
     </div>
   );
 }
@@ -212,7 +253,7 @@ function ResolutionDetails({
       ) : null}
       {omissions.length > 0 ? (
         <section>
-          <h4>확인하지 못한 항목</h4>
+          <h4>확인하지 못한 정보</h4>
           {omissions.map((omission) => <p key={omission}>{omission}</p>)}
         </section>
       ) : null}
@@ -246,15 +287,11 @@ function visibleSupportingDetails(message: ChatMessage): {
   }
   const limitations = uniqueText(message.evidence?.limitations ?? [])
     .filter((text) => !displayed.has(text))
-    .filter((text) => message.report == null || isActionableLimitation(text));
+    .filter((text) => isWarningLimitation(text) || isDataNote(text));
   for (const limitation of limitations) displayed.add(limitation);
   const omissions = uniqueText(message.resolution?.omissions ?? [])
     .filter((text) => !displayed.has(text));
   return { limitations, omissions };
-}
-
-function isActionableLimitation(text: string): boolean {
-  return /(못|없|제외|지연|불가|주의|아니|않|미만|부족|차이|대체|표본|오래|중단)/.test(text);
 }
 
 function uniqueText(values: string[]): string[] {

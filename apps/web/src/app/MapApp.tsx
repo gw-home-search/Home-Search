@@ -286,6 +286,7 @@ export function MapApp({
     >
       <AppHeader
         chatConversationStore={chatConversationStore}
+        chatDetailState={detail.detailState}
         chatUiContext={chatUiContext}
         onChatOpenChange={handleChatOpenChange}
         onUiAction={handleChatUiAction}

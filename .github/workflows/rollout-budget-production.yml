@@ -472,7 +472,7 @@ jobs:
           terraform -chdir=infra/terraform/budget-production fmt -check
           terraform -chdir=infra/terraform/budget-production validate
           (
-            unset TF_VAR_deployment_phase TF_VAR_data_services_enabled TF_VAR_public_dns_enabled TF_VAR_backup_schedules_enabled
+            unset TF_VAR_deployment_phase TF_VAR_data_services_enabled TF_VAR_public_dns_enabled TF_VAR_backup_schedules_enabled TF_VAR_market_news_public_enabled TF_VAR_market_news_schedules_enabled TF_VAR_rtms_refresh_schedule_enabled TF_VAR_prediction_enabled TF_VAR_ml_service_enabled TF_VAR_user_oauth_enabled_providers
             terraform -chdir=infra/terraform/budget-production test
           )
           code=0

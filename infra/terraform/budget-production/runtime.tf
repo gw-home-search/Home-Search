@@ -151,7 +151,7 @@ locals {
         { name = "HOME_AI_SUPERVISOR_GRAPH_MODE", value = var.ai_supervisor_graph_mode },
         { name = "HOME_AI_SUPERVISOR_GRAPH_CANARY_PERCENT", value = tostring(var.ai_supervisor_graph_canary_percent) },
         { name = "HOME_AI_AGENTIC_ORCHESTRATION_ENABLED", value = "true" },
-        { name = "HOME_AI_OFFICIAL_WEB_SEARCH_ENABLED", value = "false" },
+        { name = "HOME_AI_OFFICIAL_WEB_SEARCH_ENABLED", value = "true" },
         { name = "HOME_AI_ENABLED_PROPERTY_CAPABILITIES", value = "complex_identity,recent_trade_lookup,price_trend,recommendation,comparison" },
         { name = "HOME_AI_ENABLED_REFERENCE_CAPABILITIES", value = "academy_lookup,rail_station_lookup,school_location,retail_location" },
         { name = "HOME_AI_DB_POOL_MIN_SIZE", value = "1" },

@@ -354,6 +354,10 @@ run "private_phase_uses_fixed_bridge_ports_and_least_privilege_roles" {
         for item in local.application_specs["ai"].environment :
         item.value if item.name == "HOME_AI_SUPERVISOR_GRAPH_CANARY_PERCENT"
       ]) == "0"
+      && one([
+        for item in local.application_specs["ai"].environment :
+        item.value if item.name == "HOME_AI_OFFICIAL_WEB_SEARCH_ENABLED"
+      ]) == "true"
       && strcontains(file("ssm_parameter_containers.tf"), "retained_apt_service_key")
       && toset(keys(local.application_secret_parameters["user-api"])) == toset([
         "USER_DB_PASSWORD",

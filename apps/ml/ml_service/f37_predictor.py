@@ -9,12 +9,20 @@ from pathlib import Path
 from typing import Any
 
 import h5py
-import numpy as np
 import tensorflow as tf
 
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
 DEFAULT_ARTIFACT_DIR = PROJECT_DIR / "models" / "best_price_deployment_attempt"
+LEGACY_VOCABULARY_ASSETS = {
+    "legal_dong_code": "assets/_layer_checkpoint_dependencies/string_lookup/vocabulary.txt",
+    "sgg_code": "assets/_layer_checkpoint_dependencies/string_lookup_2/vocabulary.txt",
+    "prev_deal_gap_bucket": "assets/_layer_checkpoint_dependencies/string_lookup_4/vocabulary.txt",
+}
+LEGACY_DESERIALIZATION_ERROR_MARKERS = (
+    "keras.src.engine.functional",
+    "expected str, bytes or os.PathLike object, not NoneType",
+)
 
 
 @dataclass(frozen=True)
@@ -70,7 +78,10 @@ class F37Predictor:
         try:
             return tf.keras.models.load_model(model_path, compile=False)
         except TypeError as exc:
-            if "NoneType" not in str(exc):
+            if not any(
+                marker in str(exc)
+                for marker in LEGACY_DESERIALIZATION_ERROR_MARKERS
+            ):
                 raise
             return self._load_model_from_weights_archive(model_path)
 
@@ -80,17 +91,20 @@ class F37Predictor:
         embedding_layers = []
 
         for feature in self.embedding_features:
+            vocabulary = self._load_vocabulary(model_path, feature)
+            if not vocabulary or vocabulary[0] != "[UNK]":
+                raise ValueError(f"legacy vocabulary must start with [UNK]: {feature}")
             feature_input = tf.keras.Input(shape=(1,), dtype=tf.string, name=f"{feature}_input")
             inputs[f"{feature}_input"] = feature_input
             lookup = tf.keras.layers.StringLookup(
-                vocabulary=self._load_vocabulary(feature),
+                vocabulary=vocabulary[1:],
                 num_oov_indices=1,
                 mask_token=None,
                 output_mode="int",
                 name=f"{feature}_lookup",
             )(feature_input)
             embedding_layer = tf.keras.layers.Embedding(
-                input_dim=len(self._load_vocabulary(feature)),
+                input_dim=len(vocabulary),
                 output_dim=int(self.embedding_dims[feature]),
                 name=f"{feature}_embedding",
             )
@@ -132,7 +146,7 @@ class F37Predictor:
         model = tf.keras.Model(inputs=inputs, outputs=output)
 
         sample_inputs = {
-            "numeric_input": np.zeros((1, len(self.numeric_features)), dtype="float32"),
+            "numeric_input": tf.zeros((1, len(self.numeric_features)), dtype=tf.float32),
             **{
                 f"{feature}_input": tf.constant([["missing"]])
                 for feature in self.embedding_features
@@ -147,11 +161,24 @@ class F37Predictor:
         )
         return model
 
-    def _load_vocabulary(self, feature: str) -> list[str]:
-        path = self.artifact_dir / "lookup_vocabulary" / f"{feature}.txt"
-        if not path.exists():
-            raise FileNotFoundError(path)
-        return path.read_text(encoding="utf-8").splitlines()
+    def _load_vocabulary(self, model_path: Path, feature: str) -> list[str]:
+        asset_path = LEGACY_VOCABULARY_ASSETS.get(feature)
+        if asset_path is None:
+            raise ValueError(f"unsupported legacy embedding feature: {feature}")
+        with zipfile.ZipFile(model_path) as archive:
+            try:
+                info = archive.getinfo(asset_path)
+            except KeyError as exc:
+                raise ValueError(f"missing legacy vocabulary asset: {feature}") from exc
+            if info.is_dir() or info.file_size > 1024 * 1024:
+                raise ValueError(f"invalid legacy vocabulary asset: {feature}")
+            try:
+                vocabulary = archive.read(info).decode("utf-8").splitlines()
+            except UnicodeDecodeError as exc:
+                raise ValueError(f"invalid legacy vocabulary encoding: {feature}") from exc
+        if not vocabulary or vocabulary[0] != "[UNK]":
+            raise ValueError(f"legacy vocabulary must start with [UNK]: {feature}")
+        return vocabulary
 
     def _assign_archive_weights(
         self,
@@ -200,7 +227,7 @@ class F37Predictor:
             numeric_values.append(float(value))
 
         inputs: dict[str, Any] = {
-            "numeric_input": np.asarray([numeric_values], dtype="float32"),
+            "numeric_input": tf.convert_to_tensor([numeric_values], dtype=tf.float32),
         }
         for feature in self.embedding_features:
             value = embedding_features.get(feature, "missing")

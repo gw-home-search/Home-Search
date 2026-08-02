@@ -40,7 +40,7 @@ resource "aws_ssm_document" "install_ml_model" {
         "for name in _SUCCESS eval_metrics.csv feature_schema.json keras_model.keras metadata.json numeric_medians.json sample_input.json; do mv \"$workdir/$name\" \"$workdir/artifact/$name\"; done",
         "\"$workdir/install.sh\" \"$workdir/manifest.json\" \"$workdir/artifact\" /srv/home-search/runtime/ml-model 10001:10001",
         "docker pull '${var.image_uris["ml"]}' >/dev/null",
-        "docker run --rm --user 10001:10001 -e F37_ARTIFACT_DIR=/model -v /srv/home-search/runtime/ml-model:/model:ro '${var.image_uris["ml"]}' python -m ml_service.smoke_predict >/tmp/home-search-ml-smoke.json",
+        "docker run --rm --log-driver none --user 10001:10001 -e F37_ARTIFACT_DIR=/model -v /srv/home-search/runtime/ml-model:/model:ro '${var.image_uris["ml"]}' python -m ml_service.smoke_predict >/tmp/home-search-ml-smoke.json",
         "python3 -c 'import json,math; p=json.load(open(\"/tmp/home-search-ml-smoke.json\")); v=float(p[\"predictedPricePerM2\"]); assert math.isfinite(v) and v > 0; assert p[\"modelVersion\"] == \"${local.f37_model_version}\"'",
         "rm -f /tmp/home-search-ml-smoke.json",
       ] }

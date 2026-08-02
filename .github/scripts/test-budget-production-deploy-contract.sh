@@ -259,6 +259,13 @@ rollback_ready_line="$(grep -nF 'id: rollback_evidence' "${rollout_workflow}" | 
 [[ "${progress_artifact_line}" -lt "${rollback_ready_line}" ]]
 apply_prep_line="$(grep -nF 'name: Apply reviewed dark prep saved plan' "${rollout_workflow}" | cut -d: -f1)"
 [[ "${rollback_ready_line}" -lt "${apply_prep_line}" ]]
+register_ai_canary_line="$(grep -nF 'name: Register isolated AI canary revision' "${rollout_workflow}" | cut -d: -f1)"
+run_ai_canary_line="$(grep -nF 'name: Run isolated AI canary' "${rollout_workflow}" | cut -d: -f1)"
+start_ml_line="$(grep -nF 'name: Start and verify ML before data bootstrap' "${rollout_workflow}" | cut -d: -f1)"
+run_data_bootstrap_line="$(grep -nF 'name: Run RTMS catch-up and market-news bootstrap' "${rollout_workflow}" | cut -d: -f1)"
+[[ "${register_ai_canary_line}" -lt "${run_ai_canary_line}" ]]
+[[ "${run_ai_canary_line}" -lt "${start_ml_line}" ]]
+[[ "${start_ml_line}" -lt "${run_data_bootstrap_line}" ]]
 grep -Fq 'terraform -chdir=infra/terraform/budget-production apply -auto-approve rollout.tfplan' "${rollout_workflow}"
 grep -Fq 'infra/terraform/budget-production/rollout.tfplan' "${rollout_workflow}"
 grep -Fq 'https://homesearch.world/api/v1/search/complexes' "${rollout_workflow}"

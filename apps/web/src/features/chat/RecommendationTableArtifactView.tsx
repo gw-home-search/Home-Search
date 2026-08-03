@@ -74,7 +74,7 @@ function AgentRecommendationTable({
     <section className="chatbot-recommendation-table chatbot-agent-recommendations">
       <h4>{artifact.title}</h4>
       <p className="chatbot-comparison-basis">
-        적용 기준 · {artifact.basis.scopeLabel} · 균형 비교(BALANCED_V1)
+        조회 조건 · {artifact.basis.scopeLabel} · 균형 비교(BALANCED_V1)
       </p>
       <ol className="chatbot-agent-recommendation-list">
         {artifact.rows.map((row) => (

@@ -358,9 +358,10 @@ def test_recommendation_uses_server_fallback_without_language_model_draft() -> N
     ))
 
     assert response["status"] == "success"
-    assert response["answer"] == (
-        "현재 데이터 기준으로 요청한 조건에서 확인된 후보를 정리했습니다."
-    )
+    expected_lead = "송파구 조건을 적용해 1곳을 확인했으며 먼저 볼 곳은 후보 501입니다."
+    assert response["answer"] == expected_lead
+    assert response["uiSummary"]["headline"]["text"] == expected_lead
+    assert response["uiReport"]["opening"]["text"] == expected_lead
 
 
 def test_recommendation_maps_server_text_presentation_failure(monkeypatch) -> None:
@@ -760,7 +761,9 @@ def test_recommendation_uses_the_explicit_result_limit_instead_of_asking_again()
 
     response = asyncio.run(engine.query(
         request=ChatbotQueryRequest(
-            question="송파구에서 20억원 이하 전용 84㎡ 아파트 3곳을 추천해줘"
+            question=(
+                "송파구 20억원 이하 전용 84㎡ 단지 3곳을 거래와 교통 기준으로 추천해줘"
+            )
         ),
         user=AuthenticatedUser(user_id=1),
         request_id="request-recommendation-limit-mismatch",
@@ -853,23 +856,48 @@ def test_criteria_recommendation_uses_units_and_academy_without_budget_or_area()
                 region_name="영등포구",
                 recommendation_mode="CRITERIA",
                 minimum_unit_count=500,
-                recommendation_criteria=("ACADEMY",),
-                criteria_order=("ACADEMY",),
+                recommendation_criteria=("ACADEMY", "TRANSIT"),
+                criteria_order=("ACADEMY", "TRANSIT"),
             )
+
+    class CriteriaRailRepository:
+        def __init__(self):
+            self.calls = 0
+
+        def nearest_batch(self, *, points, radius_meters):
+            self.calls += 1
+            assert radius_meters == 1500
+            assert [point.complex_id for point in points] == [502, 503]
+            return {
+                point.complex_id: RailStationSearchResult(
+                    stations=(RailStation(
+                        station_name=f"역 {point.complex_id}", lines=("1호선",),
+                        occurrence_ids=(f"rail-{point.complex_id}",),
+                        distance_meters=300,
+                    ),),
+                    occurrence_count=1, dataset_version="rail-v1",
+                    source_date=date(2026, 6, 30),
+                )
+                for point in points
+            }
 
     property_repository = CriteriaPropertyRepository()
     academy_repository = CriteriaAcademyRepository()
+    rail_repository = CriteriaRailRepository()
     engine = GroundedChatbotEngine(
         repository=property_repository,
         language_model=CriteriaLanguageModel(),
         enabled_capabilities=frozenset({"recommendation"}),
         academy_location_repository=academy_repository,
+        rail_station_repository=rail_repository,
         today=lambda: date(2026, 7, 20),
     )
 
     response = asyncio.run(engine.query(
         request=ChatbotQueryRequest(
-            question="영등포구 500세대 이상 중 학원 접근성 우선으로 추천해줘"
+            question=(
+                "영등포구 500세대 이상 중 학원과 역 접근성을 우선한 후보 3곳을 알려줘"
+            )
         ),
         user=AuthenticatedUser(user_id=1),
         request_id="request-criteria-recommendation",
@@ -878,20 +906,21 @@ def test_criteria_recommendation_uses_units_and_academy_without_budget_or_area()
     assert response["status"] == "success"
     assert property_repository.calls == 1
     assert academy_repository.calls == 1
+    assert rail_repository.calls == 1
     table = response["uiArtifacts"][0]
     assert table["type"] == "recommendationTable"
     assert table["policyVersion"] == "criteria-recommendation-policy-v1"
     assert table["basis"] == {
         "scopeType": "ADMIN_REGION",
         "scopeLabel": "영등포구",
-        "criteriaOrder": ["ACADEMY"],
+        "criteriaOrder": ["ACADEMY", "TRANSIT"],
         "minimumUnitCount": 500,
         "radiusMeters": 800,
     }
     assert [row["complexId"] for row in table["rows"]] == [503, 502]
     assert all(row["unitCount"] >= 500 for row in table["rows"])
     assert [item["key"] for item in response["uiSummary"]["criteria"]] == [
-        "REGION", "MIN_UNIT_COUNT", "ACADEMY",
+        "REGION", "MIN_UNIT_COUNT", "ACADEMY", "TRANSIT",
     ]
     assert response["uiSummary"]["scopeNotice"]["text"] == (
         "‘영등포구’ 기준으로 해석했습니다."

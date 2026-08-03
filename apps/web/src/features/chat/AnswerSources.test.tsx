@@ -35,6 +35,18 @@ describe('챗봇 답변 출처', () => {
     expect(host.querySelector('[aria-label="전체 답변 출처"]')?.textContent).toContain('철도역');
     expect(host.querySelector('[aria-label="전체 답변 출처"]')?.textContent).toContain('학원');
   });
+
+  it('출처 제목 뒤에 고립된 구분점을 놓지 않는다', async () => {
+    host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+    await act(async () => root?.render(<AnswerSources citations={[
+      citation('1', 'Home Search 단지 정보'),
+      citation('2', 'Home Search 실거래'),
+    ]} />));
+
+    expect(host.textContent).toBe('출처Home Search 단지 정보·Home Search 실거래');
+  });
 });
 
 function citation(id: string, sourceName: string): ChatCitation {

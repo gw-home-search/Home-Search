@@ -300,7 +300,7 @@ def test_observed_fact_returns_deterministic_answer_when_draft_provider_fails() 
     assert response["success"] is True
     assert response["status"] == "success"
     assert response["answer"] == (
-        "잠실동 잠실엘스의 주소는 서울 송파구 잠실동 19로 확인했습니다."
+        "잠실동 잠실엘스는 서울 송파구 잠실동 19에 있습니다."
     )
     assert response["evidenceSummary"]["factCount"] == 1
 
@@ -382,7 +382,7 @@ def test_observed_fact_replaces_request_only_draft_with_result() -> None:
     )
 
     assert response["answer"] == (
-        "잠실동 잠실엘스의 주소는 서울 송파구 잠실동 19로 확인했습니다."
+        "잠실동 잠실엘스는 서울 송파구 잠실동 19에 있습니다."
     )
 
 
@@ -509,7 +509,7 @@ def test_price_trend_empty_returns_recent_individual_trade_reference() -> None:
 
     assert response["success"] is True
     assert response["status"] == "partial_success"
-    assert response["evidenceSummary"]["factCount"] == 1
+    assert response["evidenceSummary"]["factCount"] == 2
     assert any("월별 추이" in item and "개별 거래" in item for item in response["limitations"])
 
 
@@ -614,7 +614,7 @@ def test_recent_trade_accepts_server_supplied_korean_amount_display_claim() -> N
     )
 
     assert response["success"] is True
-    assert response["evidenceSummary"]["factCount"] == 1
+    assert response["evidenceSummary"]["factCount"] == 2
 
 
 def test_supported_answer_recovers_when_model_omits_an_observed_trade_fact() -> None:
@@ -655,7 +655,7 @@ def test_supported_answer_recovers_when_model_omits_an_observed_trade_fact() -> 
     )
 
     assert response["status"] == "success"
-    assert response["evidenceSummary"]["factCount"] == 2
+    assert response["evidenceSummary"]["factCount"] == 3
 
 
 @pytest.mark.parametrize(
@@ -824,7 +824,7 @@ def test_answer_first_multi_candidate_trade_selects_exact_data_and_keeps_alterna
             enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
             answer_first_enabled=True,
         ),
-        "마포래미안푸르지오 전용 84㎡의 최근 실거래 5건을 알려줘",
+        "마포래미안푸르지오 전용 84㎡의 최근 실거래 5건을 거래일과 층까지 알려줘",
         "request-mapo",
     )
 
@@ -834,16 +834,27 @@ def test_answer_first_multi_candidate_trade_selects_exact_data_and_keeps_alterna
         if item["type"] == "factList" and item["title"] == "다른 후보 단지"
     )
     assert [row["tradeId"] for row in trade_table["rows"]] == [9005, 9004]
+    expected_lead = (
+        "마포래미안푸르지오4단지의 2025-07-31~2026-07-31·전용 84㎡ 실거래 "
+        "2건을 확인했습니다. 가장 최근 거래는 2026-06-20, 전용 84.6㎡, "
+        "25억원, 18층입니다."
+    )
+    assert response["answer"].startswith(expected_lead)
+    assert response["uiSummary"]["headline"]["text"] == expected_lead
+    assert response["uiReport"]["opening"]["text"] == expected_lead
     assert response["uiReport"]["primaryArtifactId"] == trade_table["artifactId"]
-    assert response["uiReport"]["basis"][-1] == {
-        "text": (
-            "대표 선택 근거: 요청한 기간·면적의 데이터 2건이 확인되고 "
-            "세대수 1,237세대도 확인되는 마포래미안푸르지오4단지를 대표로 선택했습니다."
+    assert all(
+        not item["text"].startswith("대표 선택 근거:")
+        for item in response["uiReport"]["basis"]
+    )
+    assert response["uiSummary"]["criteria"][-1] == {
+        "key": "representativeSelection",
+        "label": "대표 선택 근거",
+        "value": (
+            "요청한 기간·면적의 데이터 2건이 확인되고 세대수 1,237세대도 "
+            "확인되는 마포래미안푸르지오4단지를 대표로 선택했습니다."
         ),
-        "factIds": [
-            "property-complex-7756",
-            "candidate-observation-7756",
-        ],
+        "factIds": ["property-complex-7756", "candidate-observation-7756"],
     }
     assert response["conversationMemoryPatch"]["complexId"] == 7756
     assert alternative_list["items"][0]["factIds"] == [
@@ -929,6 +940,13 @@ def test_answer_first_helio_trend_counts_month_rows_not_candidates() -> None:
     trend = next(item for item in response["uiArtifacts"] if item["type"] == "trendTable")
     assert len(trend["rows"]) == 8
     assert sum(row["tradeCount"] for row in trend["rows"]) == 20
+    expected_lead = (
+        "가락동 헬리오시티의 2025-08-01~2026-08-01·전용 59㎡ 월별 관찰값은 "
+        "8개월·총 20건입니다. 최근 관찰월 평균은 19억 3,000만원입니다."
+    )
+    assert response["answer"].startswith(expected_lead)
+    assert response["uiSummary"]["headline"]["text"] == expected_lead
+    assert response["uiReport"]["opening"]["text"] == expected_lead
     assert repository.selected_complex_id == 12416
     assert response["conversationMemoryPatch"]["complexId"] == 12416
     assert response["uiActions"][0]["complexId"] == 12416
@@ -1180,11 +1198,6 @@ def test_complex_identity_returns_fact_list_artifact_from_the_validated_fact() -
                     "value": "서울 송파구 잠실동 19",
                     "factIds": ["property-complex-11471"],
                 },
-                {
-                    "label": "위치",
-                    "value": "37.513, 127.082",
-                    "factIds": ["property-complex-11471"],
-                },
             ],
         }
     ]
@@ -1193,7 +1206,9 @@ def test_complex_identity_returns_fact_list_artifact_from_the_validated_fact() -
 
 def test_complex_identity_returns_grounded_ui_summary_v1() -> None:
     repository = FakeRepository()
-    repository.complexes = [complex_record()]
+    repository.complexes = [replace(
+        complex_record(), parcel_id=101, unit_count=5_678, use_date=date(2008, 9, 30),
+    )]
     model = FakeLanguageModel(
         QueryPlan(capability="complex_identity", complex_name="잠실엘스"),
         DraftAnswer(sentences=[DraftSentence(
@@ -1213,6 +1228,8 @@ def test_complex_identity_returns_grounded_ui_summary_v1() -> None:
         "request-identity-summary",
     )
 
+    expected_lead = "잠실동 잠실엘스는 서울 송파구 잠실동 19에 있습니다."
+    assert response["answer"].startswith(expected_lead)
     assert response["uiSummary"] == {
         "version": 1,
         "scopeNotice": {
@@ -1220,14 +1237,107 @@ def test_complex_identity_returns_grounded_ui_summary_v1() -> None:
             "factIds": ["property-complex-11471"],
         },
         "headline": {
-            "text": "잠실동 잠실엘스의 확인된 단지 정보를 정리했습니다.",
+            "text": expected_lead,
             "factIds": ["property-complex-11471"],
         },
         "criteria": [],
         "interpretations": [],
-        "followUp": "최근 실거래, 가격 흐름 또는 주변 시설을 이어서 확인할 수 있습니다.",
+        "followUp": (
+            "잠실동 잠실엘스 최근 실거래 5건을 알려줘 · "
+            "잠실동 잠실엘스 최근 1년 가격 흐름과 거래량을 보여줘 · "
+            "잠실동 잠실엘스 주변 학원 위치와 가까운 역·노선을 알려줘"
+        ),
         "fragmentSummaries": [],
     }
+    fact_list = next(
+        artifact for artifact in response["uiArtifacts"]
+        if artifact["type"] == "factList"
+    )
+    assert [(item["label"], item["value"]) for item in fact_list["items"]] == [
+        ("단지명", "잠실동 잠실엘스"),
+        ("지역", "잠실동"),
+        ("주소", "서울 송파구 잠실동 19"),
+        ("세대수", "5,678세대"),
+        ("사용승인일", "2008.09.30"),
+    ]
+    assert response["citations"][0]["sourceName"] == "Home Search 단지 정보"
+    assert response["uiReport"]["opening"]["text"] == expected_lead
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "헬리오시티 어디에 있어",
+        "헬리오시티 위치와 세대수·사용승인일을 알려줘",
+    ],
+)
+def test_answer_first_helio_location_example_resolves_map_ready_identity(
+    question: str,
+) -> None:
+    repository = FakeRepository()
+    repository.complexes = [
+        replace(
+            complex_record(), complex_id=12417, parcel_id=9016,
+            display_name="작동 헬리오시티", region_name="작동",
+            address="서울 송파구 작동", unit_count=20,
+        ),
+        replace(
+            complex_record(), complex_id=12416, parcel_id=9015,
+            display_name="가락동 헬리오시티", region_name="가락동",
+            address="서울 송파구 가락동", unit_count=9510,
+            use_date=date(2018, 12, 28), latitude=37.497, longitude=127.107,
+        ),
+    ]
+    model = DraftFailingLanguageModel(
+        QueryPlan(capability="complex_identity", complex_name="헬리오시티"),
+        DraftAnswer([]),
+    )
+
+    response = run_query(
+        GroundedChatbotEngine(
+            repository=repository,
+            language_model=model,
+            enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+            answer_first_enabled=True,
+        ),
+        question,
+        "request-helio-location",
+    )
+
+    assert response["answer"].startswith(
+        "가락동 헬리오시티는 서울 송파구 가락동에 있습니다."
+    )
+    assert response["uiSummary"]["headline"]["text"] == response["uiReport"]["opening"]["text"]
+    fact_list = next(
+        artifact for artifact in response["uiArtifacts"]
+        if artifact["type"] == "factList" and artifact["title"] == "확인된 단지 정보"
+    )
+    assert [(item["label"], item["value"]) for item in fact_list["items"]] == [
+        ("단지명", "가락동 헬리오시티"),
+        ("지역", "가락동"),
+        ("주소", "서울 송파구 가락동"),
+        ("세대수", "9,510세대"),
+        ("사용승인일", "2018.12.28"),
+    ]
+    assert not any(item["label"] in {"위도", "경도"} for item in fact_list["items"])
+    focus = next(action for action in response["uiActions"] if action["type"] == "focusComplex")
+    assert focus == {
+        "type": "focusComplex",
+        "version": 1,
+        "actionId": "action-request-helio-location-focus-complex-12416",
+        "label": "가락동 헬리오시티 지도에서 보기",
+        "parcelId": 9015,
+        "complexId": 12416,
+        "center": {"lat": 37.497, "lng": 127.107},
+        "level": 4,
+        "openDetail": True,
+        "autoRun": True,
+        "factIds": ["property-complex-12416"],
+    }
+    assert response["citations"][0]["sourceName"] == "Home Search 단지 정보"
+    assert all(
+        action.get("complexId") != 12417 for action in response["uiActions"]
+    )
 
 
 @pytest.mark.parametrize(
@@ -1445,6 +1555,98 @@ def test_grounding_diagnostic_classifies_amount_unit_conversion() -> None:
         validate_draft(draft, [fact], "supported")
 
     assert raised.value.reason_code == "GROUNDING_AMOUNT_UNIT_CONVERSION"
+
+
+@pytest.mark.parametrize(
+    ("sentence", "reason"),
+    [
+        (
+            DraftSentence(
+                text=" ", fact_ids=["fact-1"],
+                claims=[DraftClaim("fact-1", "value", "TEXT")],
+            ),
+            "GROUNDING_SENTENCE_BLANK",
+        ),
+        (
+            DraftSentence(
+                text="중복 근거", fact_ids=["fact-1", "fact-1"],
+                claims=[DraftClaim("fact-1", "value", "TEXT")],
+            ),
+            "GROUNDING_FACT_IDS_DUPLICATE",
+        ),
+        (
+            DraftSentence(
+                text="알 수 없는 근거", fact_ids=["fact-2"],
+                claims=[DraftClaim("fact-2", "value", "TEXT")],
+            ),
+            "GROUNDING_FACT_UNKNOWN",
+        ),
+        (
+            DraftSentence(
+                text="연결되지 않은 주장", fact_ids=["fact-1"],
+                claims=[DraftClaim("fact-2", "value", "TEXT")],
+            ),
+            "GROUNDING_CLAIM_NOT_ATTACHED",
+        ),
+    ],
+)
+def test_validate_draft_fails_closed_for_malformed_grounding_links(
+    sentence: DraftSentence, reason: str,
+) -> None:
+    fact = EvidenceFact(
+        fact_id="fact-1", claims=(FactClaim("value", "TEXT"),),
+        data_as_of=date(2026, 7, 16), payload={},
+    )
+
+    with pytest.raises(GroundingValidationError) as raised:
+        validate_draft(DraftAnswer([sentence]), [fact], "supported")
+
+    assert raised.value.reason_code == reason
+
+
+def test_fact_list_presenter_ignores_non_identity_and_invalid_identity_facts() -> None:
+    presenter = FactListPresenter()
+    plan = QueryPlan(capability="complex_identity", complex_name="헬리오시티")
+    unrelated = EvidenceFact(
+        fact_id="property-trade-1", claims=(FactClaim("1", "COUNT"),),
+        data_as_of=date(2026, 7, 16), payload={"complexId": 1},
+    )
+    invalid_identity = EvidenceFact(
+        fact_id="property-complex-invalid", claims=(FactClaim("name", "TEXT"),),
+        data_as_of=date(2026, 7, 16), payload={"complexId": "1"},
+    )
+
+    assert presenter.present(
+        plan=plan, used_facts=[unrelated], readiness="supported",
+    ) == []
+    assert presenter.present(
+        plan=plan, used_facts=[invalid_identity], readiness="supported",
+    ) == []
+
+
+def test_fact_list_presenter_omits_invalid_optional_identity_values() -> None:
+    presenter = FactListPresenter()
+    fact = EvidenceFact(
+        fact_id="property-complex-1", claims=(FactClaim("1", "COMPLEX_ID"),),
+        data_as_of=date(2026, 7, 16),
+        payload={
+            "complexId": 1,
+            "displayName": "헬리오시티",
+            "regionName": " ",
+            "address": None,
+            "unitCount": True,
+            "useDate": "not-a-date",
+        },
+    )
+
+    artifacts = presenter.present(
+        plan=QueryPlan(capability="complex_identity", complex_name="헬리오시티"),
+        used_facts=[fact], readiness="supported",
+    )
+
+    assert artifacts[0]["items"] == [{
+        "label": "단지명", "value": "헬리오시티", "factIds": ["property-complex-1"],
+    }]
 
 
 def run_query(engine: GroundedChatbotEngine, question: str, request_id: str) -> dict[str, object]:

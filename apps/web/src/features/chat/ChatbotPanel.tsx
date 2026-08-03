@@ -8,6 +8,7 @@ import { ChatPendingMessage, ChatThreadMessage } from './ChatThreadMessage';
 import type { ChatAction } from './actionContract';
 import type { ChatEvidence } from './chatTypes';
 import type { ChatUiContext } from './conversationContract';
+import type { DetailRequestState } from '../../app/mapAppTypes';
 import {
   buildConversationContext,
   IndexedDbChatConversationStore,
@@ -30,9 +31,10 @@ type ChatbotPanelProps = {
   onUiAction?: (action: ChatAction, source?: 'auto') => boolean;
   store?: IndexedDbChatConversationStore;
   uiContext?: ChatUiContext;
+  detailState?: DetailRequestState;
 };
 
-export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: ChatbotPanelProps) {
+export function ChatbotPanel({ detailState, onOpenChange, onUiAction, store, uiContext }: ChatbotPanelProps) {
   const auth = useAuth();
   const workspace = useChatConversationWorkspace(store);
   const launcherRef = useRef<HTMLButtonElement>(null);
@@ -52,9 +54,13 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: Cha
   const [progressMessage, setProgressMessage] = useState('질문 해석');
   const [error, setError] = useState<UserFeedbackId | null>(null);
   const [hasUnseenAnswer, setHasUnseenAnswer] = useState(false);
+  const [exampleGroupIndex, setExampleGroupIndex] = useState(0);
   const [executedActionIds, setExecutedActionIds] = useState<Set<string>>(
     () => new Set(),
   );
+  const [focusActionStatuses, setFocusActionStatuses] = useState<
+    Map<string, 'moving' | 'failed'>
+  >(() => new Map());
   const autoExecutedActionIds = useRef(new Set<string>());
   const requestSequenceRef = useRef(0);
   const failedRetryAssistantIdRef = useRef<string | undefined>(undefined);
@@ -128,6 +134,7 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: Cha
     workspace.startDraft();
     setQuestion('');
     setIsHistoryOpen(false);
+    setExampleGroupIndex(0);
     questionRef.current?.focus();
   }
 
@@ -283,7 +290,14 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: Cha
       && onUiAction != null
       && !autoExecutedActionIds.current.has(autoAction.actionId)) {
       autoExecutedActionIds.current.add(autoAction.actionId);
-      onUiAction(autoAction, 'auto');
+      setFocusActionStatuses((current) => new Map(current).set(autoAction.actionId, 'moving'));
+      try {
+        if (!onUiAction(autoAction, 'auto')) {
+          setFocusActionStatuses((current) => new Map(current).set(autoAction.actionId, 'failed'));
+        }
+      } catch {
+        setFocusActionStatuses((current) => new Map(current).set(autoAction.actionId, 'failed'));
+      }
     }
   }
 
@@ -356,7 +370,22 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: Cha
     if (action.type === 'showNearbyCategory'
       && executedActionIds.has(action.actionId)) return;
     if (onUiAction == null) return;
-    if (!onUiAction(action)) return;
+    if (action.type === 'focusComplex') {
+      setFocusActionStatuses((current) => new Map(current).set(action.actionId, 'moving'));
+    }
+    let succeeded = false;
+    try {
+      succeeded = onUiAction(action);
+    } catch {
+      succeeded = false;
+    }
+    if (!succeeded) {
+      if (action.type === 'focusComplex') {
+        setFocusActionStatuses((current) => new Map(current).set(action.actionId, 'failed'));
+      }
+      return;
+    }
+    if (action.type === 'focusComplex' && window.innerWidth < 1280) closePanel();
     if (action.type === 'showNearbyCategory') {
       setExecutedActionIds((current) => new Set(current).add(action.actionId));
     }
@@ -457,11 +486,14 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: Cha
                   message={message}
                   messageRef={message.id === latestMessage?.id ? latestTurnRef : undefined}
                   onUiAction={executeUiAction}
+                  onFollowUp={selectExampleQuestion}
                   onRetry={message.role === 'assistant' && message.terminalOutcome?.retryable
                     ? () => void retryQuestion(message.id)
                     : undefined}
                   retrying={status === 'sending'}
                   selectedComplexId={uiContext?.selectedComplex?.complexId}
+                  detailState={detailState}
+                  focusActionStatuses={focusActionStatuses}
                 />
               )) : (
                 <div className="chatbot-empty">
@@ -473,10 +505,10 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: Cha
                   <div className="chatbot-example-section">
                     <strong>이런 질문은 어때요?</strong>
                     <div aria-label="지원 질문 예시" className="chatbot-example-questions">
-                      {EXAMPLE_QUESTIONS.map((example) => (
+                      {EXAMPLE_QUESTION_GROUPS[exampleGroupIndex].map((example) => (
                         <button
                           aria-label={example.question}
-                          key={example.kind}
+                          key={example.question}
                           onClick={() => selectExampleQuestion(example.question)}
                           type="button"
                         >
@@ -485,6 +517,15 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: Cha
                         </button>
                       ))}
                     </div>
+                    <button
+                      className="chatbot-example-cycle"
+                      onClick={() => setExampleGroupIndex((current) => (
+                        current + 1
+                      ) % EXAMPLE_QUESTION_GROUPS.length)}
+                      type="button"
+                    >
+                      다른 질문 보기
+                    </button>
                   </div>
                 </div>
               )}
@@ -551,23 +592,28 @@ function isNearBottom(element: HTMLElement | null): boolean {
   return element.scrollHeight - element.scrollTop - element.clientHeight <= 48;
 }
 
-const EXAMPLE_QUESTIONS = [
-  {
-    kind: 'recent-trade',
-    label: '최근 실거래',
-    question: '마포래미안푸르지오 전용 84㎡의 최근 실거래 5건을 거래일과 층까지 알려줘',
-  },
-  {
-    kind: 'price-trend',
-    label: '가격 흐름',
-    question: '헬리오시티 전용 59㎡의 최근 1년 월별 가격 흐름과 거래량을 보여줘',
-  },
-  {
-    kind: 'lifestyle-infrastructure',
-    label: '생활 인프라',
-    question: '잠실엘스 주변 학원 위치와 가까운 역·노선을 함께 알려줘',
-  },
-];
+const EXAMPLE_QUESTION_GROUPS = [
+  [
+    ['최근 실거래', '마포래미안푸르지오 전용 84㎡의 최근 실거래 5건을 거래일과 층까지 알려줘'],
+    ['가격 흐름', '헬리오시티 전용 59㎡의 최근 1년 월별 가격 흐름과 거래량을 보여줘'],
+    ['생활 인프라', '잠실엘스 주변 학원 위치와 가까운 역·노선을 함께 알려줘'],
+  ],
+  [
+    ['단지 정보', '헬리오시티 위치와 세대수·사용승인일을 알려줘'],
+    ['단지 비교', '잠실엘스와 헬리오시티 전용 84㎡ 최근 실거래를 비교해줘'],
+    ['조건 추천', '영등포구 500세대 이상 중 학원과 역 접근성을 우선한 후보 3곳을 알려줘'],
+  ],
+  [
+    ['거래·추이', '잠실엘스 전용 84㎡ 최근 실거래 3건과 1년 가격 흐름을 함께 보여줘'],
+    ['학교·교통', '래미안대치팰리스 주변 운영 중 초등학교와 가까운 역을 거리순으로 알려줘'],
+    ['기본 비교', '마포래미안푸르지오1단지와 4단지를 세대수·사용승인일로 비교해줘'],
+  ],
+  [
+    ['예산 추천', '송파구 20억원 이하 전용 84㎡ 단지 3곳을 거래와 교통 기준으로 추천해줘'],
+    ['점포·교통', '반포자이 주변 대규모점포 위치와 가까운 역·노선을 알려줘'],
+    ['정보·거래', '올림픽파크포레온 위치와 세대수·최근 실거래를 함께 알려줘'],
+  ],
+].map((group) => group.map(([label, question]) => ({ label, question })));
 
 function HomeSearchAiMark() {
   return (

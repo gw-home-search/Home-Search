@@ -372,6 +372,10 @@ def _select_supervisor_graph(mode: str, percent: int, user_id: int) -> bool:
 
 
 def _agentic_request(question: str) -> bool:
+    if re.search(r"(실거래|거래내역|가격\s*(?:흐름|추이)|시세\s*추이)", question):
+        return False
+    if re.search(r"(최신|현재|공고|고시|계획|예정|개통)", question):
+        return True
     return re.search(r"(추천|어때|어떄|괜찮아|살기\s*어)", question) is not None
 
 
@@ -393,6 +397,18 @@ def _scope_label(question: str) -> str:
     return match.group(1) if match else "질문에서 확인한 범위"
 
 
+def _internal_axis_count(question: str) -> int:
+    axis_patterns = (
+        r"[가-힣]{1,20}(?:시|군|구)",
+        r"\d+(?:\.\d+)?\s*(?:억|만원).{0,8}(?:이하|미만|예산)",
+        r"(?:전용|면적)\s*\d+(?:\.\d+)?\s*㎡?",
+        r"\d[\d,]*\s*세대",
+        r"(?:실거래|거래\s*(?:내역|량)|가격\s*(?:흐름|추이))",
+        r"(?:학원|학교|역|철도|교통|대규모점포|마트|백화점)",
+    )
+    return sum(re.search(pattern, question) is not None for pattern in axis_patterns)
+
+
 def _agent_models(question: str) -> tuple[object, object]:
     from .property_chat.agentic_openai import OpenAIResponsesAgentModel
     from .property_chat.openai_responses import OpenAIResponsesSettings
@@ -405,7 +421,9 @@ def _agent_models(question: str) -> tuple[object, object]:
         raise ChatbotProviderUnavailable()
     try:
         timeout_seconds = float(os.getenv("HOME_AI_OPENAI_TIMEOUT_SECONDS", "8"))
-        web_mode = WebEvidencePolicy().classify(question, internal_axis_count=0)
+        web_mode = WebEvidencePolicy().classify(
+            question, internal_axis_count=_internal_axis_count(question),
+        )
         web_enabled = (
             get_official_web_search_enabled()
             and web_mode is not WebEvidenceMode.DISABLED

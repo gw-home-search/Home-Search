@@ -10,11 +10,16 @@ from ai_service.chat import ChatbotProviderUnavailable
 from ai_service.models import ChatbotQueryRequest
 from ai_service.models import ConversationContext, ConversationMemory
 from ai_service.property_chat.answer_document import CompoundAnswerDocument
+from ai_service.property_chat.academy_locations import (
+    AcademyLocation,
+    AcademyLocationSearchResult,
+)
 from ai_service.property_chat.engine import (
     GroundedChatbotEngine,
     RecommendationExecutionError,
 )
 from ai_service.property_chat.candidate_selection import CandidateObservationSummary
+from ai_service.property_chat.deterministic_router import DeterministicQueryRouter
 from ai_service.property_chat.models import (
     ComplexRecord,
     DraftAnswer,
@@ -24,6 +29,7 @@ from ai_service.property_chat.models import (
     QueryPlanBundle,
     TradeRecord,
 )
+from ai_service.property_chat.rail_stations import RailStation, RailStationSearchResult
 
 
 class PropertyRepository:
@@ -65,6 +71,40 @@ class PartiallyFailingPropertyRepository(PropertyRepository):
     def recent_trades(self, *args):
         del args
         raise RuntimeError("must-not-leak")
+
+
+class AcademyRepository:
+    def nearby(self, **_kwargs):
+        return AcademyLocationSearchResult(
+            locations=(AcademyLocation(
+                store_id="academy-1", name="잠실학원",
+                small_category_code="P10101", status="OPEN",
+                address="서울 송파구", distance_meters=320,
+                dataset_version="academy-v1",
+                observed_at=datetime(2026, 7, 20, tzinfo=UTC),
+                registry_match=None,
+            ),),
+            matched_count=1, coordinate_coverage=1.0,
+            dataset_version="academy-v1",
+            observed_at=datetime(2026, 7, 20, tzinfo=UTC), verified_zero=False,
+        )
+
+
+class RailRepository:
+    def nearby(self, **_kwargs):
+        return RailStationSearchResult(
+            stations=(RailStation(
+                station_name="잠실", lines=("2호선", "8호선"),
+                occurrence_ids=("rail-2", "rail-8"), distance_meters=640,
+            ),),
+            occurrence_count=2, dataset_version="rail-v1",
+            source_date=date(2026, 6, 30),
+        )
+
+
+class FailingRailRepository:
+    def nearby(self, **_kwargs):
+        raise OSError("provider detail must not leak")
 
 
 class AmbiguousCompoundRepository(PropertyRepository):
@@ -143,7 +183,7 @@ def _query(plans: tuple[QueryPlan, ...], *, property_enabled=True, map_enabled=T
     ))
 
 
-def test_query_plan_bundle_merges_duplicates_and_uses_static_capability_order() -> None:
+def test_query_plan_bundle_merges_duplicates_and_preserves_first_appearance() -> None:
     bundle = QueryPlanBundle((
         QueryPlan("kakao_place_search", "잠실엘스", place_category="HOSPITAL"),
         QueryPlan("complex_identity", "잠실엘스"),
@@ -151,10 +191,151 @@ def test_query_plan_bundle_merges_duplicates_and_uses_static_capability_order() 
     ))
 
     assert [plan.capability for plan in bundle.fragments] == [
-        "complex_identity", "kakao_place_search",
+        "kakao_place_search", "complex_identity",
     ]
     with pytest.raises(ValueError):
         QueryPlanBundle(tuple(QueryPlan("complex_identity", f"단지 {index}") for index in range(5)))
+
+
+def test_deterministic_router_preserves_clear_academy_and_rail_compound() -> None:
+    planned = DeterministicQueryRouter(today=date(2026, 8, 3)).plan(
+        ChatbotQueryRequest(
+            question="잠실엘스 주변 학원 위치와 가까운 역·노선을 함께 알려줘"
+        )
+    )
+
+    assert isinstance(planned, QueryPlanBundle)
+    assert [fragment.capability for fragment in planned.fragments] == [
+        "academy_lookup",
+        "rail_station_lookup",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("question", "expected_capabilities"),
+    [
+        (
+            "마포래미안푸르지오 전용 84㎡의 최근 실거래 5건을 거래일과 층까지 알려줘",
+            ("recent_trade_lookup",),
+        ),
+        (
+            "헬리오시티 전용 59㎡의 최근 1년 월별 가격 흐름과 거래량을 보여줘",
+            ("price_trend",),
+        ),
+        (
+            "잠실엘스 주변 학원 위치와 가까운 역·노선을 함께 알려줘",
+            ("academy_lookup", "rail_station_lookup"),
+        ),
+        (
+            "헬리오시티 위치와 세대수·사용승인일을 알려줘",
+            ("complex_identity",),
+        ),
+        (
+            "잠실엘스 전용 84㎡ 최근 실거래 3건과 1년 가격 흐름을 함께 보여줘",
+            ("recent_trade_lookup", "price_trend"),
+        ),
+        (
+            "래미안대치팰리스 주변 운영 중 초등학교와 가까운 역을 거리순으로 알려줘",
+            ("school_location", "rail_station_lookup"),
+        ),
+        (
+            "반포자이 주변 대규모점포 위치와 가까운 역·노선을 알려줘",
+            ("retail_location", "rail_station_lookup"),
+        ),
+        (
+            "올림픽파크포레온 위치와 세대수·최근 실거래를 함께 알려줘",
+            ("complex_identity", "recent_trade_lookup"),
+        ),
+    ],
+)
+def test_example_questions_keep_clear_engine_fallback_intents(
+    question: str, expected_capabilities: tuple[str, ...],
+) -> None:
+    class UnavailablePlanner(CompoundLanguageModel):
+        async def plan_query(self, _request):
+            raise ChatbotProviderUnavailable()
+
+    engine = GroundedChatbotEngine(
+        repository=PropertyRepository(), language_model=UnavailablePlanner(()),
+        enabled_capabilities=frozenset({
+            "complex_identity", "recent_trade_lookup", "price_trend",
+        }),
+        enabled_reference_capabilities=frozenset({
+            "academy_lookup", "rail_station_lookup", "school_location",
+            "retail_location",
+        }),
+        answer_first_enabled=True,
+    )
+
+    plans = asyncio.run(engine.plan_goals(ChatbotQueryRequest(question=question)))
+    assert tuple(plan.capability for plan in plans) == expected_capabilities
+
+
+def test_academy_and_rail_compound_preserves_both_verified_results() -> None:
+    plans = (
+        QueryPlan("academy_lookup", "잠실엘스", radius_meters=1_500),
+        QueryPlan("rail_station_lookup", "잠실엘스", radius_meters=1_500),
+    )
+    engine = GroundedChatbotEngine(
+        repository=PropertyRepository(), language_model=CompoundLanguageModel(plans),
+        enabled_capabilities=frozenset(),
+        enabled_reference_capabilities=frozenset({"academy_lookup", "rail_station_lookup"}),
+        academy_location_repository=AcademyRepository(),
+        rail_station_repository=RailRepository(),
+        answer_first_enabled=True,
+    )
+
+    response = asyncio.run(engine.query(
+        request=ChatbotQueryRequest(
+            question="잠실엘스 주변 학원 위치와 가까운 역·노선을 함께 알려줘"
+        ),
+        user=AuthenticatedUser(user_id=1), request_id="request-academy-rail",
+    ))
+
+    assert response["executionSummary"] == {"total": 2, "succeeded": 2, "failed": 0}
+    assert [fragment["capability"] for fragment in response["fragments"]] == [
+        "academy_lookup", "rail_station_lookup",
+    ]
+    assert "학원 위치 1곳" in response["uiSummary"]["headline"]["text"]
+    assert "잠실" in response["uiSummary"]["headline"]["text"]
+    assert "2호선·8호선" in response["uiSummary"]["headline"]["text"]
+    assert {citation["sourceName"] for citation in response["citations"]} >= {
+        "상가(상권)정보 API 교육업종",
+        "전국도시철도역사정보표준데이터",
+    }
+
+
+def test_academy_and_rail_partial_keeps_academy_when_rail_fails() -> None:
+    plans = (
+        QueryPlan("academy_lookup", "잠실엘스", radius_meters=1_500),
+        QueryPlan("rail_station_lookup", "잠실엘스", radius_meters=1_500),
+    )
+    engine = GroundedChatbotEngine(
+        repository=PropertyRepository(), language_model=CompoundLanguageModel(plans),
+        enabled_capabilities=frozenset(),
+        enabled_reference_capabilities=frozenset({"academy_lookup", "rail_station_lookup"}),
+        academy_location_repository=AcademyRepository(),
+        rail_station_repository=FailingRailRepository(),
+        answer_first_enabled=True,
+    )
+
+    response = asyncio.run(engine.query(
+        request=ChatbotQueryRequest(
+            question="잠실엘스 주변 학원 위치와 가까운 역·노선을 함께 알려줘"
+        ),
+        user=AuthenticatedUser(user_id=1), request_id="request-academy-rail-partial",
+    ))
+
+    assert response["status"] == "partial_success"
+    assert response["executionSummary"] == {"total": 2, "succeeded": 2, "failed": 0}
+    assert response["conversationResolution"]["goals"][1]["status"] == "degraded"
+    assert "학원 위치 1곳" in response["uiSummary"]["headline"]["text"]
+    assert "철도역·노선" in response["uiSummary"]["headline"]["text"]
+    assert any(
+        citation["sourceName"] == "상가(상권)정보 API 교육업종"
+        for citation in response["citations"]
+    )
+    assert "provider detail" not in str(response)
 
 
 def test_query_plan_bundle_merges_compatible_lists_and_rejects_conflicts() -> None:
@@ -249,7 +430,11 @@ def test_compound_query_aggregates_grounded_artifact_and_map_action() -> None:
     assert [action["category"] for action in response["uiActions"]] == ["HOSPITAL"]
     assert response["evidenceSummary"]["factCount"] == 1
     assert response["uiSummary"]["version"] == 1
-    assert response["uiSummary"]["headline"]["text"] == "2개 요청을 모두 확인했습니다."
+    assert response["uiSummary"]["headline"]["text"] == (
+        "잠실엘스는 서울 송파구에 있습니다. "
+        "잠실엘스의 요청 조건에서 검증된 정보를 확인했습니다."
+    )
+    assert "개 요청을" not in response["uiSummary"]["headline"]["text"]
     assert [item["fragmentId"] for item in response["uiSummary"]["fragmentSummaries"]] == [
         "fragment-1", "fragment-2",
     ]

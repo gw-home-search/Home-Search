@@ -295,6 +295,50 @@ def test_decision_shape_and_web_citations_fail_closed(decision: AgentDecision) -
         _validate_for_test(decision)
 
 
+def test_official_only_decision_requires_cited_research_claim_without_rows() -> None:
+    decision = AgentDecision(
+        answer="공식 근거를 확인했습니다.", rows=(), fact_ids=(),
+        web_citations=(WebCitation(
+            "web:0123456789abcdef0123456789abcdef", "공식 공고",
+            "https://www.reb.or.kr/notice?id=1",
+        ),),
+        research_claims=("최신 공식 공고의 현재 상태를 확인했습니다. [1]",),
+    )
+
+    _validate_for_test(decision)
+
+
+@pytest.mark.parametrize(
+    "decision",
+    [
+        AgentDecision(
+            answer="답변", rows=_decision(10).rows, fact_ids=("complex:10",),
+            web_citations=(WebCitation(
+                "web:0123456789abcdef0123456789abcdef", "공식 공고",
+                "https://www.reb.or.kr/notice?id=1",
+            ),),
+        ),
+        AgentDecision(
+            answer="답변", rows=_decision(10).rows, fact_ids=("complex:10",),
+            research_claims=("공식 상태를 확인했습니다. [1]",),
+        ),
+        AgentDecision(
+            answer="답변", rows=_decision(10).rows, fact_ids=("complex:10",),
+            web_citations=(WebCitation(
+                "web:0123456789abcdef0123456789abcdef", "공식 공고",
+                "https://www.reb.or.kr/notice?id=1",
+            ),),
+            research_claims=("공식 상태를 확인했습니다. [2]",),
+        ),
+    ],
+)
+def test_decision_rejects_missing_or_mismatched_research_citations(
+    decision: AgentDecision,
+) -> None:
+    with pytest.raises(ValueError):
+        _validate_for_test(decision)
+
+
 class FixedTools:
     def __init__(self, result: ToolEvidence | Exception) -> None:
         self.result = result

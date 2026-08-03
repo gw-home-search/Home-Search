@@ -428,7 +428,7 @@ class GroundedChatbotEngine:
                 request.question,
                 semantic_goal_planner_enabled=self._semantic_goal_planner_enabled,
             )
-            for plan in bundle.fragments
+            for plan in _order_plans_by_question(bundle.fragments, request.question)
         )
 
     async def execute_goal(
@@ -701,12 +701,15 @@ class GroundedChatbotEngine:
             artifacts = list(result.artifacts) or FactListPresenter().present(
                 plan=plan, used_facts=used_facts, readiness=result.readiness
             )
-            presentation_facts = (
-                list(result.result_facts)
-                if result.result_facts is not None
-                else list(result.selection_facts)
-                if result.selection_facts
-                else used_facts
+            presentation_facts = list(_unique_facts(tuple((
+                *result.selection_facts,
+                *(result.result_facts if result.result_facts is not None else ()),
+                *used_facts,
+            ))))
+            used_fact_ids = {fact.fact_id for fact in used_facts}
+            used_facts.extend(
+                fact for fact in presentation_facts
+                if fact.fact_id not in used_fact_ids
             )
             presentation, artifacts = PresentationAssembler().present(
                 plan=plan,
@@ -871,10 +874,16 @@ class GroundedChatbotEngine:
             fact.payload["complexId"]: fact for fact in observation_facts
         }
         selected_observation = observation_by_id.get(selected_match.complex.complex_id)
-        alternative_artifact = _alternative_candidate_artifact(
-            alternatives, observation_by_id, plan.capability
+        material_alternatives = tuple(
+            candidate for candidate in alternatives
+            if _is_material_alternative(
+                selected_match, candidate, observation_by_id, plan,
+            )
         )
-        actions = _focus_complex_actions(selected_match, alternatives)
+        alternative_artifact = _alternative_candidate_artifact(
+            material_alternatives, observation_by_id, plan
+        )
+        actions = _focus_complex_actions(selected_match, material_alternatives)
         all_facts = _unique_facts((
             *result.facts,
             primary_fact,
@@ -1005,6 +1014,41 @@ def _fragment_timeout_seconds(capability: QueryCapability) -> float:
     return 8.0 if capability == "recommendation" else 3.0
 
 
+_CAPABILITY_QUESTION_PATTERNS: dict[QueryCapability, re.Pattern[str]] = {
+    "complex_identity": re.compile(
+        r"(?:위치|주소|어디|단지\s*정보|세대수|사용승인일|확인)"
+    ),
+    "recent_trade_lookup": re.compile(r"(?:실거래|최근\s*거래|거래\s*내역)"),
+    "price_trend": re.compile(r"(?:가격\s*(?:흐름|추이)|월별|거래량)"),
+    "comparison": re.compile(r"(?:비교|차이)"),
+    "recommendation": re.compile(r"(?:추천|후보)"),
+    "school_location": re.compile(r"(?:초등학교|중학교|고등학교|주변\s*학교)"),
+    "academy_lookup": re.compile(r"(?:학원|교습소)"),
+    "academy_registry_summary": re.compile(r"(?:학원|교습소)"),
+    "rail_station_lookup": re.compile(
+        r"(?:철도|지하철|가까운\s*역|역[·\s-]*노선|역세권)"
+    ),
+    "retail_location": re.compile(
+        r"(?:대형마트|백화점|쇼핑센터|복합몰|대규모점포)"
+    ),
+    "childcare_lookup": re.compile(r"(?:어린이집|유치원)"),
+    "kakao_place_search": re.compile(
+        r"(?:병원|약국|카페|음식점|편의점|주차장|은행|지도)"
+    ),
+}
+
+
+def _order_plans_by_question(
+    plans: tuple[QueryPlan, ...], question: str,
+) -> tuple[QueryPlan, ...]:
+    positions: list[tuple[int, int, QueryPlan]] = []
+    for index, plan in enumerate(plans):
+        pattern = _CAPABILITY_QUESTION_PATTERNS.get(plan.capability)
+        match = pattern.search(question) if pattern is not None else None
+        positions.append((match.start() if match is not None else len(question), index, plan))
+    return tuple(item[2] for item in sorted(positions))
+
+
 def _selected_context_id(
     request: ChatbotQueryRequest,
     plan: QueryPlan,
@@ -1051,7 +1095,7 @@ def _candidate_observation_fact(
 def _alternative_candidate_artifact(
     alternatives: tuple[CandidateMatch, ...],
     observation_by_id: dict[object, EvidenceFact],
-    capability: QueryCapability,
+    plan: QueryPlan,
 ) -> dict[str, object] | None:
     if not alternatives:
         return None
@@ -1066,7 +1110,7 @@ def _alternative_candidate_artifact(
         location = record.region_name or record.address or "지역 정보 없음"
         value = location
         fact_ids = [f"property-complex-{record.complex_id}"]
-        if capability in {"recent_trade_lookup", "price_trend"} and isinstance(count, int):
+        if plan.capability in {"recent_trade_lookup", "price_trend"} and isinstance(count, int):
             value += f" · 요청 조건 데이터 {count}건"
             fact_ids.append(observation.fact_id)  # type: ignore[union-attr]
         if not record.marker_safe:
@@ -1083,6 +1127,25 @@ def _alternative_candidate_artifact(
         "title": "다른 후보 단지",
         "items": items,
     }
+
+
+def _is_material_alternative(
+    primary: CandidateMatch,
+    alternative: CandidateMatch,
+    observation_by_id: dict[object, EvidenceFact],
+    plan: QueryPlan,
+) -> bool:
+    primary_parcel = primary.complex.parcel_id
+    if primary_parcel is not None and primary_parcel == alternative.complex.parcel_id:
+        return True
+    if plan.region_name and alternative.explicit_region_match:
+        return True
+    observation = observation_by_id.get(alternative.complex.complex_id)
+    return bool(
+        observation is not None
+        and isinstance(observation.payload.get("exactObservationCount"), int)
+        and observation.payload["exactObservationCount"] > 0
+    )
 
 
 def _focus_complex_actions(
@@ -1299,6 +1362,7 @@ def _complex_fact(record: ComplexRecord) -> EvidenceFact:
         claims=tuple(claims),
         data_as_of=record.data_updated_at.date(),
         payload=payload,
+        source_name="Home Search 단지 정보",
     )
 
 

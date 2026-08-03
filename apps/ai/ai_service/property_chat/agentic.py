@@ -121,6 +121,8 @@ class WebCitation:
     fact_id: str
     title: str
     url: str
+    start_index: int | None = None
+    end_index: int | None = None
 
 
 @dataclass(frozen=True)
@@ -130,6 +132,7 @@ class AgentDecision:
     fact_ids: tuple[str, ...]
     limitations: tuple[str, ...] = ()
     web_citations: tuple[WebCitation, ...] = ()
+    research_claims: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -355,7 +358,12 @@ def _validate_decision(
 ) -> None:
     if not _bounded_text(decision.answer, 20_000):
         raise AgentGroundingError("answer is invalid")
-    if not 1 <= len(decision.rows) <= requested_count:
+    official_only = (
+        not decision.rows
+        and bool(decision.web_citations)
+        and bool(decision.research_claims)
+    )
+    if not official_only and not 1 <= len(decision.rows) <= requested_count:
         raise AgentGroundingError("final candidate count is invalid")
     selected = [row.complex_id for row in decision.rows]
     if len(selected) != len(set(selected)):
@@ -384,7 +392,7 @@ def _validate_decision(
             factual_texts.append(text)
     if not referenced.issubset(fact_ids):
         raise AgentGroundingError("unknown fact id")
-    from .web_evidence import validate_official_source_url
+    from .web_evidence import contains_prompt_injection, validate_official_source_url
     if (
         len({citation.fact_id for citation in decision.web_citations})
         != len(decision.web_citations)
@@ -396,6 +404,19 @@ def _validate_decision(
         )
     ):
         raise AgentGroundingError("invalid official web citation")
+    citation_markers = {
+        int(marker)
+        for claim in decision.research_claims
+        for marker in re.findall(r"\[(\d+)]", claim)
+    }
+    if decision.web_citations and (
+        not decision.research_claims
+        or citation_markers != set(range(1, len(decision.web_citations) + 1))
+        or any(contains_prompt_injection(claim) for claim in decision.research_claims)
+    ):
+        raise AgentGroundingError("official web claims are not fully cited")
+    if decision.research_claims and not decision.web_citations:
+        raise AgentGroundingError("official web claims lack citations")
     if any(_FORBIDDEN_CLAIM_PATTERN.search(text) for text in factual_texts):
         raise AgentGroundingError("forbidden property claim")
     stated_numbers = {

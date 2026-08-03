@@ -102,7 +102,7 @@ class PostgresPropertyFactRepository:
         with self._pool.connection() as connection:
             literal_rows = connection.execute(
                 """
-                SELECT complex_id, display_name, region_code, region_name, address,
+                SELECT complex_id, parcel_id, display_name, region_code, region_name, address,
                        latitude, longitude, marker_safe, data_updated_at,
                        unit_count, use_date
                 FROM ai_read.complex_fact

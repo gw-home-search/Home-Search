@@ -5,6 +5,7 @@ import { ChatbotPanel } from '../features/chat/ChatbotPanel';
 import type { IndexedDbChatConversationStore } from '../features/chat/storage/chatConversationStore';
 import type { ChatAction } from '../features/chat/actionContract';
 import type { ChatUiContext } from '../features/chat/conversationContract';
+import type { DetailRequestState } from './mapAppTypes';
 import { FeatureErrorBoundary } from '../shared/FeatureErrorBoundary';
 
 type AppHeaderProps = {
@@ -12,9 +13,10 @@ type AppHeaderProps = {
   onChatOpenChange?: (isOpen: boolean) => void;
   onUiAction?: (action: ChatAction, source?: 'auto') => boolean;
   chatUiContext?: ChatUiContext;
+  chatDetailState?: DetailRequestState;
 };
 
-export function AppHeader({ chatConversationStore, chatUiContext, onChatOpenChange, onUiAction }: AppHeaderProps) {
+export function AppHeader({ chatConversationStore, chatDetailState, chatUiContext, onChatOpenChange, onUiAction }: AppHeaderProps) {
   return (
     <header aria-label="상단 앱 바" className="app-bar">
       <Link aria-label="홈서치 지도 홈" className="app-brand" to="/">
@@ -34,6 +36,7 @@ export function AppHeader({ chatConversationStore, chatUiContext, onChatOpenChan
       <div className="app-header-actions">
         <FeatureErrorBoundary feature="chatbot">
           <ChatbotPanel
+            detailState={chatDetailState}
             onOpenChange={onChatOpenChange}
             onUiAction={onUiAction}
             store={chatConversationStore}

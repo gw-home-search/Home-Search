@@ -4,6 +4,7 @@ import pytest
 
 from ai_service.property_chat.models import EvidenceFact, FactClaim, QueryPlan
 from ai_service.property_chat.presentation import (
+    AnswerLeadBuilder,
     AnswerPresentation,
     AppliedCriterion,
     FollowUpPrompt,
@@ -80,3 +81,80 @@ def test_assembler_keeps_text_fallback_for_unavailable_and_builds_reference_scop
     public = summary.to_public_dict({"fact-1"})
     assert public["criteria"][0]["key"] == "RADIUS"
     assert artifacts == []
+
+
+def _evidence(fact_id: str, payload: dict[str, object]) -> EvidenceFact:
+    return EvidenceFact(
+        fact_id=fact_id,
+        claims=(FactClaim("1", "COUNT"),),
+        data_as_of=date(2026, 8, 3),
+        payload=payload,
+    )
+
+
+@pytest.mark.parametrize(
+    ("plan", "facts", "artifacts", "expected"),
+    [
+        (
+            QueryPlan("complex_identity", "헬리오시티"),
+            [_evidence("property-complex-1", {"displayName": "헬리오시티"})],
+            [],
+            "헬리오시티의 검증된 위치 정보는 현재 확인할 수 없습니다.",
+        ),
+        (
+            QueryPlan("recent_trade_lookup", "헬리오시티"),
+            [_evidence("property-complex-1", {"displayName": "헬리오시티"})],
+            [],
+            "헬리오시티의 요청 조건에서는 실거래가 0건으로 확인됐습니다.",
+        ),
+        (
+            QueryPlan(
+                "price_trend", "헬리오시티",
+                start_date=date(2025, 8, 3), end_date=date(2026, 8, 3),
+            ),
+            [_evidence("property-complex-1", {"displayName": "헬리오시티"})],
+            [],
+            "헬리오시티의 2025-08-03~2026-08-03에서는 월별 가격 관찰값이 0건으로 확인됐습니다.",
+        ),
+        (
+            QueryPlan("academy_lookup", "헬리오시티", radius_meters=800),
+            [
+                _evidence("property-complex-1", {"displayName": "헬리오시티"}),
+                _evidence("academy-scope-1", {"verifiedZero": True}),
+            ],
+            [],
+            "헬리오시티 중심 800m에서 학원 위치가 0곳으로 확인됐습니다.",
+        ),
+        (
+            QueryPlan("rail_station_lookup", "헬리오시티"),
+            [_evidence("property-complex-1", {"displayName": "헬리오시티"})],
+            [],
+            "헬리오시티의 가까운 철도역·노선은 현재 검증 가능한 근거가 없어 답할 수 없습니다.",
+        ),
+        (
+            QueryPlan("comparison", "비교", complex_names=("A", "B")),
+            [_evidence("comparison-1", {"value": 1})],
+            [{
+                "type": "comparisonTable",
+                "columns": [{"label": "A"}, {"label": "B"}],
+                "rows": [{
+                    "label": "세대수",
+                    "cells": [
+                        {"availability": "available", "value": "1,000세대"},
+                        {"availability": "available", "value": "2,000세대"},
+                    ],
+                }],
+            }],
+            "요청 조건에서 A와 B를 비교하면 세대수는 A 1,000세대, B 2,000세대입니다.",
+        ),
+    ],
+)
+def test_answer_lead_builder_handles_zero_unavailable_and_comparison(
+    plan: QueryPlan,
+    facts: list[EvidenceFact],
+    artifacts: list[dict[str, object]],
+    expected: str,
+) -> None:
+    lead = AnswerLeadBuilder().build(plan=plan, facts=facts, artifacts=artifacts)
+
+    assert lead.text == expected

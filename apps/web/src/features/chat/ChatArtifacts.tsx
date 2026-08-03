@@ -58,32 +58,43 @@ function FactListArtifactView({
   onAction?: (action: ChatAction) => void;
   selectedComplexId?: number;
 }) {
+  const content = (
+    <dl>
+      {artifact.items.map((item) => {
+        const action = focusActionForFacts(actions, item.factIds);
+        return (
+          <div key={`${item.label}:${item.factIds.join(':')}`}>
+            {action == null ? (
+              <><dt>{item.label}</dt><dd>{item.value}</dd></>
+            ) : (
+              <button
+                aria-disabled={onAction == null}
+                aria-label={action.label}
+                aria-pressed={action.complexId === selectedComplexId}
+                className="chatbot-candidate-map-action"
+                onClick={() => onAction?.(action)}
+                type="button"
+              >
+                <span>{item.label}</span><small>{item.value}</small>
+              </button>
+            )}
+          </div>
+        );
+      })}
+    </dl>
+  );
+  if (artifact.artifactId === 'alternative-complexes') {
+    return (
+      <details className="chatbot-fact-list chatbot-alternative-complexes">
+        <summary>다른 후보</summary>
+        {content}
+      </details>
+    );
+  }
   return (
     <section className="chatbot-fact-list">
       <h4>{artifact.title}</h4>
-      <dl>
-        {artifact.items.map((item) => {
-          const action = focusActionForFacts(actions, item.factIds);
-          return (
-            <div key={`${item.label}:${item.factIds.join(':')}`}>
-              {action == null ? (
-                <><dt>{item.label}</dt><dd>{item.value}</dd></>
-              ) : (
-                <button
-                  aria-disabled={onAction == null}
-                  aria-label={action.label}
-                  aria-pressed={action.complexId === selectedComplexId}
-                  className="chatbot-candidate-map-action"
-                  onClick={() => onAction?.(action)}
-                  type="button"
-                >
-                  <span>{item.label}</span><small>{item.value}</small>
-                </button>
-              )}
-            </div>
-          );
-        })}
-      </dl>
+      {content}
     </section>
   );
 }

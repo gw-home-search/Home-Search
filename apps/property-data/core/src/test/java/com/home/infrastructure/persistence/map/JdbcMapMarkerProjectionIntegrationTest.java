@@ -45,8 +45,8 @@ class JdbcMapMarkerProjectionIntegrationTest extends JdbcPostgresTestSupport {
 			LANGUAGE plpgsql
 			AS $function$
 			BEGIN
-			    IF current_setting('statement_timeout') <> '3min' THEN
-			        RAISE EXCEPTION 'projection statement_timeout must be transaction-local 3min';
+                IF current_setting('statement_timeout') <> '1h' THEN
+                    RAISE EXCEPTION 'projection statement_timeout must be transaction-local 1h';
 			    END IF;
 			    RETURN NEW;
 			END
@@ -67,7 +67,7 @@ class JdbcMapMarkerProjectionIntegrationTest extends JdbcPostgresTestSupport {
                             .sql("SELECT current_setting('statement_timeout')")
                             .query(String.class)
                             .single())
-                    .isNotEqualTo("3min");
+                    .isNotEqualTo("1h");
         } finally {
             jdbcClient
                     .sql("DROP TRIGGER require_map_projection_timeout_for_test ON map_complex_marker_projection")

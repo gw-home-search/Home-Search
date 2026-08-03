@@ -36,6 +36,49 @@ class JdbcMapMarkerProjectionIntegrationTest extends JdbcPostgresTestSupport {
     }
 
     @Test
+    @DisplayName("marker projection은 일반 runtime 제한을 바꾸지 않고 전용 transaction timeout을 사용한다")
+    void projectionUsesTransactionLocalStatementTimeout() {
+        seedPropertyExplorationData();
+        jdbcClient.sql("""
+			CREATE FUNCTION require_map_projection_timeout_for_test()
+			RETURNS trigger
+			LANGUAGE plpgsql
+			AS $function$
+			BEGIN
+			    IF current_setting('statement_timeout') <> '3min' THEN
+			        RAISE EXCEPTION 'projection statement_timeout must be transaction-local 3min';
+			    END IF;
+			    RETURN NEW;
+			END
+			$function$
+			""").update();
+        jdbcClient.sql("""
+			CREATE TRIGGER require_map_projection_timeout_for_test
+			BEFORE INSERT ON map_complex_marker_projection
+			FOR EACH ROW EXECUTE FUNCTION require_map_projection_timeout_for_test()
+			""").update();
+        try {
+            JdbcMapMarkerProjectionWriter writer =
+                    new JdbcMapMarkerProjectionWriter(jdbcClient, new DataSourceTransactionManager(dataSource));
+
+            writer.rebuildAndActivate("trade:timeout-scope");
+
+            assertThat(jdbcClient
+                            .sql("SELECT current_setting('statement_timeout')")
+                            .query(String.class)
+                            .single())
+                    .isNotEqualTo("3min");
+        } finally {
+            jdbcClient
+                    .sql("DROP TRIGGER require_map_projection_timeout_for_test ON map_complex_marker_projection")
+                    .update();
+            jdbcClient
+                    .sql("DROP FUNCTION require_map_projection_timeout_for_test()")
+                    .update();
+        }
+    }
+
+    @Test
     @DisplayName("새 generation 구축 실패는 기존 active pointer를 보존하고 실패 evidence를 남긴다")
     void failedGenerationKeepsPreviousActivePointer() {
         seedPropertyExplorationData();

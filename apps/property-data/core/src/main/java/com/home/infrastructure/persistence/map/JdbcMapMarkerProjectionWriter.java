@@ -25,7 +25,7 @@ public class JdbcMapMarkerProjectionWriter implements MapMarkerProjectionReposit
 
     private static final Logger log = LoggerFactory.getLogger(JdbcMapMarkerProjectionWriter.class);
     private static final String BUILD_COMPLEX_MARKERS_SQL = loadBuildSql();
-    private static final String PROJECTION_STATEMENT_TIMEOUT_MILLIS = "180000";
+    private static final String PROJECTION_STATEMENT_TIMEOUT_MILLIS = "3600000";
 
     private final JdbcClient jdbcClient;
     private final TransactionOperations transactions;

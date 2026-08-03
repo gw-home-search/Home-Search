@@ -157,9 +157,8 @@ locals {
       environment = [
         { name = "SPRING_PROFILES_ACTIVE", value = "prod" },
         { name = "SPRING_BATCH_JOB_NAME", value = "rtmsDailyRefreshJob" },
-        { name = "DB_JDBC_URL", value = "jdbc:postgresql://${local.host_gateway}:15432/home_search?sslmode=require" },
+        { name = "DB_JDBC_URL", value = "jdbc:postgresql://${local.host_gateway}:15432/home_search?sslmode=require&options=-c%20statement_timeout=7200000" },
         { name = "DB_USERNAME", value = "home_search_property_runtime" },
-        { name = "SPRING_DATASOURCE_HIKARI_CONNECTION_INIT_SQL", value = "SET statement_timeout = '2h'" },
         { name = "HOME_INGEST_RTMS_DAILY_ENABLED", value = "true" },
         { name = "HOME_INGEST_RTMS_DAILY_LAWD_CDS", value = "" },
         { name = "HOME_INGEST_RTMS_DAILY_LOOKBACK_MONTHS", value = "2" },

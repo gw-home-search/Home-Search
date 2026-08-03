@@ -24,6 +24,13 @@ if grep -Fq 'test \"$(shasum -a 256' "${ssm_document}"; then
 fi
 grep -Fq -- '--log-driver none' "${ssm_document}" \
   || { echo '상태: Fail - F37 one-shot smoke가 host 기본 awslogs driver를 우회하지 않습니다.' >&2; exit 1; }
+grep -Fq 'DOCKER_CONFIG=$(mktemp -d' "${ssm_document}" \
+  || { echo '상태: Fail - F37 smoke가 임시 Docker credential directory를 사용하지 않습니다.' >&2; exit 1; }
+grep -Fq 'aws ecr get-login-password' "${ssm_document}" \
+  || { echo '상태: Fail - F37 smoke가 실행 직전 ECR 인증을 갱신하지 않습니다.' >&2; exit 1; }
+if grep -Fq '/root/.docker/config.json' "${ssm_document}"; then
+  echo '상태: Fail - F37 smoke가 host 기본 Docker credential 파일을 사용합니다.' >&2; exit 1
+fi
 jq -e '.model_version == "deployment__F37_monthly_anchor_prev3_rolling_huber_010"
   and (.files | keys | sort) == ["_SUCCESS","eval_metrics.csv","feature_schema.json","keras_model.keras","metadata.json","numeric_medians.json","sample_input.json"]
   and all(.files[]; test("^[0-9a-f]{64}$"))' "${manifest}" >/dev/null

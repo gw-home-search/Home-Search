@@ -238,7 +238,7 @@ run "data_phase_keeps_platform_services_dark_before_secret_bootstrap" {
       && one([
         for item in local.one_shot_specs["rtms-daily-refresh"].environment :
         item.value if item.name == "SPRING_DATASOURCE_HIKARI_CONNECTION_INIT_SQL"
-      ]) == "SET statement_timeout = '1h'"
+      ]) == "SET statement_timeout = '2h'"
       && one([
         for item in local.one_shot_specs["rtms-daily-refresh"].environment :
         item.value if item.name == "HOME_INGEST_RTMS_ALLOW_COORDINATE_PENDING_ONLY"

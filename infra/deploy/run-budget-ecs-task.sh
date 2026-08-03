@@ -20,6 +20,7 @@ fi
 
 task_arn=''
 completed=false
+task_timeout_seconds=7200
 cleanup() {
   if [[ -n "${task_arn}" && "${completed}" != true ]]; then
     aws ecs stop-task --region ap-northeast-2 --cluster "${cluster}" \
@@ -56,6 +57,7 @@ if [[ -n "${command_override}" ]]; then
       }
       ;;
     rtms-daily-refresh)
+      task_timeout_seconds=10800
       jq -e 'length == 1 and (.[0] | test("^requestId=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"))' \
         <<<"${command_override}" >/dev/null || {
         echo '상태: Fail - RTMS 수동 실행은 canonical requestId 하나만 허용합니다.' >&2
@@ -101,7 +103,7 @@ jq -e '.failures | length == 0' <<<"${result}" >/dev/null || {
 task_arn="$(jq -er '.tasks | select(length == 1) | .[0].taskArn' <<<"${result}")"
 [[ "${task_arn}" =~ ^arn:aws:ecs:ap-northeast-2:[0-9]{12}:task/home-search-budget-production/ ]]
 
-deadline=$((SECONDS + 7200))
+deadline=$((SECONDS + task_timeout_seconds))
 last_status=''
 description=''
 while ((SECONDS < deadline)); do
@@ -113,7 +115,7 @@ while ((SECONDS < deadline)); do
   sleep 15
 done
 if [[ "${last_status}" != STOPPED ]]; then
-  echo '상태: Fail - budget one-shot task가 7200초 안에 종료되지 않았습니다.' >&2
+  echo "상태: Fail - budget one-shot task가 ${task_timeout_seconds}초 안에 종료되지 않았습니다." >&2
   exit 1
 fi
 jq -e '

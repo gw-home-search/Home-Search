@@ -268,6 +268,8 @@ register_ai_canary_line="$(grep -nF 'name: Register isolated AI canary revision'
 run_ai_canary_line="$(grep -nF 'name: Run isolated AI canary' "${rollout_workflow}" | cut -d: -f1)"
 start_ml_line="$(grep -nF 'name: Start and verify ML before data bootstrap' "${rollout_workflow}" | cut -d: -f1)"
 run_data_bootstrap_line="$(grep -nF 'name: Run RTMS catch-up and market-news bootstrap' "${rollout_workflow}" | cut -d: -f1)"
+rtms_credentials_window="$(sed -n "$((run_data_bootstrap_line - 3)),$((run_data_bootstrap_line - 1))p" "${rollout_workflow}")"
+grep -Fq 'role-duration-seconds: 10800' <<<"${rtms_credentials_window}"
 [[ "${register_ai_canary_line}" -lt "${run_ai_canary_line}" ]]
 [[ "${run_ai_canary_line}" -lt "${start_ml_line}" ]]
 [[ "${start_ml_line}" -lt "${run_data_bootstrap_line}" ]]

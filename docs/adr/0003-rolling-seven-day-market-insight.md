@@ -38,7 +38,11 @@ source identity는 관련 section에서만 제외하고 DB/API `quality`에 남�
 - 한 번도 rolling 발행이 없을 때만 `UNAVAILABLE`이다.
 - 기존 V18, `WEEKLY`, `REJECTED` 및 이미 발행된 item은 수정하거나
   삭제하지 않는다.
-- DAILY lookback은 현재 월과 이전 두 거래월로 확대하며, 허용 가능한
+- DAILY lookback은 현재 월과 직전 거래월로 하며, 허용 가능한
   provider quota를 넘으면 조용히 축소하지 않고 rollout을 중단한다.
+  (2026-08-04 개정: 기존 "이전 두 거래월"에서 축소. budget production의
+  `HOME_INGEST_RTMS_DAILY_LOOKBACK_MONTHS=1`이 이 결정을 반영한다.
+  rolling 7일 창은 두 거래월로 충분히 덮이며, 30일 신고 기한을 넘긴
+  과거월 지연신고 보정은 별도 backfill 실행이 담당한다.)
 - Web은 polling하지 않고 인사이트 재진입 및 탭 복귀 시 scope cache의
   5분 TTL 또는 KST 날짜 변경을 확인해 갱신한다.

@@ -251,6 +251,10 @@ run "data_phase_keeps_platform_services_dark_before_secret_bootstrap" {
         for item in local.one_shot_specs["rtms-daily-refresh"].environment :
         item.value if item.name == "HOME_INSIGHT_TRADE_ENABLED"
       ]) == "true"
+      && one([
+        for item in local.one_shot_specs["rtms-daily-refresh"].environment :
+        item.value if item.name == "HOME_INGEST_RTMS_DAILY_LOOKBACK_MONTHS"
+      ]) == "1"
       && alltrue([
         for name, task in aws_ecs_task_definition.one_shot : task.memory == null
         if name != "data-import-reconcile"

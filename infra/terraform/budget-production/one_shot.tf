@@ -161,7 +161,7 @@ locals {
         { name = "DB_USERNAME", value = "home_search_property_runtime" },
         { name = "HOME_INGEST_RTMS_DAILY_ENABLED", value = "true" },
         { name = "HOME_INGEST_RTMS_DAILY_LAWD_CDS", value = "" },
-        { name = "HOME_INGEST_RTMS_DAILY_LOOKBACK_MONTHS", value = "2" },
+        { name = "HOME_INGEST_RTMS_DAILY_LOOKBACK_MONTHS", value = "1" },
         { name = "HOME_INGEST_RTMS_ALLOW_COORDINATE_PENDING_ONLY", value = "true" },
         { name = "HOME_INSIGHT_TRADE_ENABLED", value = "true" },
       ]

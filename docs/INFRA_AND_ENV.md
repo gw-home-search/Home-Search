@@ -564,10 +564,11 @@ lineage table.
 
 V19 adds structured RTMS registration/cancellation dates, rolling seven-day
 period/item evidence, quality counters, and `SUPERSEDED` replacement lineage.
-Existing V15-V18 checksums remain unchanged. The DAILY RTMS lookback default is
-`2`, so the current trade month and previous two trade months are planned; the
-work-unit total is derived from the resolved region and month lists rather than
-a fixed count.
+Existing V15-V18 checksums remain unchanged. The application default DAILY RTMS
+lookback is `2`, but budget production pins
+`HOME_INGEST_RTMS_DAILY_LOOKBACK_MONTHS` to `1`, so the current trade month and
+the previous trade month are planned; the work-unit total is derived from the
+resolved region and month lists rather than a fixed count.
 
 For a credential-injected local end-to-end run, use
 `apps/property-data/ops/run-local-market-insight-e2e.sh`. The runner refuses a

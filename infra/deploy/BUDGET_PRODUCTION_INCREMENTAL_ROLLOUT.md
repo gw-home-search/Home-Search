@@ -49,6 +49,22 @@ bootstrap_plan_evidence_uri=s3://.../deployment-evidence/bootstrap/<release-sha>
 oauth_acceptance_evidence_uri=s3://.../deployment-evidence/oauth/<release-sha>/oauth-smoke.json
 ```
 
+`rtms_resume_request_id`는 직전 실행과 **같은 KST 날짜 안에서만** 유효하다. daily job의 식별 파라미터는
+`runDate`와 `requestId` 두 개이고 `runDate`는 KST 당일로 결정되므로, KST 자정을 넘긴 뒤 같은 requestId를 넘기면
+`BatchExecutionCorrelationGuard`가 `requestId was already used by a different Batch parameter set`로 즉시
+종료시킨다. 날짜가 바뀐 재시도에서는 이 입력을 비워 새 requestId를 발급받는다.
+
+## 실패 후 재시도
+
+한 번 실행한 rollout은 **같은 release tag로 재시도할 수 없다.**
+
+- prep plan이 이미 적용된 상태에서 같은 tag로 다시 planning하면 `terraform plan -detailed-exitcode`가 `0`을
+  반환하고, `Verify incremental Terraform allowlist`가 exit code `2`를 요구하므로 실패한다.
+- 같은 commit에 새 tag만 붙여도 release는 통과하지 못한다. ECR repository의 SHA tag가 immutable이라
+  `The image tag '<sha>' already exists ... cannot be overwritten`으로 push가 거부된다.
+
+따라서 재시도는 **새 commit을 main에 머지한 뒤 새 tag를 끊는 것**이 유일한 경로다.
+
 prep plan은 현재 application task definition ARN과 desired count를 exact pin하고 schedule을 disabled로 둔다. saved full plan 적용 뒤 V39→V40 migrate 또는 live V40 validate-only, F37 install, ML health, RTMS catch-up, news bootstrap, AI canary 순서로 진행한다. Application 교체 순서는 `ml → property-api → user-api → ai → chat-bff → admin-api → admin-gateway → public-gateway`이다.
 
 Workflow는 backend 교체 후 OAuth evidence를 최대 15분 기다린다. 그 사이 운영자는 Google·Kakao·Naver 각각 실제 login, 현재 사용자 provider, logout, cookie 정책을 확인하고 secret·`code`·`state` 없이 `oauth-smoke.json`을 지정 경로에 올린다. 세 provider 중 하나라도 실패했거나 증거가 도착하지 않으면 public gateway를 교체하지 않고 application-only rollback한다.

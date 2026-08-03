@@ -712,7 +712,7 @@ jobs:
               checks:{ecs_healthy:true,health_http_status:200,prediction_finite_positive:true,model_version_matches:true},redactions_applied:true}' \
             >deployment-evidence/ml-smoke.json
       - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
-        with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_DEPLOY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
+        with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_DEPLOY_ROLE_ARN }}", aws-region: ap-northeast-2, role-duration-seconds: 10800, unset-current-credentials: true }
       - name: Run RTMS catch-up and market-news bootstrap
         env:
           RELEASE_TAG: "${{ inputs.release_tag }}"

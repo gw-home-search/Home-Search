@@ -168,25 +168,22 @@ publish_artifacts() {
   bucket="${bucket%%/*}"
   prefix="${location#*/}"
 
-  local artifact checksum_hex checksum_base64 content_length key head_size head_checksum
+  local artifact checksum_hex content_length key head_size head_metadata_checksum head_checksum head_checksum_type
   for artifact in "${dump_file}" "${manifest_file}"; do
     checksum_hex="$(sha256_file "${artifact}")"
-    checksum_base64="$(python3 - "${checksum_hex}" <<'PY'
-import base64
-import sys
-
-print(base64.b64encode(bytes.fromhex(sys.argv[1])).decode("ascii"))
-PY
-)"
     content_length="$(wc -c <"${artifact}" | tr -d ' ')"
     key="${prefix}/$(basename "${artifact}")"
     aws s3 cp "${artifact}" "s3://${bucket}/${key}" --only-show-errors \
-      --checksum-algorithm SHA256 --sse aws:kms --sse-kms-key-id "${kms_key_id}"
-    IFS=$'\t' read -r head_size head_checksum < <(
+      --checksum-algorithm SHA256 --metadata "sha256=${checksum_hex}" \
+      --sse aws:kms --sse-kms-key-id "${kms_key_id}"
+    IFS=$'\t' read -r head_size head_metadata_checksum head_checksum head_checksum_type < <(
       aws s3api head-object --bucket "${bucket}" --key "${key}" --checksum-mode ENABLED \
-        --query '[ContentLength,ChecksumSHA256]' --output text
+        --query '[ContentLength,Metadata.sha256,ChecksumSHA256,ChecksumType]' --output text
     )
-    [[ "${head_size}" == "${content_length}" && "${head_checksum}" == "${checksum_base64}" ]] || {
+    [[ "${head_size}" == "${content_length}" \
+      && "${head_metadata_checksum}" == "${checksum_hex}" \
+      && -n "${head_checksum}" && "${head_checksum}" != 'None' \
+      && "${head_checksum_type}" =~ ^(COMPOSITE|FULL_OBJECT)$ ]] || {
       echo "ERROR: uploaded backup checksum or size mismatch: $(basename "${artifact}")" >&2
       return 1
     }

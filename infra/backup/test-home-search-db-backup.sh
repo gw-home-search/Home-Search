@@ -74,16 +74,15 @@ if [[ "$1 $2" == 's3api head-object' ]]; then
   file="${FAKE_AWS_UPLOAD_ROOT}/${key##*/}"
   size="$(wc -c <"${file}" | tr -d ' ')"
   checksum="$(python3 - "${file}" <<'PY'
-import base64
 import hashlib
 import pathlib
 import sys
 
-print(base64.b64encode(hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).digest()).decode("ascii"))
+print(hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest())
 PY
 )"
   if [[ "${FAKE_AWS_CHECKSUM_MISMATCH:-false}" == 'true' ]]; then checksum='INVALID'; fi
-  printf '%s\t%s\n' "${size}" "${checksum}"
+  printf '%s\t%s\t%s\t%s\n' "${size}" "${checksum}" 'multipart-checksum-303' 'COMPOSITE'
 fi
 EOF
 chmod +x "${fake_bin}/psql" "${fake_bin}/pg_dump" "${fake_bin}/pg_restore" "${fake_bin}/aws"
@@ -132,6 +131,7 @@ grep -Fq 's3://fixture-bucket/staging/property-20260716T010203Z.dump' "${aws_log
 grep -Fq 's3://fixture-bucket/staging/user-20260716T010203Z.manifest.tsv' "${aws_log}"
 grep -Fq 's3://fixture-bucket/staging/ai-20260716T010203Z.manifest.tsv' "${aws_log}"
 grep -Fq -- '--checksum-algorithm SHA256' "${aws_log}"
+grep -Eq -- '--metadata sha256=[0-9a-f]{64}' "${aws_log}"
 grep -Fq -- 's3api head-object' "${aws_log}"
 if grep -Fq '/coordinate-' "${aws_log}"; then
   echo 'ERROR: default backup set must defer coordinate source data.' >&2

@@ -70,6 +70,24 @@ oauth_acceptance_evidence_uri=s3://.../deployment-evidence/oauth/<release-sha>/o
 이 입력은 공공 API 호출 쿼터를 아끼기 위한 것이며, 다른 날짜의 실행 id를 넘기면
 감사 SQL이 당일 데이터와 맞지 않아 실패한다.
 
+## Application 배포 비율과 호스트 메모리
+
+budget production은 단일 EC2 host에서 모든 application service를 실행한다. ECS 배포
+설정이 `maximumPercent 200`이면 교체 중 신규 task와 기존 task가 동시에 떠 메모리가 두 배로
+필요하고, 이 host에서는 배치가 실패한다.
+
+```
+unable to place a task because no container instance met all of its requirements.
+The closest matching container-instance ... has insufficient memory available.
+```
+
+따라서 모든 application service는 `maximumPercent 100`, `minimumHealthyPercent 0`으로
+운영한다. 교체 중 해당 service는 짧게 비지만 host 메모리 안에서 안전하게 교체된다.
+rollout plan은 live 값을 읽어 tfvars에 반영하므로 live 설정이 곧 기준이 된다.
+
+v1.0.57 rollout(run 30955022823)은 `property-api`와 `chat-bff`만 200으로 남아 있어
+`Waiter ServicesStable failed: Max attempts exceeded`로 중단됐다.
+
 ## 실패 후 재시도
 
 한 번 실행한 rollout은 **같은 release tag로 재시도할 수 없다.**

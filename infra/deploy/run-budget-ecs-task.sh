@@ -79,6 +79,16 @@ if [[ -n "${command_override}" ]]; then
         exit 2
       }
       ;;
+    runtime-feature-audit)
+      jq -e 'length == 6
+        and (.[0] | test("^v[0-9]+[.][0-9]+[.][0-9]+$"))
+        and (.[1] | test("^[0-9a-f]{40}$"))
+        and (.[2:] | all(test("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")))' \
+        <<<"${command_override}" >/dev/null || {
+        echo '상태: Fail - runtime-feature-audit override는 release, commit, execution id 조합만 허용합니다.' >&2
+        exit 2
+      }
+      ;;
     market-news-major-selection | market-news-major-complex | market-news-retention)
       jq -e 'length == 1 and (.[0] | test("^schedulerExecutionId=manual-[0-9a-f]{32}$"))' \
         <<<"${command_override}" >/dev/null || {

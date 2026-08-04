@@ -76,6 +76,12 @@ on:
         required: false
         default: ""
         type: string
+      rtms_catchup:
+        description: "Run or audit the RTMS catch-up, or record it as skipped"
+        required: true
+        default: "run"
+        type: choice
+        options: [run, skip]
       market_news_bootstrap:
         description: "Run the market-news bootstrap tasks or record them as skipped"
         required: true
@@ -131,8 +137,10 @@ jobs:
           RTMS_CATCHUP_EXECUTION_IDS: "${{ inputs.rtms_catchup_execution_ids }}"
           MARKET_NEWS_BOOTSTRAP: "${{ inputs.market_news_bootstrap }}"
           OAUTH_ACCEPTANCE: "${{ inputs.oauth_acceptance }}"
+          RTMS_CATCHUP: "${{ inputs.rtms_catchup }}"
         run: |
           set -Eeuo pipefail
+          [[ "${RTMS_CATCHUP}" == run || "${RTMS_CATCHUP}" == skip ]]
           [[ "${MARKET_NEWS_BOOTSTRAP}" == run || "${MARKET_NEWS_BOOTSTRAP}" == skip ]]
           [[ "${OAUTH_ACCEPTANCE}" == required || "${OAUTH_ACCEPTANCE}" == skipped ]]
           [[ "${RELEASE_TAG}" =~ ^v[0-9]+[.][0-9]+[.][0-9]+$ && "${RELEASE_TAG}" != v1.0.4 ]]
@@ -744,13 +752,18 @@ jobs:
           RTMS_RESUME_REQUEST_ID: "${{ inputs.rtms_resume_request_id }}"
           RTMS_CATCHUP_EXECUTION_IDS: "${{ inputs.rtms_catchup_execution_ids }}"
           MARKET_NEWS_BOOTSTRAP: "${{ inputs.market_news_bootstrap }}"
+          RTMS_CATCHUP: "${{ inputs.rtms_catchup }}"
         run: |
           set -Eeuo pipefail
           cluster="$(jq -er '.ecs_cluster_name.value' deployment-evidence/rollout-outputs.json)"
           tasks="$(jq -ec '.one_shot_task_definition_arns.value' deployment-evidence/rollout-outputs.json)"
           started_by="budget-${GITHUB_RUN_ID}"
           reuse_rtms_catchup=false
-          if [[ -n "${RTMS_CATCHUP_EXECUTION_IDS}" ]]; then
+          if [[ "${RTMS_CATCHUP}" != run ]]; then
+            reuse_rtms_catchup=skipped
+            rtms_id="$(tr 'A-F' 'a-f' </proc/sys/kernel/random/uuid)"
+            rtms_repeat_id="$(tr 'A-F' 'a-f' </proc/sys/kernel/random/uuid)"
+          elif [[ -n "${RTMS_CATCHUP_EXECUTION_IDS}" ]]; then
             reuse_rtms_catchup=true
             rtms_id="${RTMS_CATCHUP_EXECUTION_IDS%%,*}"
             rtms_repeat_id="${RTMS_CATCHUP_EXECUTION_IDS##*,}"
@@ -786,11 +799,16 @@ jobs:
           audit_args="$(jq -cn --arg tag "${RELEASE_TAG}" --arg sha "${RELEASE_SHA}" \
             --arg first "${rtms_id}" --arg repeat "${rtms_repeat_id}" --arg bootstrap "${bootstrap_id}" --arg review "${review_id}" \
             '[$tag,$sha,$first,$repeat,$bootstrap,$review]')"
-          infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["runtime-feature-audit"]' <<<"${tasks}")" \
-            "${started_by}" "${audit_args}" >/dev/null
+          if [[ "${RTMS_CATCHUP}" == run || "${MARKET_NEWS_BOOTSTRAP}" == run ]]; then
+            infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["runtime-feature-audit"]' <<<"${tasks}")" \
+              "${started_by}" "${audit_args}" >/dev/null
+          fi
           bucket="$(jq -er '.backup_bucket_name.value' deployment-evidence/rollout-outputs.json)"
           mkdir -p deployment-evidence/runtime-audit
-          required_audits=(rtms-catchup)
+          required_audits=()
+          if [[ "${RTMS_CATCHUP}" == run ]]; then
+            required_audits+=(rtms-catchup)
+          fi
           if [[ "${MARKET_NEWS_BOOTSTRAP}" == run ]]; then
             required_audits+=(news-bootstrap)
           fi
@@ -802,6 +820,13 @@ jobs:
               "deployment-evidence/runtime-audit/${name}.json" >/dev/null
             cp "deployment-evidence/runtime-audit/${name}.json" "deployment-evidence/${name}.json"
           done
+          if [[ "${RTMS_CATCHUP}" != run ]]; then
+            jq -n --arg tag "${RELEASE_TAG}" --arg sha "${RELEASE_SHA}" --arg created_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              '{status:"skipped",release_tag:$tag,commit_sha:$sha,created_at:$created_at,
+                skipped_reason:"operator disabled the RTMS catch-up audit for this rollout",
+                checks:{catchup_executed:false},redactions_applied:true}' \
+              >deployment-evidence/rtms-catchup.json
+          fi
           if [[ "${MARKET_NEWS_BOOTSTRAP}" != run ]]; then
             jq -n --arg tag "${RELEASE_TAG}" --arg sha "${RELEASE_SHA}" --arg created_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
               '{status:"skipped",release_tag:$tag,commit_sha:$sha,created_at:$created_at,

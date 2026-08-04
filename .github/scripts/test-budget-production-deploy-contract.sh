@@ -275,6 +275,8 @@ rollout_timeout="$(awk '/^  rollout:/{found=1} found && /timeout-minutes:/{print
 grep -Fq 'rtms_catchup_execution_ids:' "${rollout_workflow}"
 grep -Fq 'RTMS_CATCHUP_EXECUTION_IDS: "${{ inputs.rtms_catchup_execution_ids }}"' "${rollout_workflow}"
 grep -Fq 'reuse_rtms_catchup=false' "${rollout_workflow}"
+grep -Fq 'jq -n --arg reused "${reuse_rtms_catchup}"' "${rollout_workflow}"
+! grep -Fq -- '--argjson reused' "${rollout_workflow}"
 grep -Fq 'rtms_catchup:' "${rollout_workflow}"
 grep -Fq 'RTMS_CATCHUP: "${{ inputs.rtms_catchup }}"' "${rollout_workflow}"
 grep -Fq 'if [[ "${RTMS_CATCHUP}" != run ]]; then' "${rollout_workflow}"

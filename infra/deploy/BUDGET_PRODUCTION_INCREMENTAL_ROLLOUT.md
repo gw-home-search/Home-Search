@@ -54,6 +54,22 @@ oauth_acceptance_evidence_uri=s3://.../deployment-evidence/oauth/<release-sha>/o
 `BatchExecutionCorrelationGuard`가 `requestId was already used by a different Batch parameter set`로 즉시
 종료시킨다. 날짜가 바뀐 재시도에서는 이 입력을 비워 새 requestId를 발급받는다.
 
+## RTMS catch-up 재사용
+
+같은 KST 날짜에 RTMS catch-up이 이미 성공했다면 `rtms_catchup_execution_ids`에
+`<first>,<repeat>` 실행 id를 넘겨 수집을 다시 하지 않는다. workflow는 두
+`rtms-daily-refresh` 태스크를 실행하지 않고, 넘긴 id를 그대로
+`run-runtime-feature-audit.sh`에 전달한다. 감사는 `rtms_collection_execution`과
+`rtms_ingest_run`을 DB에서 직접 조회하므로 `rtms-catchup.json` 증거는 동일하게
+생성되고 반복 실행의 `normalized_inserted_count == 0` 검증도 그대로 수행된다.
+
+재사용 여부는 `deployment-evidence/rtms-catchup-source.json`의
+`rtms_catchup_reused`에 기록한다. `rtms_resume_request_id`와 동시에 지정할 수
+없다. 실행 id는 `public.rtms_collection_execution`에서 확인한다.
+
+이 입력은 공공 API 호출 쿼터를 아끼기 위한 것이며, 다른 날짜의 실행 id를 넘기면
+감사 SQL이 당일 데이터와 맞지 않아 실패한다.
+
 ## 실패 후 재시도
 
 한 번 실행한 rollout은 **같은 release tag로 재시도할 수 없다.**

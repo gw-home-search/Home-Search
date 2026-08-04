@@ -71,6 +71,11 @@ on:
         required: false
         default: ""
         type: string
+      rtms_catchup_execution_ids:
+        description: "Optional first,repeat execution ids of a verified same-day RTMS catch-up to audit instead of collecting again"
+        required: false
+        default: ""
+        type: string
 
 permissions: { contents: read, actions: read, id-token: write }
 concurrency: { group: deploy-budget-production, cancel-in-progress: false }
@@ -111,6 +116,7 @@ jobs:
           BOOTSTRAP_PLAN_EVIDENCE_URI: "${{ inputs.bootstrap_plan_evidence_uri }}"
           OAUTH_ACCEPTANCE_EVIDENCE_URI: "${{ inputs.oauth_acceptance_evidence_uri }}"
           RTMS_RESUME_REQUEST_ID: "${{ inputs.rtms_resume_request_id }}"
+          RTMS_CATCHUP_EXECUTION_IDS: "${{ inputs.rtms_catchup_execution_ids }}"
         run: |
           set -Eeuo pipefail
           [[ "${RELEASE_TAG}" =~ ^v[0-9]+[.][0-9]+[.][0-9]+$ && "${RELEASE_TAG}" != v1.0.4 ]]
@@ -124,6 +130,8 @@ jobs:
           [[ "${OAUTH_ENABLED_PROVIDERS}" == google,kakao,naver ]]
           [[ "${SECURITY_AUDIT_RESULT}" == none ]]
           [[ -z "${RTMS_RESUME_REQUEST_ID}" || "${RTMS_RESUME_REQUEST_ID}" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]
+          [[ -z "${RTMS_CATCHUP_EXECUTION_IDS}" || "${RTMS_CATCHUP_EXECUTION_IDS}" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12},[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]
+          [[ -z "${RTMS_CATCHUP_EXECUTION_IDS}" || -z "${RTMS_RESUME_REQUEST_ID}" ]]
           [[ "${BOOTSTRAP_PLAN_EVIDENCE_URI}" =~ ^s3://home-search-budget-production-backup-[0-9]{12}/deployment-evidence/bootstrap/[0-9a-f]{40}/terraform-bootstrap-plan[.]json$ ]]
           [[ "${OAUTH_ACCEPTANCE_EVIDENCE_URI}" =~ ^s3://home-search-budget-production-backup-[0-9]{12}/deployment-evidence/oauth/[0-9a-f]{40}/oauth-smoke[.]json$ ]]
           [[ "${GITHUB_SHA}" == "${RELEASE_SHA}" ]]
@@ -718,21 +726,31 @@ jobs:
           RELEASE_TAG: "${{ inputs.release_tag }}"
           RELEASE_SHA: "${{ inputs.release_sha }}"
           RTMS_RESUME_REQUEST_ID: "${{ inputs.rtms_resume_request_id }}"
+          RTMS_CATCHUP_EXECUTION_IDS: "${{ inputs.rtms_catchup_execution_ids }}"
         run: |
           set -Eeuo pipefail
           cluster="$(jq -er '.ecs_cluster_name.value' deployment-evidence/rollout-outputs.json)"
           tasks="$(jq -ec '.one_shot_task_definition_arns.value' deployment-evidence/rollout-outputs.json)"
           started_by="budget-${GITHUB_RUN_ID}"
-          if [[ -n "${RTMS_RESUME_REQUEST_ID}" ]]; then
-            rtms_id="${RTMS_RESUME_REQUEST_ID}"
+          reuse_rtms_catchup=false
+          if [[ -n "${RTMS_CATCHUP_EXECUTION_IDS}" ]]; then
+            reuse_rtms_catchup=true
+            rtms_id="${RTMS_CATCHUP_EXECUTION_IDS%%,*}"
+            rtms_repeat_id="${RTMS_CATCHUP_EXECUTION_IDS##*,}"
           else
-            rtms_id="$(tr 'A-F' 'a-f' </proc/sys/kernel/random/uuid)"
+            if [[ -n "${RTMS_RESUME_REQUEST_ID}" ]]; then
+              rtms_id="${RTMS_RESUME_REQUEST_ID}"
+            else
+              rtms_id="$(tr 'A-F' 'a-f' </proc/sys/kernel/random/uuid)"
+            fi
+            rtms_repeat_id="$(tr 'A-F' 'a-f' </proc/sys/kernel/random/uuid)"
+            infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["rtms-daily-refresh"]' <<<"${tasks}")" "${started_by}" \
+              "$(jq -cn --arg id "${rtms_id}" '["requestId="+$id]')" >/dev/null
+            infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["rtms-daily-refresh"]' <<<"${tasks}")" "${started_by}" \
+              "$(jq -cn --arg id "${rtms_repeat_id}" '["requestId="+$id]')" >/dev/null
           fi
-          rtms_repeat_id="$(tr 'A-F' 'a-f' </proc/sys/kernel/random/uuid)"
-          infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["rtms-daily-refresh"]' <<<"${tasks}")" "${started_by}" \
-            "$(jq -cn --arg id "${rtms_id}" '["requestId="+$id]')" >/dev/null
-          infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["rtms-daily-refresh"]' <<<"${tasks}")" "${started_by}" \
-            "$(jq -cn --arg id "${rtms_repeat_id}" '["requestId="+$id]')" >/dev/null
+          jq -n --argjson reused "${reuse_rtms_catchup}" '{rtms_catchup_reused:$reused}' \
+            >deployment-evidence/rtms-catchup-source.json
           execution_id="manual-$(printf '%032x' "${GITHUB_RUN_ID}")"
           infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["market-news-major-selection"]' <<<"${tasks}")" "${started_by}" \
             "$(jq -cn --arg id "${execution_id}" '["schedulerExecutionId="+$id]')" >/dev/null

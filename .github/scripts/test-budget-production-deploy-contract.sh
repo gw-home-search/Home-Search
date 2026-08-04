@@ -272,6 +272,10 @@ rtms_credentials_window="$(sed -n "$((run_data_bootstrap_line - 3)),$((run_data_
 grep -Fq 'role-duration-seconds: 10800' <<<"${rtms_credentials_window}"
 rollout_timeout="$(awk '/^  rollout:/{found=1} found && /timeout-minutes:/{print $2; exit}' "${rollout_workflow}")"
 [[ "${rollout_timeout}" -ge 180 ]]
+grep -Fq 'rtms_catchup_execution_ids:' "${rollout_workflow}"
+grep -Fq 'RTMS_CATCHUP_EXECUTION_IDS: "${{ inputs.rtms_catchup_execution_ids }}"' "${rollout_workflow}"
+grep -Fq 'reuse_rtms_catchup=false' "${rollout_workflow}"
+grep -Fq 'if [[ -n "${RTMS_CATCHUP_EXECUTION_IDS}" ]]; then' "${rollout_workflow}"
 [[ "${register_ai_canary_line}" -lt "${run_ai_canary_line}" ]]
 [[ "${run_ai_canary_line}" -lt "${start_ml_line}" ]]
 [[ "${start_ml_line}" -lt "${run_data_bootstrap_line}" ]]

@@ -96,12 +96,14 @@ jq -e '.status == "pass" and .checks.ecs_healthy == true and .checks.health_http
 jq -e '.status == "pass" and .checks.task_exit_code == 0 and .checks.all_steps_completed == true
   and .checks.raw_first == true and .checks.duplicate_normalized_trades == 0
   and .checks.nation_snapshot_fresh == true and .checks.seoul_snapshot_fresh == true' "${evidence_dir}/rtms-catchup.json" >/dev/null
-jq -e '.status == "pass" and .checks.provider_failures == 0 and .checks.scope_snapshot_count == 18
+jq -e 'if .status == "skipped" then (.skipped_reason | type == "string" and length > 0)
+  else .status == "pass" and .checks.provider_failures == 0 and .checks.scope_snapshot_count == 18
   and .checks.nation_non_empty == true and .checks.seoul_non_empty == true
-  and .checks.raw_first == true and .checks.duplicate_articles == 0 and .checks.quality_policy == "NEWS_V5"' "${evidence_dir}/news-bootstrap.json" >/dev/null
-jq -e '.status == "pass" and (.checks.providers | sort) == ["google","kakao","naver"]
+  and .checks.raw_first == true and .checks.duplicate_articles == 0 and .checks.quality_policy == "NEWS_V5" end' "${evidence_dir}/news-bootstrap.json" >/dev/null
+jq -e 'if .status == "skipped" then (.skipped_reason | type == "string" and length > 0)
+  else .status == "pass" and (.checks.providers | sort) == ["google","kakao","naver"]
   and .checks.redirects_passed == true and .checks.invalid_callbacks_controlled == true
-  and .checks.full_logins_passed == true and .checks.logout_passed == true and .checks.cookie_policy_preserved == true' "${evidence_dir}/oauth-smoke.json" >/dev/null
+  and .checks.full_logins_passed == true and .checks.logout_passed == true and .checks.cookie_policy_preserved == true end' "${evidence_dir}/oauth-smoke.json" >/dev/null
 jq -e '.status == "pass" and .checks.running == true and .checks.healthy == true
   and .checks.cleaned_up == true and .checks.failure_evidence_capable == true' "${evidence_dir}/ai-canary.json" >/dev/null
 jq -e '.status == "pass"

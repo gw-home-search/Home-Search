@@ -235,6 +235,13 @@ run "data_phase_keeps_platform_services_dark_before_secret_bootstrap" {
         for item in local.one_shot_specs["rtms-daily-refresh"].environment :
         item.value if item.name == "SPRING_BATCH_JOB_NAME"
       ]) == "rtmsDailyRefreshJob"
+      && alltrue([
+        for name in ["market-news-major-selection", "market-news-general", "market-news-major-complex", "market-news-quality-sample", "market-news-retention"] :
+        one([
+          for item in local.one_shot_specs[name].environment :
+          item.value if item.name == "DB_JDBC_URL"
+        ]) == "jdbc:postgresql://172.31.255.1:15432/home_search?sslmode=require&options=-c%20statement_timeout=7200000"
+      ])
       && one([
         for item in local.one_shot_specs["rtms-daily-refresh"].environment :
         item.value if item.name == "DB_JDBC_URL"

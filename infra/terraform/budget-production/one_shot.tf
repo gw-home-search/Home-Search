@@ -1,7 +1,7 @@
 locals {
   market_news_common_environment = [
     { name = "SPRING_PROFILES_ACTIVE", value = "prod" },
-    { name = "DB_JDBC_URL", value = "jdbc:postgresql://${local.host_gateway}:15432/home_search?sslmode=require" },
+    { name = "DB_JDBC_URL", value = "jdbc:postgresql://${local.host_gateway}:15432/home_search?sslmode=require&options=-c%20statement_timeout=7200000" },
     { name = "DB_USERNAME", value = "home_search_property_runtime" },
     { name = "SPRING_DATA_REDIS_HOST", value = local.host_gateway },
     { name = "SPRING_DATA_REDIS_PORT", value = "16379" },

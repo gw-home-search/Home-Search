@@ -81,6 +81,12 @@ oauth_acceptance_evidence_uri=s3://.../deployment-evidence/oauth/<release-sha>/o
 
 따라서 재시도는 **새 commit을 main에 머지한 뒤 새 tag를 끊는 것**이 유일한 경로다.
 
+release run이 이미지 build 도중 실패하면 일부 image는 ECR에 push된 상태로 남는다. 같은
+commit으로 release를 다시 실행하면 먼저 push된 repository에서
+`The image tag '<sha>' already exists ... cannot be overwritten`으로 거부되므로, 이때도
+새 commit이 필요하다. Gradle wrapper 잠금 timeout이나 OIDC token 만료처럼 build 환경
+문제로 실패한 경우에도 동일하다.
+
 prep plan은 현재 application task definition ARN과 desired count를 exact pin하고 schedule을 disabled로 둔다. saved full plan 적용 뒤 V39→V40 migrate 또는 live V40 validate-only, F37 install, ML health, RTMS catch-up, news bootstrap, AI canary 순서로 진행한다. Application 교체 순서는 `ml → property-api → user-api → ai → chat-bff → admin-api → admin-gateway → public-gateway`이다.
 
 Workflow는 backend 교체 후 OAuth evidence를 최대 15분 기다린다. 그 사이 운영자는 Google·Kakao·Naver 각각 실제 login, 현재 사용자 provider, logout, cookie 정책을 확인하고 secret·`code`·`state` 없이 `oauth-smoke.json`을 지정 경로에 올린다. 세 provider 중 하나라도 실패했거나 증거가 도착하지 않으면 public gateway를 교체하지 않고 application-only rollback한다.

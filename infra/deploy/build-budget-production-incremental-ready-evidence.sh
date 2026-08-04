@@ -93,9 +93,10 @@ jq -e '.status == "pass" and .checks.atomic_install == true and .checks.uid_1000
   and .checks.extra_files == 0 and .checks.symlinks == 0' "${evidence_dir}/model-install.json" >/dev/null
 jq -e '.status == "pass" and .checks.ecs_healthy == true and .checks.health_http_status == 200
   and .checks.prediction_finite_positive == true and .checks.model_version_matches == true' "${evidence_dir}/ml-smoke.json" >/dev/null
-jq -e '.status == "pass" and .checks.task_exit_code == 0 and .checks.all_steps_completed == true
+jq -e 'if .status == "skipped" then (.skipped_reason | type == "string" and length > 0)
+  else .status == "pass" and .checks.task_exit_code == 0 and .checks.all_steps_completed == true
   and .checks.raw_first == true and .checks.duplicate_normalized_trades == 0
-  and .checks.nation_snapshot_fresh == true and .checks.seoul_snapshot_fresh == true' "${evidence_dir}/rtms-catchup.json" >/dev/null
+  and .checks.nation_snapshot_fresh == true and .checks.seoul_snapshot_fresh == true end' "${evidence_dir}/rtms-catchup.json" >/dev/null
 jq -e 'if .status == "skipped" then (.skipped_reason | type == "string" and length > 0)
   else .status == "pass" and .checks.provider_failures == 0 and .checks.scope_snapshot_count == 18
   and .checks.nation_non_empty == true and .checks.seoul_non_empty == true

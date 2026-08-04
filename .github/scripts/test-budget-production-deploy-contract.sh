@@ -275,6 +275,12 @@ rollout_timeout="$(awk '/^  rollout:/{found=1} found && /timeout-minutes:/{print
 grep -Fq 'rtms_catchup_execution_ids:' "${rollout_workflow}"
 grep -Fq 'RTMS_CATCHUP_EXECUTION_IDS: "${{ inputs.rtms_catchup_execution_ids }}"' "${rollout_workflow}"
 grep -Fq 'reuse_rtms_catchup=false' "${rollout_workflow}"
+grep -Fq 'market_news_bootstrap:' "${rollout_workflow}"
+grep -Fq 'oauth_acceptance:' "${rollout_workflow}"
+grep -Fq 'MARKET_NEWS_BOOTSTRAP: "${{ inputs.market_news_bootstrap }}"' "${rollout_workflow}"
+grep -Fq 'OAUTH_ACCEPTANCE: "${{ inputs.oauth_acceptance }}"' "${rollout_workflow}"
+grep -Fq 'if [[ "${MARKET_NEWS_BOOTSTRAP}" == run ]]; then' "${rollout_workflow}"
+grep -Fq 'if [[ "${OAUTH_ACCEPTANCE}" != required ]]; then' "${rollout_workflow}"
 grep -Fq 'if [[ -n "${RTMS_CATCHUP_EXECUTION_IDS}" ]]; then' "${rollout_workflow}"
 [[ "${register_ai_canary_line}" -lt "${run_ai_canary_line}" ]]
 [[ "${run_ai_canary_line}" -lt "${start_ml_line}" ]]

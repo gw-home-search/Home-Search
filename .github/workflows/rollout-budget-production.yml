@@ -76,6 +76,18 @@ on:
         required: false
         default: ""
         type: string
+      market_news_bootstrap:
+        description: "Run the market-news bootstrap tasks or record them as skipped"
+        required: true
+        default: "run"
+        type: choice
+        options: [run, skip]
+      oauth_acceptance:
+        description: "Require three-provider real-login evidence or record it as skipped"
+        required: true
+        default: "required"
+        type: choice
+        options: [required, skipped]
 
 permissions: { contents: read, actions: read, id-token: write }
 concurrency: { group: deploy-budget-production, cancel-in-progress: false }
@@ -117,8 +129,12 @@ jobs:
           OAUTH_ACCEPTANCE_EVIDENCE_URI: "${{ inputs.oauth_acceptance_evidence_uri }}"
           RTMS_RESUME_REQUEST_ID: "${{ inputs.rtms_resume_request_id }}"
           RTMS_CATCHUP_EXECUTION_IDS: "${{ inputs.rtms_catchup_execution_ids }}"
+          MARKET_NEWS_BOOTSTRAP: "${{ inputs.market_news_bootstrap }}"
+          OAUTH_ACCEPTANCE: "${{ inputs.oauth_acceptance }}"
         run: |
           set -Eeuo pipefail
+          [[ "${MARKET_NEWS_BOOTSTRAP}" == run || "${MARKET_NEWS_BOOTSTRAP}" == skip ]]
+          [[ "${OAUTH_ACCEPTANCE}" == required || "${OAUTH_ACCEPTANCE}" == skipped ]]
           [[ "${RELEASE_TAG}" =~ ^v[0-9]+[.][0-9]+[.][0-9]+$ && "${RELEASE_TAG}" != v1.0.4 ]]
           [[ "${RELEASE_SHA}" =~ ^[0-9a-f]{40}$ ]]
           [[ '${{ inputs.protected_rollout_approval }}' == true ]]
@@ -727,6 +743,7 @@ jobs:
           RELEASE_SHA: "${{ inputs.release_sha }}"
           RTMS_RESUME_REQUEST_ID: "${{ inputs.rtms_resume_request_id }}"
           RTMS_CATCHUP_EXECUTION_IDS: "${{ inputs.rtms_catchup_execution_ids }}"
+          MARKET_NEWS_BOOTSTRAP: "${{ inputs.market_news_bootstrap }}"
         run: |
           set -Eeuo pipefail
           cluster="$(jq -er '.ecs_cluster_name.value' deployment-evidence/rollout-outputs.json)"
@@ -752,18 +769,20 @@ jobs:
           jq -n --argjson reused "${reuse_rtms_catchup}" '{rtms_catchup_reused:$reused}' \
             >deployment-evidence/rtms-catchup-source.json
           execution_id="manual-$(printf '%032x' "${GITHUB_RUN_ID}")"
-          infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["market-news-major-selection"]' <<<"${tasks}")" "${started_by}" \
-            "$(jq -cn --arg id "${execution_id}" '["schedulerExecutionId="+$id]')" >/dev/null
           bootstrap_id="$(tr 'A-F' 'a-f' </proc/sys/kernel/random/uuid)"
-          infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["market-news-general"]' <<<"${tasks}")" "${started_by}" \
-            "$(jq -cn --arg id "${bootstrap_id}" '["requestId=BOOTSTRAP:"+$id]')" >/dev/null
-          infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["market-news-major-complex"]' <<<"${tasks}")" "${started_by}" \
-            "$(jq -cn --arg id "${execution_id}" '["schedulerExecutionId="+$id]')" >/dev/null
           review_id="$(tr 'A-F' 'a-f' </proc/sys/kernel/random/uuid)"
-          infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["market-news-quality-sample"]' <<<"${tasks}")" "${started_by}" \
-            "$(jq -cn --arg id "${review_id}" '["reviewSetId="+$id,"policyVersion=NEWS_V5"]')" >/dev/null
-          infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["market-news-retention"]' <<<"${tasks}")" "${started_by}" \
-            "$(jq -cn --arg id "${execution_id}" '["schedulerExecutionId="+$id]')" >/dev/null
+          if [[ "${MARKET_NEWS_BOOTSTRAP}" == run ]]; then
+            infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["market-news-major-selection"]' <<<"${tasks}")" "${started_by}" \
+              "$(jq -cn --arg id "${execution_id}" '["schedulerExecutionId="+$id]')" >/dev/null
+            infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["market-news-general"]' <<<"${tasks}")" "${started_by}" \
+              "$(jq -cn --arg id "${bootstrap_id}" '["requestId=BOOTSTRAP:"+$id]')" >/dev/null
+            infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["market-news-major-complex"]' <<<"${tasks}")" "${started_by}" \
+              "$(jq -cn --arg id "${execution_id}" '["schedulerExecutionId="+$id]')" >/dev/null
+            infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["market-news-quality-sample"]' <<<"${tasks}")" "${started_by}" \
+              "$(jq -cn --arg id "${review_id}" '["reviewSetId="+$id,"policyVersion=NEWS_V5"]')" >/dev/null
+            infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["market-news-retention"]' <<<"${tasks}")" "${started_by}" \
+              "$(jq -cn --arg id "${execution_id}" '["schedulerExecutionId="+$id]')" >/dev/null
+          fi
           audit_args="$(jq -cn --arg tag "${RELEASE_TAG}" --arg sha "${RELEASE_SHA}" \
             --arg first "${rtms_id}" --arg repeat "${rtms_repeat_id}" --arg bootstrap "${bootstrap_id}" --arg review "${review_id}" \
             '[$tag,$sha,$first,$repeat,$bootstrap,$review]')"
@@ -771,7 +790,11 @@ jobs:
             "${started_by}" "${audit_args}" >/dev/null
           bucket="$(jq -er '.backup_bucket_name.value' deployment-evidence/rollout-outputs.json)"
           mkdir -p deployment-evidence/runtime-audit
-          for name in rtms-catchup news-bootstrap; do
+          required_audits=(rtms-catchup)
+          if [[ "${MARKET_NEWS_BOOTSTRAP}" == run ]]; then
+            required_audits+=(news-bootstrap)
+          fi
+          for name in "${required_audits[@]}"; do
             aws s3 cp "s3://${bucket}/deployment-evidence/runtime-audit/${RELEASE_TAG}/${name}.json" \
               "deployment-evidence/runtime-audit/${name}.json" --only-show-errors
             jq -e --arg tag "${RELEASE_TAG}" --arg sha "${RELEASE_SHA}" \
@@ -779,6 +802,13 @@ jobs:
               "deployment-evidence/runtime-audit/${name}.json" >/dev/null
             cp "deployment-evidence/runtime-audit/${name}.json" "deployment-evidence/${name}.json"
           done
+          if [[ "${MARKET_NEWS_BOOTSTRAP}" != run ]]; then
+            jq -n --arg tag "${RELEASE_TAG}" --arg sha "${RELEASE_SHA}" --arg created_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              '{status:"skipped",release_tag:$tag,commit_sha:$sha,created_at:$created_at,
+                skipped_reason:"operator disabled the market-news bootstrap for this rollout",
+                checks:{bootstrap_executed:false},redactions_applied:true}' \
+              >deployment-evidence/news-bootstrap.json
+          fi
       - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
         with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_APPLY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
       - name: Roll ML then application services in dependency order
@@ -810,8 +840,17 @@ jobs:
           RELEASE_TAG: "${{ inputs.release_tag }}"
           RELEASE_SHA: "${{ inputs.release_sha }}"
           OAUTH_ACCEPTANCE_EVIDENCE_URI: "${{ inputs.oauth_acceptance_evidence_uri }}"
+          OAUTH_ACCEPTANCE: "${{ inputs.oauth_acceptance }}"
         run: |
           set -Eeuo pipefail
+          if [[ "${OAUTH_ACCEPTANCE}" != required ]]; then
+            jq -n --arg tag "${RELEASE_TAG}" --arg sha "${RELEASE_SHA}" --arg created_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              '{status:"skipped",release_tag:$tag,commit_sha:$sha,created_at:$created_at,
+                skipped_reason:"operator waived the three-provider real-login acceptance for this rollout",
+                checks:{providers:["google","kakao","naver"],full_logins_passed:false},redactions_applied:true}' \
+              >deployment-evidence/oauth-smoke.json
+            exit 0
+          fi
           downloaded=false
           for _ in $(seq 1 30); do
             if aws s3 cp "${OAUTH_ACCEPTANCE_EVIDENCE_URI}" deployment-evidence/oauth-smoke.json --only-show-errors 2>/dev/null; then

@@ -779,7 +779,7 @@ jobs:
             infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["rtms-daily-refresh"]' <<<"${tasks}")" "${started_by}" \
               "$(jq -cn --arg id "${rtms_repeat_id}" '["requestId="+$id]')" >/dev/null
           fi
-          jq -n --argjson reused "${reuse_rtms_catchup}" '{rtms_catchup_reused:$reused}' \
+          jq -n --arg reused "${reuse_rtms_catchup}" '{rtms_catchup_source:$reused}' \
             >deployment-evidence/rtms-catchup-source.json
           execution_id="manual-$(printf '%032x' "${GITHUB_RUN_ID}")"
           bootstrap_id="$(tr 'A-F' 'a-f' </proc/sys/kernel/random/uuid)"

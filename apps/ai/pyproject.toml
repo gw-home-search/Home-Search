@@ -5,6 +5,7 @@ description = "Evidence-grounded Home Search AI service"
 requires-python = ">=3.13,<3.15"
 dependencies = [
   "boto3>=1.40,<2",
+  "cryptography>=50,<51",
   "defusedxml>=0.7,<1",
   "fastapi>=0.116,<1",
   "openpyxl>=3.1,<4",

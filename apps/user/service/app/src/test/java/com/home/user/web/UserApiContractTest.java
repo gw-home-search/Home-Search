@@ -63,15 +63,15 @@ class UserApiContractTest {
     }
 
     @Test
-    void returnsExactMeFieldsWithoutEmail() throws Exception {
+    void returnsExactMeFieldsWithEmail() throws Exception {
         var users = mock(CurrentUserQueryService.class);
         when(users.find(42))
                 .thenReturn(new OAuthLoginResult(
                         42, OAuthProvider.GOOGLE, new UserProfile("홍길동", "hidden@example.com", null)));
         var controller = new UserController(users);
         var response = controller.me(new AuthenticatedUserPrincipal(42));
-        org.assertj.core.api.Assertions.assertThat(response).isEqualTo(new MeResponse(42, "GOOGLE", "홍길동", null));
-        org.assertj.core.api.Assertions.assertThat(response.toString()).doesNotContain("hidden@example.com");
+        org.assertj.core.api.Assertions.assertThat(response)
+                .isEqualTo(new MeResponse(42, "GOOGLE", "홍길동", "hidden@example.com", null));
     }
 
     private RefreshTokenCookieFactory cookieFactory() {

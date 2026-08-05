@@ -1434,14 +1434,17 @@ and returns `204`. It is idempotent when the cookie is absent.
 
 ### GET `/api/v1/users/me`
 
-Returns the verified user's stable profile without exposing email or OAuth
-provider tokens.
+Returns the verified user's stable profile. The response carries the account
+email so the my-page can show which address the service operates on, and never
+exposes OAuth provider tokens. `email` is `null` when the provider did not
+supply one or the user withheld consent.
 
 ```json
 {
   "userId": 42,
   "provider": "GOOGLE",
   "displayName": "홍길동",
+  "email": "user@example.com",
   "profileImage": null
 }
 ```

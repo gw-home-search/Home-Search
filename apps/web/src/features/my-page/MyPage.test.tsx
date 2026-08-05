@@ -336,6 +336,7 @@ function authenticatedClient(
         userId: 19,
         provider: 'google',
         displayName: '홈서치 사용자',
+        email: 'user@example.com',
         profileImage: null,
       },
     }),

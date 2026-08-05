@@ -72,7 +72,12 @@
 
 .detail-tab-panel { display: block; }
 .detail-info-panel,
-.detail-trend-panel { display: contents; }
+.detail-trend-panel {
+  display: flex;
+  flex-direction: column;
+}
+.detail-trend-panel { order: 4; }
+.detail-info-panel { order: 5; }
 .detail-tab-panel[hidden] { display: none; }
 .detail-drawer-header { order: 0; }
 .favorite-error-row { order: 1; }

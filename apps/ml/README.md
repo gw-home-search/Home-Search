@@ -64,6 +64,10 @@ F37_ARTIFACT_DIR=/path/to/best_price_deployment_attempt \
   python -m ml_service.smoke_predict
 ```
 
+The smoke prediction fails when the bundled sample exceeds the artifact's
+`recent_holdout` p99 relative-error boundary. This catches compatibility loader
+regressions that still return finite positive values.
+
 CI builds the image on amd64, runs `pip check`, imports the runtime modules,
 asserts the non-root identity and model exclusion, and verifies the entrypoint
 fails without a model. Before updating the lock, validate the new graph on both

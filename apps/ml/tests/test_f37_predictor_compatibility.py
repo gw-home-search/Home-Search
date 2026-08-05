@@ -6,15 +6,16 @@ import zipfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import h5py
-import numpy as np
-
 try:
+    import h5py
+    import numpy as np
     import tensorflow as tf
 
     from ml_service.f37_predictor import F37Predictor
     from ml_service.smoke_predict import assert_sample_prediction_quality
 except ModuleNotFoundError:
+    h5py = None
+    np = None
     tf = None
     F37Predictor = None
     assert_sample_prediction_quality = None

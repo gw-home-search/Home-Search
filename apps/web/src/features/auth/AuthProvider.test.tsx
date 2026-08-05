@@ -50,7 +50,7 @@ describe('AuthProvider와 AccountControl', () => {
     window.history.replaceState({}, '', '/auth/success');
     const client = authClient({
       kind: 'authenticated',
-      currentUser: { userId: 17, provider: 'google', displayName: '홍길동', profileImage: null },
+      currentUser: { userId: 17, provider: 'google', displayName: '홍길동', email: 'user@example.com', profileImage: null },
     });
     ({ root, host } = await renderAuth(client));
 
@@ -64,7 +64,7 @@ describe('AuthProvider와 AccountControl', () => {
     window.sessionStorage.setItem('home-search:return-to', '/my/favorites');
     const client = authClient({
       kind: 'authenticated',
-      currentUser: { userId: 17, provider: 'google', displayName: '홍길동', profileImage: null },
+      currentUser: { userId: 17, provider: 'google', displayName: '홍길동', email: 'user@example.com', profileImage: null },
     });
     ({ root, host } = await renderAuth(client));
 
@@ -75,7 +75,7 @@ describe('AuthProvider와 AccountControl', () => {
   it('authenticated request 401은 memory session을 지우고 만료 dialog를 연다', async () => {
     const client = authClient({
       kind: 'authenticated',
-      currentUser: { userId: 17, provider: 'google', displayName: '홍길동', profileImage: null },
+      currentUser: { userId: 17, provider: 'google', displayName: '홍길동', email: 'user@example.com', profileImage: null },
     });
     client.authenticatedRequest = vi.fn().mockResolvedValue(new Response(null, { status: 401 }));
     host = document.createElement('div'); document.body.append(host); root = createRoot(host);
@@ -92,7 +92,7 @@ describe('AuthProvider와 AccountControl', () => {
   it('인증 서비스 장애 rejection은 기존 사용자 표시를 유지하고 만료 dialog를 열지 않는다', async () => {
     const client = authClient({
       kind: 'authenticated',
-      currentUser: { userId: 17, provider: 'google', displayName: '홍길동', profileImage: null },
+      currentUser: { userId: 17, provider: 'google', displayName: '홍길동', email: 'user@example.com', profileImage: null },
     });
     client.authenticatedRequest = vi.fn().mockRejectedValue(new Error('Authentication unavailable'));
     host = document.createElement('div'); document.body.append(host); root = createRoot(host);
@@ -117,7 +117,7 @@ describe('AuthProvider와 AccountControl', () => {
   it('logout API 실패에도 memory 사용자 상태를 지운다', async () => {
     const client = authClient({
       kind: 'authenticated',
-      currentUser: { userId: 17, provider: 'google', displayName: '홍길동', profileImage: null },
+      currentUser: { userId: 17, provider: 'google', displayName: '홍길동', email: 'user@example.com', profileImage: null },
     });
     client.logout = vi.fn().mockRejectedValue(new Error('logout unavailable'));
     host = document.createElement('div'); document.body.append(host); root = createRoot(host);

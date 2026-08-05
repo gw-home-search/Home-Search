@@ -91,7 +91,7 @@ describe('App 지도 shell', () => {
       logout: async () => undefined,
       restoreSession: async () => ({
         kind: 'authenticated',
-        currentUser: { userId: 1, provider: 'google', displayName: '지도 사용자', profileImage: null },
+        currentUser: { userId: 1, provider: 'google', displayName: '지도 사용자', email: 'user@example.com', profileImage: null },
       }),
     };
     const chatConversationStore = new IndexedDbChatConversationStore(

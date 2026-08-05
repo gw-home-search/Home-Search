@@ -788,7 +788,7 @@ function authenticatedClient(uiActions: unknown[] = []): AuthClient {
     logout: vi.fn().mockResolvedValue(undefined),
     restoreSession: vi.fn().mockResolvedValue({
       kind: 'authenticated',
-      currentUser: { userId: 7, provider: 'google', displayName: '홍길동', profileImage: null },
+      currentUser: { userId: 7, provider: 'google', displayName: '홍길동', email: 'user@example.com', profileImage: null },
     }),
   };
 }

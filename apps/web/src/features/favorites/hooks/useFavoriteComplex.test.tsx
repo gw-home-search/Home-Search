@@ -25,7 +25,7 @@ describe('useFavoriteComplex 즐겨찾기 상태', () => {
     const second = deferred<Response>();
     const request = vi.fn<AuthClient['authenticatedRequest']>((path) => path.endsWith('/501') ? first.promise : second.promise);
     const client = authClient({ kind: 'authenticated', currentUser: {
-      userId: 77, provider: 'google', displayName: '테스터', profileImage: null,
+      userId: 77, provider: 'google', displayName: '테스터', email: 'user@example.com', profileImage: null,
     } }, request);
     ({ root, host } = await render(client, 501));
     await act(async () => root?.render(tree(client, 502)));
@@ -42,7 +42,7 @@ describe('useFavoriteComplex 즐겨찾기 상태', () => {
       .mockResolvedValueOnce(jsonResponse({ complexId: 501, favorite: false, savedAt: null }))
       .mockReturnValueOnce(mutation.promise);
     const client = authClient({ kind: 'authenticated', currentUser: {
-      userId: 77, provider: 'google', displayName: '테스터', profileImage: null,
+      userId: 77, provider: 'google', displayName: '테스터', email: 'user@example.com', profileImage: null,
     } }, request);
     ({ root, host } = await render(client, 501));
 
@@ -59,7 +59,7 @@ describe('useFavoriteComplex 즐겨찾기 상태', () => {
     const firstRequest = vi.fn<AuthClient['authenticatedRequest']>()
       .mockResolvedValue(jsonResponse({ complexId: 501, favorite: true, savedAt: '2026-07-13T06:00:00Z' }));
     const firstClient = authClient({ kind: 'authenticated', currentUser: {
-      userId: 77, provider: 'google', displayName: '첫 사용자', profileImage: null,
+      userId: 77, provider: 'google', displayName: '첫 사용자', email: 'user@example.com', profileImage: null,
     } }, firstRequest);
     ({ root, host } = await render(firstClient, 501));
     expect(host.dataset.favorite).toBe('true');
@@ -72,7 +72,7 @@ describe('useFavoriteComplex 즐겨찾기 상태', () => {
     const secondRequest = vi.fn<AuthClient['authenticatedRequest']>()
       .mockResolvedValue(jsonResponse({ complexId: 501, favorite: false, savedAt: null }));
     const secondClient = authClient({ kind: 'authenticated', currentUser: {
-      userId: 88, provider: 'google', displayName: '둘째 사용자', profileImage: null,
+      userId: 88, provider: 'google', displayName: '둘째 사용자', email: 'user@example.com', profileImage: null,
     } }, secondRequest);
     ({ root, host } = await render(secondClient, 501));
 

@@ -209,6 +209,7 @@ export function DetailSidebar({
             role="tabpanel"
             aria-labelledby="detail-tab-trend"
             className="detail-tab-panel detail-trend-panel"
+            data-detail-flow="stacked"
             data-mobile-tab-panel="trend"
             data-mobile-tab-active={mobileTab === 'trend' ? 'true' : 'false'}
             hidden={isMobileLayout && mobileTab !== 'trend'}
@@ -256,6 +257,7 @@ export function DetailSidebar({
             role="tabpanel"
             aria-labelledby="detail-tab-info"
             className="detail-tab-panel detail-info-panel"
+            data-detail-flow="stacked"
             data-mobile-tab-panel="info"
             data-mobile-tab-active={mobileTab === 'info' ? 'true' : 'false'}
             hidden={isMobileLayout && mobileTab !== 'info'}

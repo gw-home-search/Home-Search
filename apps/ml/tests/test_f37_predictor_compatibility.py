@@ -4,15 +4,20 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+
+import h5py
+import numpy as np
 
 try:
     import tensorflow as tf
 
     from ml_service.f37_predictor import F37Predictor
+    from ml_service.smoke_predict import assert_sample_prediction_quality
 except ModuleNotFoundError:
     tf = None
     F37Predictor = None
+    assert_sample_prediction_quality = None
 
 
 @unittest.skipIf(tf is None, "ML runtime dependencies are verified in the built image")
@@ -83,6 +88,58 @@ class F37PredictorCompatibilityTest(unittest.TestCase):
         inputs = predictor.make_inputs({}, {"legal_dong_code": "1111010100"})
 
         self.assertTrue(all(tf.is_tensor(value) for value in inputs.values()))
+
+    def test_archive_fallback_finalizes_normalization_after_assigning_weights(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            weights_path = Path(temp_dir) / "model.weights.h5"
+            with h5py.File(weights_path, "w") as weights:
+                dependencies = weights.create_group("_layer_checkpoint_dependencies")
+                for group_name in ["embedding", "embedding_2", "embedding_4"]:
+                    variables = dependencies.create_group(group_name).create_group("vars")
+                    variables.create_dataset("0", data=np.zeros((1, 1), dtype="float32"))
+                normalization_variables = dependencies.create_group("normalization").create_group("vars")
+                normalization_variables.create_dataset("0", data=np.zeros((1,), dtype="float32"))
+                normalization_variables.create_dataset("1", data=np.ones((1,), dtype="float32"))
+                normalization_variables.create_dataset("2", data=np.array(1, dtype="int64"))
+                for group_name in ["dense", "dense_2", "dense_4"]:
+                    variables = dependencies.create_group(group_name).create_group("vars")
+                    variables.create_dataset("0", data=np.zeros((1, 1), dtype="float32"))
+                    variables.create_dataset("1", data=np.zeros((1,), dtype="float32"))
+
+            model_path = Path(temp_dir) / "keras_model.keras"
+            with zipfile.ZipFile(model_path, "w") as archive:
+                archive.write(weights_path, "model.weights.h5")
+
+            predictor = object.__new__(F37Predictor)
+            embedding_layers = [MagicMock(), MagicMock(), MagicMock()]
+            normalization = MagicMock()
+            dense_layers = [MagicMock(), MagicMock(), MagicMock()]
+
+            predictor._assign_archive_weights(
+                model_path,
+                embedding_layers=embedding_layers,
+                normalization=normalization,
+                dense_layers=dense_layers,
+            )
+
+            normalization.finalize_state.assert_called_once_with()
+
+    def test_smoke_rejects_sample_prediction_beyond_recent_holdout_p99(self) -> None:
+        payload = {"actual_price_per_m2": 2030.9364}
+        metadata = {"metrics": [{"split": "recent_holdout", "abs_pct_error_p99": 0.353809}]}
+
+        with self.assertRaisesRegex(RuntimeError, "exceeds the recent_holdout p99 error"):
+            assert_sample_prediction_quality(
+                payload,
+                {"predictedPricePerM2": 7145.0466},
+                metadata,
+            )
+
+        assert_sample_prediction_quality(
+            payload,
+            {"predictedPricePerM2": 2039.4983},
+            metadata,
+        )
 
 
 if __name__ == "__main__":

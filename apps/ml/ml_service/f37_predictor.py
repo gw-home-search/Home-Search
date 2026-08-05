@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import math
 import tempfile
 import zipfile
@@ -12,6 +13,7 @@ import h5py
 import tensorflow as tf
 
 
+LOGGER = logging.getLogger(__name__)
 PROJECT_DIR = Path(__file__).resolve().parents[1]
 DEFAULT_ARTIFACT_DIR = PROJECT_DIR / "models" / "best_price_deployment_attempt"
 LEGACY_VOCABULARY_ASSETS = {
@@ -76,14 +78,18 @@ class F37Predictor:
     def _load_model(self) -> tf.keras.Model:
         model_path = self.artifact_dir / "keras_model.keras"
         try:
-            return tf.keras.models.load_model(model_path, compile=False)
+            model = tf.keras.models.load_model(model_path, compile=False)
+            LOGGER.info("F37 model loaded with the native Keras loader")
+            return model
         except TypeError as exc:
             if not any(
                 marker in str(exc)
                 for marker in LEGACY_DESERIALIZATION_ERROR_MARKERS
             ):
                 raise
-            return self._load_model_from_weights_archive(model_path)
+            model = self._load_model_from_weights_archive(model_path)
+            LOGGER.warning("F37 model loaded with the Keras 2 archive compatibility loader")
+            return model
 
     def _load_model_from_weights_archive(self, model_path: Path) -> tf.keras.Model:
         inputs: dict[str, tf.keras.KerasTensor] = {}
@@ -204,6 +210,7 @@ class F37Predictor:
                     dependencies["normalization"]["vars"]["1"][()],
                     dependencies["normalization"]["vars"]["2"][()],
                 ])
+                normalization.finalize_state()
                 for layer, group_name in zip(
                     dense_layers,
                     ["dense", "dense_2", "dense_4"],

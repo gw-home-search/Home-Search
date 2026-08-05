@@ -272,6 +272,8 @@ describe('DetailSidebar 모바일 탭', () => {
     expect(host.querySelector('#detail-tabpanel-info')?.textContent).toContain('면적·밀도');
     const trendTab = host.querySelector<HTMLButtonElement>('#detail-tab-trend');
     act(() => trendTab?.click());
+    expect(host.querySelector('#detail-tabpanel-trend')?.getAttribute('data-detail-flow')).toBe('stacked');
+    expect(host.querySelector('#detail-tabpanel-info')?.getAttribute('data-detail-flow')).toBe('stacked');
     expect(host.querySelectorAll('[role="tabpanel"]:not([hidden])')).toHaveLength(1);
     expect(host.querySelector('#detail-tabpanel-info')?.hasAttribute('hidden')).toBe(true);
     const selector = host.querySelector<HTMLSelectElement>('#detail-excl-area');

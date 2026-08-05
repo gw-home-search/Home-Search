@@ -223,7 +223,7 @@ class UserPersistenceConcurrencyTest {
                 .andExpect(jsonPath("$.userId").value(user.userId()))
                 .andExpect(jsonPath("$.provider").value("GOOGLE"))
                 .andExpect(jsonPath("$.displayName").value("보안 사용자"))
-                .andExpect(jsonPath("$.email").doesNotExist());
+                .andExpect(jsonPath("$.email").value("hidden@example.com"));
 
         for (String rejected : java.util.List.of(
                 signedAccessToken(

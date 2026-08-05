@@ -128,6 +128,15 @@
   padding: 14px 0;
 }
 
+.my-profile-email {
+  overflow: hidden;
+  margin-top: 2px;
+  color: var(--hs-map-color-text-muted);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .my-profile-avatar {
   display: grid;
   width: 40px;

@@ -6,6 +6,7 @@ export type CurrentUser = {
   userId: number;
   provider: OAuthProvider;
   displayName: string;
+  email: string | null;
   profileImage: string | null;
 };
 

@@ -23,6 +23,11 @@ export function MyPageOverview({
         <div>
           <h2 id="my-profile-title">{user.displayName}</h2>
           <p>{PROVIDER_LABELS[user.provider]} 계정</p>
+          {user.email == null ? null : (
+            <p className="my-profile-email" title={user.email}>
+              {user.email}
+            </p>
+          )}
         </div>
       </section>
       <Link className="my-favorite-summary-link" to="/my/favorites">

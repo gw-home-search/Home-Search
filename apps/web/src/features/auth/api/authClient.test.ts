@@ -13,6 +13,7 @@ describe('authClient 인증 요청', () => {
         userId: 7,
         provider: 'GOOGLE',
         displayName: '홍길동',
+        email: 'user@example.com',
         profileImage: null,
       }));
     const localStorageSpy = vi.spyOn(Storage.prototype, 'setItem');
@@ -25,6 +26,7 @@ describe('authClient 인증 요청', () => {
         userId: 7,
         provider: 'google',
         displayName: '홍길동',
+        email: 'user@example.com',
         profileImage: null,
       },
     });

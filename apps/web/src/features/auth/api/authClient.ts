@@ -265,13 +265,16 @@ function parseCurrentUser(value: unknown): CurrentUser | null {
     || typeof value.displayName !== 'string'
     || value.displayName.trim().length === 0
     || (value.profileImage !== null && typeof value.profileImage !== 'string')
+    || (value.email != null && typeof value.email !== 'string')
   ) {
     return null;
   }
+  const email = typeof value.email === 'string' && value.email.trim().length > 0 ? value.email.trim() : null;
   return {
     userId: value.userId,
     provider: provider as OAuthProvider,
     displayName: value.displayName.trim(),
+    email,
     profileImage: value.profileImage,
   };
 }

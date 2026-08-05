@@ -168,7 +168,6 @@ public class JdbcComplexSearchReader implements ComplexSearchReader {
 		        SELECT c.id
 		        FROM complex c
 		        WHERE lower(c.display_name) LIKE token.raw_pattern ESCAPE chr(92)
-		        ORDER BY c.id
 		        LIMIT 200
 		    ) hit
 		    UNION ALL
@@ -178,7 +177,6 @@ public class JdbcComplexSearchReader implements ComplexSearchReader {
 		        SELECT c.id
 		        FROM complex c
 		        WHERE lower(c.name) LIKE token.raw_pattern ESCAPE chr(92)
-		        ORDER BY c.id
 		        LIMIT 200
 		    ) hit
 		    UNION ALL
@@ -188,7 +186,6 @@ public class JdbcComplexSearchReader implements ComplexSearchReader {
 		        SELECT c.id
 		        FROM complex c
 		        WHERE lower(COALESCE(c.trade_name, '')) LIKE token.raw_pattern ESCAPE chr(92)
-		        ORDER BY c.id
 		        LIMIT 200
 		    ) hit
 		    UNION ALL
@@ -199,7 +196,6 @@ public class JdbcComplexSearchReader implements ComplexSearchReader {
 		        FROM complex c
 		        WHERE token.normalized_token <> ''
 		          AND c.search_name LIKE token.normalized_pattern ESCAPE chr(92)
-		        ORDER BY c.id
 		        LIMIT 200
 		    ) hit
 		    UNION ALL
@@ -211,7 +207,6 @@ public class JdbcComplexSearchReader implements ComplexSearchReader {
 		        WHERE lower(alias.alias_name) LIKE token.raw_pattern ESCAPE chr(92)
 		           OR (token.normalized_token <> ''
 		               AND alias.normalized_name LIKE token.normalized_pattern ESCAPE chr(92))
-		        ORDER BY alias.complex_id
 		        LIMIT 200
 		    ) hit
 		)

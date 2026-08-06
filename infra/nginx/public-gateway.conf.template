@@ -9,6 +9,13 @@ map $http_x_forwarded_proto $external_forwarded_proto {
     http http;
 }
 
+map $uri $robots_header {
+    default "";
+    ~^/(?:my|auth)(?:/|$) "noindex, nofollow";
+    ~^/(?:api|internal)(?:/|$) "noindex, nofollow";
+    ~^/insights(?:/|$) "noindex, follow";
+}
+
 limit_req_zone $public_rate_limit_key zone=nearby_place_per_ip:10m rate=5r/s;
 limit_req_zone $public_rate_limit_key zone=map_bbox_per_ip:10m rate=10r/s;
 
@@ -19,19 +26,112 @@ server {
     limit_req_status 429;
     client_max_body_size 1m;
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://dapi.kakao.com https://t1.daumcdn.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.daumcdn.net https://*.kakaocdn.net; connect-src 'self' https://dapi.kakao.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://dapi.kakao.com https://t1.daumcdn.net https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.daumcdn.net https://*.kakaocdn.net https://www.google-analytics.com; connect-src 'self' https://dapi.kakao.com https://www.google-analytics.com https://region1.google-analytics.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-Frame-Options "DENY" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     add_header Permissions-Policy "camera=(), microphone=(), geolocation=(self)" always;
+    add_header X-Robots-Tag $robots_header always;
     error_page 429 = @ingress_rate_limit_problem;
+    error_page 404 =404 @public_not_found;
 
     location @ingress_rate_limit_problem {
         internal;
         default_type application/problem+json;
         add_header Cache-Control "no-store" always;
         add_header Retry-After "1" always;
+        add_header X-Robots-Tag "noindex, nofollow" always;
         return 429 '{"type":"/docs/index.html#error-code-list","title":"Too Many Requests","status":429,"detail":"Too many requests.","exception":"IngressRateLimitException","timestamp":"$time_iso8601"}';
+    }
+
+    location @seo_unavailable {
+        internal;
+        default_type text/html;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+        add_header Content-Security-Policy "default-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(self)" always;
+        add_header Retry-After "60" always;
+        add_header X-Robots-Tag "noindex, nofollow" always;
+        return 503 '<!doctype html><html lang="ko"><head><meta name="robots" content="noindex"><title>503 | 홈서치</title></head><body><h1>503</h1><p>잠시 후 다시 시도해 주세요.</p></body></html>';
+    }
+
+    location @public_not_found {
+        internal;
+        default_type text/html;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+        add_header Content-Security-Policy "default-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(self)" always;
+        add_header X-Robots-Tag "noindex, nofollow" always;
+        return 404 '<!doctype html><html lang="ko"><head><meta name="robots" content="noindex"><title>404 | 홈서치</title></head><body><h1>404</h1><p>페이지를 찾을 수 없습니다.</p></body></html>';
+    }
+
+    location @spa_private {
+        rewrite ^ /index.html break;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://dapi.kakao.com https://t1.daumcdn.net https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.daumcdn.net https://*.kakaocdn.net https://www.google-analytics.com; connect-src 'self' https://dapi.kakao.com https://www.google-analytics.com https://region1.google-analytics.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(self)" always;
+        add_header X-Robots-Tag "noindex, nofollow" always;
+        add_header Cache-Control "no-cache" always;
+    }
+
+    location @spa_insights {
+        rewrite ^ /index.html break;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://dapi.kakao.com https://t1.daumcdn.net https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.daumcdn.net https://*.kakaocdn.net https://www.google-analytics.com; connect-src 'self' https://dapi.kakao.com https://www.google-analytics.com https://region1.google-analytics.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(self)" always;
+        add_header X-Robots-Tag "noindex, follow" always;
+        add_header Cache-Control "no-cache" always;
+    }
+
+    location = /robots.txt {
+        proxy_pass http://${SEO_RENDERER_HOST}:${SEO_RENDERER_PORT};
+        proxy_connect_timeout 2s;
+        proxy_intercept_errors on;
+        error_page 500 502 503 504 =503 @seo_unavailable;
+    }
+
+    location = /sitemap.xml {
+        proxy_pass http://${SEO_RENDERER_HOST}:${SEO_RENDERER_PORT};
+        proxy_connect_timeout 2s;
+        proxy_intercept_errors on;
+        error_page 500 502 503 504 =503 @seo_unavailable;
+    }
+
+    location ^~ /sitemaps/ {
+        proxy_pass http://${SEO_RENDERER_HOST}:${SEO_RENDERER_PORT};
+        proxy_connect_timeout 2s;
+        proxy_intercept_errors on;
+        error_page 500 502 503 504 =503 @seo_unavailable;
+    }
+
+    location ~ ^/(?:regions|complexes)/[1-9][0-9]*$ {
+        proxy_pass http://${SEO_RENDERER_HOST}:${SEO_RENDERER_PORT};
+        proxy_connect_timeout 2s;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $external_forwarded_proto;
+        proxy_intercept_errors on;
+        error_page 500 502 503 504 =503 @seo_unavailable;
+    }
+
+    location ~ ^/(?:privacy|terms|about)$ {
+        proxy_pass http://${SEO_RENDERER_HOST}:${SEO_RENDERER_PORT};
+        proxy_connect_timeout 2s;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $external_forwarded_proto;
+        proxy_intercept_errors on;
+        error_page 500 502 503 504 =503 @seo_unavailable;
     }
 
     location = /internal { return 404; }
@@ -185,12 +285,25 @@ server {
         add_header Cache-Control "public, max-age=31536000, immutable";
     }
 
+    location ~ ^/(?:favicon-32[.]png|apple-touch-icon[.]png|home-search-logo[.]png)$ {
+        try_files $uri =404;
+        add_header Cache-Control "public, max-age=86400";
+    }
+
     location = /index.html {
         add_header Cache-Control "no-cache";
     }
 
-    location / {
-        try_files $uri $uri/ /index.html;
+    location = / {
+        try_files /index.html =404;
         add_header Cache-Control "no-cache";
     }
+
+    location = /auth/success { try_files /__home_search_missing @spa_private; }
+    location = /auth/failure { try_files /__home_search_missing @spa_private; }
+    location = /my { try_files /__home_search_missing @spa_private; }
+    location ^~ /my/ { try_files /__home_search_missing @spa_private; }
+    location = /insights { try_files /__home_search_missing @spa_insights; }
+    location = /insights/news { try_files /__home_search_missing @spa_insights; }
+    location / { return 404; }
 }

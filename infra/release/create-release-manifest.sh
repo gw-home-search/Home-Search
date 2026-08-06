@@ -10,7 +10,7 @@ output="${4:?output path is required}"
 application_images=(
   property-api property-batch property-flyway admin-api admin-migration admin-ops
   user-api user-insight-worker user-flyway source-data-migration public-gateway admin-gateway backup ops-bootstrap ml
-  ai chat-bff
+  ai chat-bff seo-renderer
 )
 platform_images=(budget-postgres budget-valkey)
 application_tmp="$(mktemp)"
@@ -50,6 +50,6 @@ jq -n --arg tag "${tag}" --arg commit_sha "${commit_sha}" \
   --slurpfile images "${application_tmp}" --slurpfile platform_images "${platform_tmp}" \
   '{format_version:1,tag:$tag,commit_sha:$commit_sha,generated_at:$generated_at,images:$images[0],platform_images:$platform_images[0]}' >"${output}"
 jq -e '
-  .format_version == 1 and (.images | length == 17) and (.platform_images | length == 2)
+  .format_version == 1 and (.images | length == 18) and (.platform_images | length == 2)
   and ([.images[].digest, .platform_images[].digest] | all(test("^sha256:[0-9a-f]{64}$")))
 ' "${output}" >/dev/null

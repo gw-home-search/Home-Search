@@ -184,8 +184,8 @@ locals {
       image_key      = "public-gateway"
       container_port = 8080
       host_port      = 18000
-      cpu            = 128
-      memory         = 256
+      cpu            = 256
+      memory         = 512
       desired        = local.public_enabled ? 1 : 0
       readonly_root  = false
       health         = ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1"]
@@ -196,6 +196,8 @@ locals {
         { name = "USER_API_PORT", value = "18082" },
         { name = "CHAT_BFF_HOST", value = local.host_gateway },
         { name = "CHAT_BFF_PORT", value = "18083" },
+        { name = "SEO_RENDERER_HOST", value = "seo-renderer" },
+        { name = "SEO_RENDERER_PORT", value = "3000" },
       ]
     }
     admin-gateway = {
@@ -374,6 +376,7 @@ resource "aws_ecs_task_definition" "application" {
         each.key == "ml" ? [{ sourceVolume = "model", containerPath = "/model", readOnly = true }] : [],
       )
       dependsOn              = length(local.application_key_parameters[each.key]) > 0 ? [{ containerName = "key-materializer", condition = "SUCCESS" }] : []
+      links                  = each.key == "public-gateway" ? ["seo-renderer:seo-renderer"] : []
       systemControls         = []
       volumesFrom            = []
       readonlyRootFilesystem = each.value.readonly_root
@@ -392,6 +395,45 @@ resource "aws_ecs_task_definition" "application" {
       stopTimeout      = 90
       logConfiguration = local.awslogs[each.key]
     }],
+    each.key == "public-gateway" ? [{
+      name              = "seo-renderer"
+      image             = var.image_uris["seo-renderer"]
+      essential         = false
+      cpu               = 64
+      memoryReservation = 128
+      memory            = 192
+      portMappings      = [{ containerPort = 3000, hostPort = 0, protocol = "tcp" }]
+      environment = [
+        { name = "PORT", value = "3000" },
+        { name = "HOME_SEO_INDEX_MODE", value = "PILOT" },
+        { name = "HOME_SEO_CANONICAL_ORIGIN", value = "https://${var.public_hostname}" },
+        { name = "HOME_SEO_PROPERTY_API_BASE_URL", value = "http://${local.host_gateway}:18080" },
+        { name = "HOME_SEO_PAGE_CACHE_TTL", value = "15m" },
+        { name = "HOME_SEO_SITEMAP_CACHE_TTL", value = "6h" },
+        { name = "HOME_SEO_STALE_IF_ERROR", value = "24h" },
+      ]
+      secrets                = []
+      mountPoints            = []
+      dependsOn              = []
+      links                  = []
+      systemControls         = []
+      volumesFrom            = []
+      readonlyRootFilesystem = true
+      privileged             = false
+      linuxParameters = {
+        initProcessEnabled = true
+        capabilities       = { add = [], drop = ["NET_RAW"] }
+      }
+      healthCheck = {
+        command     = ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))\""]
+        interval    = 30
+        timeout     = 5
+        retries     = 3
+        startPeriod = 30
+      }
+      stopTimeout      = 30
+      logConfiguration = local.awslogs[each.key]
+    }] : [],
     length(local.application_key_parameters[each.key]) > 0 ? [{
       name                   = "key-materializer"
       user                   = "0:0"
@@ -402,6 +444,7 @@ resource "aws_ecs_task_definition" "application" {
       secrets                = [for name, parameter in local.application_key_parameters[each.key] : { name = name, valueFrom = local.runtime_parameter_arns[parameter] }]
       mountPoints            = [{ sourceVolume = "keys", containerPath = "/run/keys", readOnly = false }]
       portMappings           = []
+      links                  = []
       systemControls         = []
       volumesFrom            = []
       readonlyRootFilesystem = false

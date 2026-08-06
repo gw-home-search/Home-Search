@@ -9,7 +9,7 @@ trap cleanup EXIT
 images=(
   property-api property-batch property-flyway admin-api admin-migration admin-ops
   user-api user-insight-worker user-flyway source-data-migration public-gateway admin-gateway
-  backup ops-bootstrap ml ai chat-bff
+  backup ops-bootstrap ml ai chat-bff seo-renderer
 )
 manifest_images='{}'
 for image in "${images[@]}"; do
@@ -40,7 +40,7 @@ jq -n --argjson images "${manifest_images}" \
   'public.ecr.aws/aws-observability/aws-otel-collector@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' \
   "${tmp_dir}/release.auto.tfvars.json"
 jq -e '
-  (.image_uris | length == 17)
+  (.image_uris | length == 18)
   and .deployment_release_tag == "v1.2.3"
   and .image_uris["property-api"] == "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/property-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
   and .adot_collector_image_uri == "public.ecr.aws/aws-observability/aws-otel-collector@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"

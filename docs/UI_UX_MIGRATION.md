@@ -128,6 +128,18 @@ Mobile is not the first project target, but the layout should not block it:
 - Filter changes refresh complex markers.
 - Detail drawer clearly shows complex info and trade list.
 
+## Search landing routes
+
+- `/regions/:id`와 `/complexes/:id`는 server-rendered landing content와 React
+  hydration에서 동일한 표현 컴포넌트를 사용한다.
+- 각 문서는 고유 title, description, 절대 canonical, Open Graph/Twitter,
+  breadcrumb와 `Place` 또는 `ApartmentComplex` JSON-LD를 제공한다.
+- 외부 데이터 문자열은 text로 escape하며 `Offer`와 `RealEstateListing`을
+  생성하지 않는다.
+- SPA가 해당 URL에서 시작해도 `/`로 redirect하지 않는다. 사용자는 landing에서
+  root 지도 화면으로 이동할 수 있다.
+- bot과 일반 사용자에 대한 User-Agent 기반 본문 분기는 금지한다.
+
 ## Additive Map Insights Route
 
 - Public `/insights` renders the same `MapApp`, Kakao map, and filter bar as

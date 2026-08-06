@@ -365,7 +365,7 @@ resource "aws_ecs_task_definition" "service" {
         length(setsubtract(local.image_names, toset(keys(var.image_uris)))) == 0
         && length(setsubtract(toset(keys(var.image_uris)), local.image_names)) == 0
       )
-      error_message = "image_uris keys must exactly match the 17-image release manifest."
+      error_message = "image_uris keys must exactly match the 18-image release manifest."
     }
   }
 }

@@ -60,7 +60,7 @@ locals {
     "property-api", "property-batch", "property-flyway",
     "admin-api", "admin-migration", "admin-ops",
     "user-api", "user-insight-worker", "user-flyway", "source-data-migration",
-    "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml", "ai", "chat-bff",
+    "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml", "ai", "chat-bff", "seo-renderer",
   ])
   service_names = toset([
     "property-api", "admin-api", "user-api", "public-gateway", "admin-gateway",

@@ -114,7 +114,7 @@ jobs:
           cp "${manifest}" deployment-evidence/release-manifest.json
           jq -e --arg tag "${RELEASE_TAG}" --arg sha "${RELEASE_SHA}" '
             .format_version == 2 and .tag == $tag and .commit_sha == $sha
-            and (.images | length) == 17 and (.platform_images | length) == 2
+            and (.images | length) == 18 and (.platform_images | length) == 2
             and .vulnerability_critical_gate_passed and .vulnerability_policy_gate_passed
           ' deployment-evidence/release-manifest.json >/dev/null
           if LC_ALL=C grep -R -a -Fq 'staging.homesearch.world' release-evidence; then

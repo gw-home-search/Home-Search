@@ -36,7 +36,7 @@ infra/deploy/upload-f37-model.sh \
 ```text
 release_tag=vX.Y.Z
 release_sha=<merged-main-40-hex>
-property_migration_target=40
+property_migration_target=41
 enable_market_news_public=true
 enable_market_news_schedules=true
 enable_rtms_refresh_schedule=true
@@ -105,7 +105,7 @@ commit으로 release를 다시 실행하면 먼저 push된 repository에서
 새 commit이 필요하다. Gradle wrapper 잠금 timeout이나 OIDC token 만료처럼 build 환경
 문제로 실패한 경우에도 동일하다.
 
-prep plan은 현재 application task definition ARN과 desired count를 exact pin하고 schedule을 disabled로 둔다. saved full plan 적용 뒤 V39→V40 migrate 또는 live V40 validate-only, F37 install, ML health, RTMS catch-up, news bootstrap, AI canary 순서로 진행한다. Application 교체 순서는 `ml → property-api → user-api → ai → chat-bff → admin-api → admin-gateway → public-gateway`이다.
+prep plan은 현재 application task definition ARN과 desired count를 exact pin하고 schedule을 disabled로 둔다. saved full plan 적용 뒤 V39/V40→V41 migrate 또는 live V41 validate-only, F37 install, ML health, RTMS catch-up, news bootstrap, AI canary 순서로 진행한다. Application 교체 순서는 `ml → property-api → user-api → ai → chat-bff → admin-api → admin-gateway → public-gateway`이다.
 
 Workflow는 backend 교체 후 OAuth evidence를 최대 15분 기다린다. 그 사이 운영자는 Google·Kakao·Naver 각각 실제 login, 현재 사용자 provider, logout, cookie 정책을 확인하고 secret·`code`·`state` 없이 `oauth-smoke.json`을 지정 경로에 올린다. 세 provider 중 하나라도 실패했거나 증거가 도착하지 않으면 public gateway를 교체하지 않고 application-only rollback한다.
 
@@ -115,4 +115,4 @@ Workflow는 backend 교체 후 OAuth evidence를 최대 15분 기다린다. 그 
 
 15분 hard gate에서 public 5xx, task crash, readiness failure, secret 노출, platform 변경 중 하나라도 발생하면 rollback한다. p95 및 순간 CPU/memory는 단독 rollback 사유가 아니며 60분 후속 관찰에 누적한다.
 
-Rollback은 캡처된 application 8개 ARN/desired count만 복원하고 각 service stable waiter와 public search smoke를 실행한다. Schedule을 먼저 disable하고 PostgreSQL·Valkey, DNS, EBS, EC2, 정상 수집 데이터, V40 index, model S3 object는 변경하거나 삭제하지 않는다.
+Rollback은 캡처된 application 8개 ARN/desired count만 복원하고 각 service stable waiter와 public search smoke를 실행한다. Schedule을 먼저 disable하고 PostgreSQL·Valkey, DNS, EBS, EC2, 정상 수집 데이터, V40 index, V41 SEO catalog, model S3 object는 변경하거나 삭제하지 않는다.

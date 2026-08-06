@@ -1,0 +1,7 @@
+const XML_HEADER='<?xml version="1.0" encoding="UTF-8"?>'; export const SITEMAP_CHUNK_SIZE=10_000;
+export function buildComplexSitemaps(origin:string,ids:number[]){const unique=[...new Set(ids.filter((id)=>Number.isSafeInteger(id)&&id>0))];const chunks:string[]=[];for(let offset=0;offset<unique.length;offset+=SITEMAP_CHUNK_SIZE)chunks.push(urlSet(unique.slice(offset,offset+SITEMAP_CHUNK_SIZE).map((id)=>`${origin}/complexes/${id}`)));return chunks;}
+export function buildRegionSitemap(origin:string,ids:number[]){return urlSet([...new Set(ids)].map((id)=>`${origin}/regions/${id}`));}
+export function buildPagesSitemap(origin:string){return urlSet([`${origin}/`,`${origin}/about`,`${origin}/privacy`,`${origin}/terms`]);}
+export function buildSitemapIndex(origin:string,count:number){const locations=[`${origin}/sitemaps/pages.xml`,`${origin}/sitemaps/regions.xml`,...Array.from({length:count},(_,index)=>`${origin}/sitemaps/complexes-${String(index+1).padStart(4,'0')}.xml`)];return `${XML_HEADER}<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${locations.map((location)=>`<sitemap><loc>${escapeXml(location)}</loc></sitemap>`).join('')}</sitemapindex>`;}
+function urlSet(urls:string[]){return `${XML_HEADER}<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.map((url)=>`<url><loc>${escapeXml(url)}</loc></url>`).join('')}</urlset>`;}
+function escapeXml(value:string){return value.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');}

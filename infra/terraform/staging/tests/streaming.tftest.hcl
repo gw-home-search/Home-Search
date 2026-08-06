@@ -23,7 +23,7 @@ run "private_iam_streaming_and_registry_ownership" {
     enable_property_event_retention_schedule = true
     image_digests = { for name in [
       "property-api", "property-batch", "property-flyway", "admin-api", "admin-migration", "admin-ops",
-      "user-api", "user-insight-worker", "user-flyway", "source-data-migration", "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml", "ai", "chat-bff",
+      "user-api", "user-insight-worker", "user-flyway", "source-data-migration", "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml", "ai", "chat-bff", "seo-renderer",
     ] : name => "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
   }
 

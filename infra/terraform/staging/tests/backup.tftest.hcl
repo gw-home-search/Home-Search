@@ -22,7 +22,7 @@ run "encrypted_scheduled_backup_and_restore_verification" {
     enable_backup_schedules = true
     image_digests = { for name in [
       "property-api", "property-batch", "property-flyway", "admin-api", "admin-migration", "admin-ops",
-      "user-api", "user-insight-worker", "user-flyway", "source-data-migration", "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml", "ai", "chat-bff",
+      "user-api", "user-insight-worker", "user-flyway", "source-data-migration", "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml", "ai", "chat-bff", "seo-renderer",
     ] : name => "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
   }
 

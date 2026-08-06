@@ -1,0 +1,1 @@
+{"compilerOptions":{"target":"ES2023","lib":["ES2023","DOM"],"module":"ESNext","moduleResolution":"Bundler","strict":true,"skipLibCheck":true,"jsx":"react-jsx","types":["node"]},"include":["seo-renderer","src/seo","vite.renderer.config.ts"],"exclude":["src/**/*.test.ts","src/**/*.test.tsx"]}

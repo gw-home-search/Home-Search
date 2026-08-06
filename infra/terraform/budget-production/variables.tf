@@ -199,13 +199,13 @@ variable "monthly_budget_usd" {
 variable "image_uris" {
   type        = map(string)
   default     = {}
-  description = "The existing 17 application images from one approved immutable release manifest."
+  description = "The existing 18 application images from one approved immutable release manifest."
   validation {
     condition = length(var.image_uris) == 0 || (
-      length(var.image_uris) == 17
+      length(var.image_uris) == 18
       && alltrue([for uri in values(var.image_uris) : can(regex("^[0-9]{12}[.]dkr[.]ecr[.]ap-northeast-2[.]amazonaws[.]com/home-search/[a-z0-9-]+@sha256:[0-9a-f]{64}$", uri))])
     )
-    error_message = "image_uris must be empty before release selection or contain all 17 immutable Seoul ECR image URIs."
+    error_message = "image_uris must be empty before release selection or contain all 18 immutable Seoul ECR image URIs."
   }
 }
 
@@ -355,11 +355,11 @@ variable "ai_supervisor_graph_canary_percent" {
 
 variable "property_migration_target" {
   type        = number
-  default     = 40
+  default     = 41
   description = "Exact append-only Property Flyway target approved for the incremental rollout."
   validation {
-    condition     = var.property_migration_target == 40
-    error_message = "property_migration_target is pinned to 40 for this rollout."
+    condition     = var.property_migration_target == 41
+    error_message = "property_migration_target is pinned to 41 for this rollout."
   }
 }
 

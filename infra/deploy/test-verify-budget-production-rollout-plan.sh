@@ -81,7 +81,7 @@ jq '
   | .resource_changes[0].change.before.container_definitions |=
       (fromjson | .[0].name = "property-flyway" | .[0].image |= sub("property-api"; "property-flyway") | .[0].command = ["migrate"] | tojson)
   | .resource_changes[0].change.after.container_definitions |=
-      (fromjson | .[0].name = "property-flyway" | .[0].image |= sub("property-api"; "property-flyway") | .[0].command = ["-target=40","migrate"] | tojson)
+      (fromjson | .[0].name = "property-flyway" | .[0].image |= sub("property-api"; "property-flyway") | .[0].command = ["-target=41","migrate"] | tojson)
 ' "${tmp_dir}/allowed.json" >"${tmp_dir}/property-flyway.json"
 bash "${script}" "${tmp_dir}/property-flyway.json" "${tmp_dir}/live-application-settings.json" >/dev/null
 jq '.resource_changes[0].change.after.container_definitions |= (fromjson | .[0].command = ["clean"] | tojson)' \

@@ -3,7 +3,7 @@
 ## 목적과 경계
 
 `budget-production`은 월 AWS 증분 `$95` 이하를 우선하는 단일 노드 profile이다.
-기존 `infra/terraform/production`, staging state, application ECR 17개는 소유하지
+기존 `infra/terraform/production`, staging state, application ECR 18개는 소유하지
 않는다. 공개 계약은 `docs/API_CONTRACT.md` 그대로다.
 
 ```text
@@ -21,7 +21,7 @@ SSM -> host maintenance     S3/DLM <- logical dump/EBS snapshot
 |---|---|
 | bootstrap state | state S3/KMS, budget plan/apply/deploy OIDC role |
 | budget state | VPC/subnet/EIP/EC2/EBS/ECS, platform ECR, S3, SSM, ACM, DNS, alarm, AWS Budget, anomaly subscription |
-| staging state | 기존 application ECR 17개 |
+| staging state | 기존 application ECR 18개 |
 | 기존 production state | 변경 없음 |
 | 외부 입력 | hosted zone ID, account-wide SERVICE anomaly monitor ARN, external credential 값, 승인된 acceptance evidence |
 

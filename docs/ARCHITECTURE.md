@@ -322,6 +322,26 @@ The legacy browser-facing property-data admin controllers are removed.
 Public ingress returns `404` for `/internal/**`; only admin-service reaches the
 internal property-data port on the service network.
 
+## Search renderer boundary
+
+`budget-production`의 `public-gateway` task에는 비필수(`essential=false`)
+`seo-renderer` sidecar가 함께 실행된다. Nginx는 `/regions/**`, `/complexes/**`,
+`/robots.txt`, `/sitemap.xml`, `/sitemaps/**`만 renderer로 전달하고, renderer는
+private task network를 통해 property-data의 read-only `/internal/v1/seo/**`를
+호출한다.
+
+```text
+Search engine / browser
+        -> public-gateway Nginx
+        -> seo-renderer (React SSR, page/sitemap cache)
+        -> property-data internal SEO reader
+        -> PostgreSQL
+```
+
+Renderer는 prediction, ranking, favorite, mail state에 의존하지 않는다. 장애 시
+Nginx는 SEO URL을 SPA fallback으로 바꾸지 않고 `503 + noindex`로 반환한다.
+Public JSON API와 `/internal/**` ingress 차단 경계는 유지된다.
+
 ## Frontend Current Shape
 
 The source frontend is a Vite React app:

@@ -97,14 +97,14 @@ check "prediction_requires_ml_service" {
 
 check "data_phase_requires_platform_release" {
   assert {
-    condition     = !local.data_enabled || (length(var.platform_image_uris) == 2 && length(var.image_uris) == 17)
-    error_message = "data phase requires both platform images and the exact 17-image release for reviewed one-shot tasks."
+    condition     = !local.data_enabled || (length(var.platform_image_uris) == 2 && length(var.image_uris) == 18)
+    error_message = "data phase requires both platform images and the exact 18-image release for reviewed one-shot tasks."
   }
 }
 
 check "private_phase_requires_application_release" {
   assert {
-    condition     = !local.private_enabled || length(var.image_uris) == 17
-    error_message = "private/public phases require the exact 17-image application release."
+    condition     = !local.private_enabled || length(var.image_uris) == 18
+    error_message = "private/public phases require the exact 18-image application release."
   }
 }

@@ -26,6 +26,7 @@ import { MapModeNavigation } from '../features/insights/MapModeNavigation';
 import { readInsightMetric } from '../features/insights/insightMetricConfig';
 import { FeatureErrorBoundary } from '../shared/FeatureErrorBoundary';
 import { NewsRailContent } from '../features/news/NewsRailContent';
+import { PublicFooter } from '../shared/PublicFooter';
 
 export type MapAppProps = {
   initialMapLevel?: number;
@@ -426,6 +427,7 @@ export function MapApp({
           </FeatureErrorBoundary>
         </div>
       </div>
+      <PublicFooter compact />
     </main>
   );
 }

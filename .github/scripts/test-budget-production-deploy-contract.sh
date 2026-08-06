@@ -159,7 +159,7 @@ for required in \
   'environment: budget-production-plan' \
   'environment: budget-production' \
   'Verify public phase and live platform health' \
-  'Require V39 or V40 live history before target V40' \
+  'Require V39, V40, or V41 live history before target V41' \
   'Require backup and disk headroom' \
   'Preserve live PostgreSQL and Valkey digests' \
   'Verify incremental Terraform allowlist' \
@@ -195,7 +195,7 @@ require_absent_regex 'run-budget-ecs-task[^\n]*data-import-reconcile|update-serv
 [[ "$(grep -Fc 'terraform_wrapper: false' "${rollout_workflow}")" -eq 2 ]]
 grep -Fq 'with: { fetch-depth: 0, ref: "${{ github.sha }}" }' "${rollout_workflow}"
 grep -Fq 'git rev-list -n 1 "${RELEASE_TAG}"' "${rollout_workflow}"
-grep -Fq '(.images | length) == 17 and (.platform_images | length) == 2' "${rollout_workflow}"
+grep -Fq '(.images | length) == 18 and (.platform_images | length) == 2' "${rollout_workflow}"
 grep -Fq 'baseline_source=live-recovery' "${rollout_workflow}"
 grep -Fq 'baseline_source=historical' "${rollout_workflow}"
 grep -Fq '{source:$source}' "${rollout_workflow}"

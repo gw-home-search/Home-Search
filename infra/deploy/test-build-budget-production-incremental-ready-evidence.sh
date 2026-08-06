@@ -12,7 +12,7 @@ mkdir "${evidence}"
 tag=v1.0.24
 sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 common="$(jq -cn --arg tag "${tag}" --arg sha "${sha}" '{status:"pass",release_tag:$tag,commit_sha:$sha,created_at:"2026-08-02T00:00:00Z",checks:{},redactions_applied:true}')"
-application_names=(admin-api admin-gateway admin-migration admin-ops ai backup chat-bff ml ops-bootstrap property-api property-batch property-flyway public-gateway source-data-migration user-api user-flyway user-insight-worker)
+application_names=(admin-api admin-gateway admin-migration admin-ops ai backup chat-bff ml ops-bootstrap property-api property-batch property-flyway public-gateway seo-renderer source-data-migration user-api user-flyway user-insight-worker)
 images='{}'; index=0
 for name in "${application_names[@]}"; do
   index=$((index + 1)); digest="sha256:$(printf '%064d' "${index}")"
@@ -35,8 +35,8 @@ jq -n --argjson services "${apps}" '{format_version:1,cluster_exists:true,servic
 printf '%s\n' '{"format_version":1,"cluster_exists":true,"services":{"budget-postgres":{},"budget-valkey":{}}}' >"${evidence}/pre-rollout-platform.json"
 
 data='{"complex":{"rows":1,"identity_checksum":"a"},"complex_name_alias":{"rows":1,"identity_checksum":"b"},"parcel":{"rows":1,"identity_checksum":"c"},"trade":{"rows":1,"identity_checksum":"d"}}'
-jq -n --argjson data "${data}" '{status:"pass",phase:"before",previous_version:39,target_version:40,failed:0,missing:0,out_of_order:0,data:$data}' >"${evidence}/migration-before.json"
-jq -n --argjson data "${data}" '{status:"pass",phase:"after",previous_version:39,target_version:40,failed:0,missing:0,out_of_order:0,data:$data}' >"${evidence}/migration-after.json"
+jq -n --argjson data "${data}" '{status:"pass",phase:"before",previous_version:40,target_version:41,failed:0,missing:0,out_of_order:0,data:$data}' >"${evidence}/migration-before.json"
+jq -n --argjson data "${data}" '{status:"pass",phase:"after",previous_version:40,target_version:41,failed:0,missing:0,out_of_order:0,data:$data}' >"${evidence}/migration-after.json"
 
 jq --argjson base "${common}" '$base | .checks={allowlist_exact:true,checksums_match:true,immutable_upload:true}' <<<null >"${evidence}/model-artifact.json"
 jq --argjson base "${common}" '$base | .checks={atomic_install:true,uid_10001_readable:true,extra_files:0,symlinks:0}' <<<null >"${evidence}/model-install.json"
@@ -54,8 +54,8 @@ SECURITY_AUDIT_RESULT=none bash "${script}" "${evidence}" "${evidence}/BUDGET_PR
 jq -e '.status == "BUDGET_PRODUCTION_INCREMENTAL_READY" and .property_migration_target == 40 and .contract_impact == "compatible"
   and .security_audit == "security-audit: 지적사항 = none" and (.artifacts | length) == 23' "${evidence}/BUDGET_PRODUCTION_INCREMENTAL_READY.json" >/dev/null
 
-jq '.previous_version = 40' "${evidence}/migration-before.json" >"${evidence}/migration-before.next" && mv "${evidence}/migration-before.next" "${evidence}/migration-before.json"
-jq '.previous_version = 40' "${evidence}/migration-after.json" >"${evidence}/migration-after.next" && mv "${evidence}/migration-after.next" "${evidence}/migration-after.json"
+jq '.previous_version = 41' "${evidence}/migration-before.json" >"${evidence}/migration-before.next" && mv "${evidence}/migration-before.next" "${evidence}/migration-before.json"
+jq '.previous_version = 41' "${evidence}/migration-after.json" >"${evidence}/migration-after.next" && mv "${evidence}/migration-after.next" "${evidence}/migration-after.json"
 SECURITY_AUDIT_RESULT=none bash "${script}" "${evidence}" "${tmp_dir}/already-v40.json" >/dev/null
 
 jq '.checks.public_5xx = 1' "${evidence}/observation.json" >"${evidence}/observation.next" && mv "${evidence}/observation.next" "${evidence}/observation.json"

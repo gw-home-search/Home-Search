@@ -14,7 +14,7 @@ GitHub OIDC↔AWS role, live EBS↔backup/recovery다.
 | secret exfiltration | DB/OAuth/JWT/ACM 탈취 | SSM ARN allowlist, `value_wo` `UNSET`, no Terraform state value, 0400 key, log/artifact scan | provider refresh 때문에 plan/apply role은 budget prefix를 일시 복호화할 수 있고 host root는 certificate 접근 가능 |
 | EBS loss/corruption | 모든 DB 중단/손실 | encrypted protected data EBS, daily snapshot, logical dump, clone restore | RPO 최대 24h |
 | backup tampering/deletion | 복구 불가 | versioning, Object Lock Governance 35일, checksum/head verify, TLS-only policy | AWS-managed KMS key policy 격리 약화 |
-| release substitution | 악성/환경 종속 image | exact tag+SHA, 17+2 digest, SBOM/Grype, staging-origin scan, immutable ECR | scanner 미탐 가능 |
+| release substitution | 악성/환경 종속 image | exact tag+SHA, 18+2 digest, SBOM/Grype, staging-origin scan, immutable ECR | scanner 미탐 가능 |
 | OIDC/state confusion | 다른 환경 파괴 | exact workflow/environment claims, state object deny, budget ARN/tag mutation deny, deploy state deny, zero-destroy verifier | hosted zone처럼 외부 입력 resource는 protected plan/apply 승인에 의존 |
 | Unlimited credit 잔류 | 비용 초과 | trap + in-job always + cross-job cleanup, explicit Standard assertion, readiness gate | workflow 전체 취소나 AWS API 장애 시 수동 확인 필요 |
 | L7 abuse/WAF 부재 | 비용/latency/DoS | Nginx 1MiB/rate/connection limit, app bounds, Shield Standard | 정교한 WAF rule 없음 |

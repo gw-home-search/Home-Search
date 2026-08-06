@@ -948,3 +948,22 @@ secret 대신 write-only `value_wo`로 `UNSET` container만 생성한다. provid
 필요한 GitHub Environment/variables와
 운영 절차는 `BUDGET_PRODUCTION_RUNBOOK.md`, threat boundary는
 `BUDGET_PRODUCTION_THREAT_MODEL.md`를 따른다.
+
+SEO 릴리스에서는 `public-gateway` task CPU/memory를 `256`/`512 MiB`로 두고,
+같은 bridge task에 `seo-renderer`를 memory reservation `128 MiB`, hard limit
+`192 MiB`, `essential=false`로 추가한다. Renderer image를 포함해 immutable
+application release는 18개 digest로 구성한다. Renderer가 중단되어도 gateway는
+유지되며 SEO 경로는 `503`을 반환한다.
+
+Renderer runtime 변수:
+
+- `HOME_SEO_INDEX_MODE=PILOT|ALL|OFF` (`PILOT`이 초기값)
+- `HOME_SEO_CANONICAL_ORIGIN=https://homesearch.world`
+- `HOME_SEO_PROPERTY_API_BASE_URL`: private property-data endpoint
+- `HOME_SEO_PAGE_CACHE_TTL=15m`
+- `HOME_SEO_SITEMAP_CACHE_TTL=6h`
+- `HOME_SEO_STALE_IF_ERROR=24h`
+
+`rtms_refresh_schedule_enabled`는 누락일 first/repeat runtime audit가 모두 통과한
+뒤에만 `true`로 apply한다. Schedule 계약은 매일 `cron(30 7 * * ? *)`,
+`Asia/Seoul`, event age 3,600초, retry 1회다.

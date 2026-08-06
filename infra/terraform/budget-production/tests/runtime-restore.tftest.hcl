@@ -29,6 +29,7 @@ variables {
     ml                    = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/ml@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     ai                    = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/ai@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     chat-bff              = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/chat-bff@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    seo-renderer          = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/seo-renderer@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
   }
   platform_image_uris = {
     budget-postgres = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/budget-postgres@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
@@ -118,6 +119,20 @@ run "runtime_restore_enables_only_approved_features" {
       ])
     )
     error_message = "Property prediction/news, ML, and three-provider OAuth must be wired together."
+  }
+
+  assert {
+    condition = (
+      aws_ecs_task_definition.application["public-gateway"].cpu == "256"
+      && aws_ecs_task_definition.application["public-gateway"].memory == "512"
+      && toset([for container in jsondecode(aws_ecs_task_definition.application["public-gateway"].container_definitions) : container.name]) == toset(["public-gateway", "seo-renderer"])
+      && one([for container in jsondecode(aws_ecs_task_definition.application["public-gateway"].container_definitions) : container.essential if container.name == "seo-renderer"]) == false
+      && one([for container in jsondecode(aws_ecs_task_definition.application["public-gateway"].container_definitions) : container.memoryReservation if container.name == "seo-renderer"]) == 128
+      && one([for container in jsondecode(aws_ecs_task_definition.application["public-gateway"].container_definitions) : container.memory if container.name == "seo-renderer"]) == 192
+      && one([for container in jsondecode(aws_ecs_task_definition.application["public-gateway"].container_definitions) : container.image if container.name == "seo-renderer"]) == var.image_uris["seo-renderer"]
+      && one([for container in jsondecode(aws_ecs_task_definition.application["public-gateway"].container_definitions) : container.links if container.name == "public-gateway"]) == ["seo-renderer:seo-renderer"]
+    )
+    error_message = "Public gateway must run the non-essential immutable SEO renderer sidecar within the reviewed CPU/memory envelope."
   }
 
   assert {

@@ -103,7 +103,7 @@ release workflow가 아직 이미지를 게시할 ECR repository를 필요로 �
 operator가 KMS/ECR registry target을 먼저 apply한다. 이 target-only plan의
 형식 검증을 위해 placeholder digest map을 전달할 수 있지만 task definition이나
 service에는 적용하지 않는다. ECR 생성 뒤 5절의 첫 image release를 게시하고,
-그 manifest의 실제 17개 digest로 foundation full plan을 만든다.
+그 manifest의 실제 18개 digest로 foundation full plan을 만든다.
 
 ```bash
 terraform -chdir=infra/terraform/staging init

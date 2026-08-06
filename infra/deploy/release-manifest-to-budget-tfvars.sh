@@ -18,7 +18,7 @@ output="${4:?Terraform variable output path is required}"
   exit 1
 }
 
-expected_applications='["admin-api","admin-gateway","admin-migration","admin-ops","ai","backup","chat-bff","ml","ops-bootstrap","property-api","property-batch","property-flyway","public-gateway","source-data-migration","user-api","user-flyway","user-insight-worker"]'
+expected_applications='["admin-api","admin-gateway","admin-migration","admin-ops","ai","backup","chat-bff","ml","ops-bootstrap","property-api","property-batch","property-flyway","public-gateway","seo-renderer","source-data-migration","user-api","user-flyway","user-insight-worker"]'
 expected_platform='["budget-postgres","budget-valkey"]'
 jq -e --argjson applications "${expected_applications}" --argjson platform "${expected_platform}" '
   .format_version == 2
@@ -37,7 +37,7 @@ jq -e --argjson applications "${expected_applications}" --argjson platform "${ex
     and (.value.uri | test("^[0-9]{12}[.]dkr[.]ecr[.]ap-northeast-2[.]amazonaws[.]com/home-search/[a-z0-9-]+@sha256:[0-9a-f]{64}$"))
     and .value.uri == ((.value.uri | split("/")[0]) + "/" + .value.repository + "@" + .value.digest))
 ' "${manifest}" >/dev/null || {
-  echo '상태: Fail - budget-production release는 market news가 활성화된 완전한 17+2 amd64 digest release여야 합니다.' >&2
+  echo '상태: Fail - budget-production release는 market news가 활성화된 완전한 18+2 amd64 digest release여야 합니다.' >&2
   exit 1
 }
 
@@ -56,4 +56,4 @@ jq --arg migration_uri "${migration_uri%/}" --arg migration_sha256 "${migration_
 chmod 0600 "${temporary}"
 mv "${temporary}" "${output}"
 trap - EXIT
-echo '상태: Pass - budget-production 17+2 release를 secret 없는 Terraform inputs로 변환했습니다.'
+echo '상태: Pass - budget-production 18+2 release를 secret 없는 Terraform inputs로 변환했습니다.'

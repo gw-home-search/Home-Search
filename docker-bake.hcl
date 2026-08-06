@@ -45,6 +45,7 @@ group "default" {
     "ml",
     "ai",
     "chat-bff",
+    "seo-renderer",
     "budget-postgres",
     "budget-valkey",
   ]
@@ -157,6 +158,18 @@ target "public-gateway" {
   }
   labels = { "org.opencontainers.image.title" = "home-search-public-gateway" }
   tags = ["${REGISTRY}/${IMAGE_PREFIX}/public-gateway:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}/public-gateway:${VERSION}"]
+}
+
+target "seo-renderer" {
+  inherits = ["_common"]
+  context = "."
+  dockerfile = "apps/web/seo-renderer/Dockerfile"
+  args = {
+    VITE_KAKAO_MAP_APP_KEY = "${KAKAO_MAP_APP_KEY}"
+    VITE_MARKET_NEWS_ENABLED = "${MARKET_NEWS_ENABLED}"
+  }
+  labels = { "org.opencontainers.image.title" = "home-search-seo-renderer" }
+  tags = ["${REGISTRY}/${IMAGE_PREFIX}/seo-renderer:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}/seo-renderer:${VERSION}"]
 }
 
 target "budget-postgres" {

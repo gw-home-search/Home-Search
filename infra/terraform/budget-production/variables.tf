@@ -97,6 +97,19 @@ variable "rtms_refresh_schedule_enabled" {
   description = "Enables the 07:30 KST RTMS refresh independently from backup schedules."
 }
 
+variable "rtms_refresh_task_definition_arn" {
+  type        = string
+  default     = ""
+  description = "Exact immutable RTMS refresh task definition revision used by EventBridge Scheduler."
+  validation {
+    condition = var.rtms_refresh_task_definition_arn == "" || can(regex(
+      "^arn:aws:ecs:ap-northeast-2:[0-9]{12}:task-definition/home-search-budget-production-rtms-daily-refresh:[1-9][0-9]*$",
+      var.rtms_refresh_task_definition_arn,
+    ))
+    error_message = "rtms_refresh_task_definition_arn must be empty or the exact budget RTMS refresh revision ARN."
+  }
+}
+
 variable "prediction_enabled" {
   type        = bool
   default     = false

@@ -5,12 +5,13 @@ mock_provider "aws" {
 mock_provider "aws" { alias = "retained_ssm" }
 
 variables {
-  ami_id                   = "ami-0123456789abcdef0"
-  availability_zone        = "ap-northeast-2a"
-  hosted_zone_id           = "Z0123456789ABCDEFG"
-  alarm_email              = "operator@example.com"
-  cost_anomaly_monitor_arn = "arn:aws:ce::123456789012:anomalymonitor/11111111-1111-1111-1111-111111111111"
-  deployment_release_tag   = "v1.2.3"
+  ami_id                           = "ami-0123456789abcdef0"
+  availability_zone                = "ap-northeast-2a"
+  hosted_zone_id                   = "Z0123456789ABCDEFG"
+  alarm_email                      = "operator@example.com"
+  cost_anomaly_monitor_arn         = "arn:aws:ce::123456789012:anomalymonitor/11111111-1111-1111-1111-111111111111"
+  deployment_release_tag           = "v1.2.3"
+  rtms_refresh_task_definition_arn = "arn:aws:ecs:ap-northeast-2:123456789012:task-definition/home-search-budget-production-rtms-daily-refresh:23"
   image_uris = {
     property-api          = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/property-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     property-batch        = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/property-batch@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -99,6 +100,14 @@ run "runtime_restore_enables_only_approved_features" {
     prediction_enabled            = true
     ml_service_enabled            = true
     user_oauth_enabled_providers  = ["google", "kakao", "naver"]
+  }
+
+  assert {
+    condition = (
+      aws_scheduler_schedule.rtms_daily_refresh[0].target[0].ecs_parameters[0].task_definition_arn
+      == var.rtms_refresh_task_definition_arn
+    )
+    error_message = "RTMS Scheduler must preserve the explicitly reviewed immutable task definition revision."
   }
 
   assert {

@@ -361,6 +361,8 @@ jobs:
           migration_uri=''; migration_sha=''
           live_scheduled_backup_task_definition="$(aws scheduler get-schedule --name home-search-budget-production-logical-backup --group-name home-search-budget-production-backup --query 'Target.EcsParameters.TaskDefinitionArn' --output text)"
           [[ "${live_scheduled_backup_task_definition}" =~ ^arn:aws:ecs:ap-northeast-2:[0-9]{12}:task-definition/home-search-budget-production-scheduled-backup:[0-9]+$ ]]
+          live_rtms_refresh_task_definition="$(aws scheduler get-schedule --name home-search-budget-production-rtms-daily-refresh --group-name home-search-budget-production-data-refresh --query 'Target.EcsParameters.TaskDefinitionArn' --output text)"
+          [[ "${live_rtms_refresh_task_definition}" =~ ^arn:aws:ecs:ap-northeast-2:[0-9]{12}:task-definition/home-search-budget-production-rtms-daily-refresh:[0-9]+$ ]]
           live_data_import_task_definition="$(terraform -chdir=infra/terraform/budget-production output -json one_shot_task_definition_arns | jq -er '.["data-import-reconcile"]')"
           live_data_import_definition="$(aws ecs describe-task-definition --task-definition "${live_data_import_task_definition}" --include TAGS --output json)"
           live_data_import_image="$(jq -er '.taskDefinition.containerDefinitions[0].image' <<<"${live_data_import_definition}")"
@@ -383,6 +385,7 @@ jobs:
             --argjson task_definitions "${live_application_task_definition_arns}" \
             --argjson desired_counts "${live_application_desired_counts}" \
             --arg scheduled_backup_task_definition "${live_scheduled_backup_task_definition}" \
+            --arg rtms_refresh_task_definition "${live_rtms_refresh_task_definition}" \
             --arg data_import_image "${live_data_import_image}" \
             --arg data_import_release_tag "${live_data_import_release_tag}" \
             --arg ai_mode "${ai_supervisor_graph_mode}" \
@@ -393,6 +396,7 @@ jobs:
             | .application_service_task_definition_arns=$task_definitions
             | .application_service_desired_counts=$desired_counts
             | .scheduled_backup_task_definition_arn=$scheduled_backup_task_definition
+            | .rtms_refresh_task_definition_arn=$rtms_refresh_task_definition
             | .data_import_preserved_image_uri=$data_import_image
             | .data_import_preserved_release_tag=$data_import_release_tag
             | .ai_supervisor_graph_mode=$ai_mode

@@ -6,7 +6,7 @@ import java.util.Optional;
 public interface SeoReader {
     Optional<SeoComplexResult> findComplex(long complexId);
 
-    Optional<SeoRegionResult> findRegion(long regionId);
+    Optional<SeoRegionResult> findRegion(long regionId, SeoIndexMode mode);
 
     List<SeoCatalogComplex> findComplexCatalog(SeoIndexMode mode, long afterId, int limit);
 

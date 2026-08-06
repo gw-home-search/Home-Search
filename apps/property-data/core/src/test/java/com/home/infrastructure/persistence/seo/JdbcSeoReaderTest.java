@@ -35,7 +35,7 @@ class JdbcSeoReaderTest extends JdbcPostgresTestSupport {
         assertThat(reader.findRegionCatalog(SeoIndexMode.PILOT))
                 .extracting("regionId")
                 .containsExactly(1L);
-        assertThat(reader.findRegion(1L)).get().satisfies(result -> {
+        assertThat(reader.findRegion(1L, SeoIndexMode.PILOT)).get().satisfies(result -> {
             assertThat(result.indexable()).isTrue();
             assertThat(result.indexableComplexCount()).isEqualTo(1L);
         });
@@ -67,7 +67,7 @@ class JdbcSeoReaderTest extends JdbcPostgresTestSupport {
         assertThat(reader.findComplexCatalog(SeoIndexMode.PILOT, 0, 1000))
                 .extracting("complexId")
                 .containsExactly(503L);
-        assertThat(reader.findRegion(1L)).get().satisfies(result -> {
+        assertThat(reader.findRegion(1L, SeoIndexMode.PILOT)).get().satisfies(result -> {
             assertThat(result.indexableComplexCount()).isEqualTo(1L);
             assertThat(result.representativeComplexes()).extracting("complexId").containsExactly(503L);
         });
@@ -119,6 +119,11 @@ class JdbcSeoReaderTest extends JdbcPostgresTestSupport {
         assertThat(reader.findComplexCatalog(SeoIndexMode.PILOT, 0, 10_000))
                 .extracting("complexId")
                 .containsExactly(501L);
+
+        assertThat(reader.findRegion(1L, SeoIndexMode.PILOT)).get().satisfies(result -> {
+            assertThat(result.indexableComplexCount()).isEqualTo(1L);
+            assertThat(result.representativeComplexes()).extracting("complexId").containsExactly(501L);
+        });
     }
 
     private void refreshPilotCatalog() {

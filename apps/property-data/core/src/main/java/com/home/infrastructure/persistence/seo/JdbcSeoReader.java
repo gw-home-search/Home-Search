@@ -131,13 +131,16 @@ public class JdbcSeoReader implements SeoReader {
     }
 
     @Override
-    public Optional<SeoRegionResult> findRegion(long regionId) {
+    public Optional<SeoRegionResult> findRegion(long regionId, SeoIndexMode mode) {
         Optional<RegionRow> region = jdbcClient
                 .sql("SELECT id, name, parent_id FROM region WHERE id=:regionId")
                 .param("regionId", regionId)
                 .query(this::mapRegionRow)
                 .optional();
         if (region.isEmpty()) return Optional.empty();
+        if (mode == SeoIndexMode.PILOT) {
+            return Optional.of(pilotRegion(region.get()));
+        }
         List<SeoRegionResult.RepresentativeComplex> representatives = jdbcClient
                 .sql("""
                 WITH RECURSIVE region_tree AS (
@@ -193,6 +196,44 @@ public class JdbcSeoReader implements SeoReader {
                 countIndexableComplexes(regionId),
                 breadcrumbs(regionId),
                 representatives));
+    }
+
+    private SeoRegionResult pilotRegion(RegionRow region) {
+        List<SeoRegionResult.RepresentativeComplex> representatives = jdbcClient.sql("""
+                WITH RECURSIVE region_tree AS (
+                    SELECT id FROM region WHERE id=:regionId
+                    UNION ALL SELECT child.id FROM region child JOIN region_tree parent ON child.parent_id=parent.id
+                )
+                SELECT c.id, COALESCE(NULLIF(BTRIM(c.trade_name), ''), c.name) AS name, p.address
+                FROM seo_pilot_complex_catalog catalog
+                JOIN complex c ON c.id=catalog.complex_id
+                JOIN parcel p ON p.id=c.parcel_id
+                WHERE catalog.region_id IN (SELECT id FROM region_tree)
+                ORDER BY catalog.pilot_rank
+                LIMIT 5
+                """)
+                .param("regionId", region.id())
+                .query((rs, rowNumber) -> new SeoRegionResult.RepresentativeComplex(
+                        rs.getLong("id"), rs.getString("name"), rs.getString("address")))
+                .list();
+        long count = jdbcClient.sql("""
+                WITH RECURSIVE region_tree AS (
+                    SELECT id FROM region WHERE id=:regionId
+                    UNION ALL SELECT child.id FROM region child JOIN region_tree parent ON child.parent_id=parent.id
+                )
+                SELECT COUNT(*) FROM seo_pilot_complex_catalog
+                WHERE region_id IN (SELECT id FROM region_tree)
+                """)
+                .param("regionId", region.id())
+                .query(Long.class)
+                .single();
+        return new SeoRegionResult(
+                region.id(),
+                region.name(),
+                !representatives.isEmpty(),
+                count,
+                breadcrumbs(region.id()),
+                representatives);
     }
 
     @Override

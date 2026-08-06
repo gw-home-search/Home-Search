@@ -27,8 +27,10 @@ public class SeoController {
     }
 
     @GetMapping("/internal/v1/seo/regions/{regionId}")
-    public SeoRegionResponse region(@PathVariable @Positive long regionId) {
-        return SeoRegionResponse.from(service.getRegion(regionId));
+    public SeoRegionResponse region(
+            @PathVariable @Positive long regionId,
+            @RequestParam(defaultValue = "PILOT") SeoIndexMode mode) {
+        return SeoRegionResponse.from(service.getRegion(regionId, mode));
     }
 
     @GetMapping("/internal/v1/seo/catalog/complexes")

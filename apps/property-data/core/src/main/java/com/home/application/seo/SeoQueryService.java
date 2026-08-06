@@ -22,8 +22,8 @@ public class SeoQueryService {
                 .orElseThrow(() -> new ResourceNotFoundException("SEO complex not found: " + complexId));
     }
 
-    public SeoRegionResult getRegion(long regionId) {
-        return reader.findRegion(regionId)
+    public SeoRegionResult getRegion(long regionId, SeoIndexMode mode) {
+        return reader.findRegion(regionId, Objects.requireNonNull(mode))
                 .orElseThrow(() -> new ResourceNotFoundException("SEO region not found: " + regionId));
     }
 

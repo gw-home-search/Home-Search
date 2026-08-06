@@ -1,7 +1,7 @@
 import { renderLegalDocument, renderSeoDocument } from './seoDocument';
 import { buildComplexSitemaps, buildPagesSitemap } from './sitemap';
 
-describe('SEO renderer', () => {
+describe('SEO renderer 렌더링', () => {
   it('단지별 canonical과 JSON-LD를 만들고 외부 문자열을 escape한다', () => {
     const html = renderSeoDocument({
       kind: 'complex',

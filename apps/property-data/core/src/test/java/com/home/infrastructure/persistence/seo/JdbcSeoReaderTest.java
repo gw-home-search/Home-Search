@@ -4,11 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.home.application.seo.SeoIndexMode;
 import com.home.infrastructure.persistence.ingest.JdbcPostgresTestSupport;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class JdbcSeoReaderTest extends JdbcPostgresTestSupport {
 
     @Test
+    @DisplayName("색인 가능한 단지와 콘텐츠 부족 단지를 구분하고 PILOT 카탈로그를 만든다")
     void separatesIndexableAndContentPoorComplexesAndBuildsPilotCatalog() {
         seedComplex();
         jdbcClient.sql("""
@@ -42,6 +44,7 @@ class JdbcSeoReaderTest extends JdbcPostgresTestSupport {
     }
 
     @Test
+    @DisplayName("재개발 관계의 신뢰도 높은 이전 단지를 페이지와 지역 집계에서 제외한다")
     void excludesHighConfidenceRedevelopmentPredecessorFromPagesAndRegionCounts() {
         seedComplex();
         jdbcClient
@@ -74,6 +77,7 @@ class JdbcSeoReaderTest extends JdbcPostgresTestSupport {
     }
 
     @Test
+    @DisplayName("PILOT 카탈로그를 1,000개로 고정하고 선택 이후 keyset을 적용한다")
     void fixesPilotCatalogAtOneThousandAndAppliesKeysetAfterSelection() {
         seedComplex();
         jdbcClient.sql("""
@@ -102,6 +106,7 @@ class JdbcSeoReaderTest extends JdbcPostgresTestSupport {
     }
 
     @Test
+    @DisplayName("배포된 PILOT 카탈로그는 후속 단지 추가에도 고정된다")
     void keepsPilotSelectionFixedAfterTheCatalogIsPublished() {
         seedComplex();
         refreshPilotCatalog();

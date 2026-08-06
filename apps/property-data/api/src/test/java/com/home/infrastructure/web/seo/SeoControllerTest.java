@@ -11,6 +11,7 @@ import com.home.application.seo.SeoComplexResult;
 import com.home.application.seo.SeoQueryService;
 import java.time.LocalDate;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -32,6 +33,7 @@ class SeoControllerTest {
     private PricePredictionUseCase predictionUseCase;
 
     @Test
+    @DisplayName("단지 SEO 조회는 가격 예측을 호출하지 않는다")
     void complexSeoReadDoesNotInvokePrediction() throws Exception {
         given(seoQueryService.getComplex(501L))
                 .willReturn(new SeoComplexResult(

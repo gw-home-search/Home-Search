@@ -4,7 +4,7 @@ export function SeoLandingContent({page}:{page:SeoPage}) {
   return <main className="seo-landing">
     <nav aria-label="지역 경로"><a href="/">홈</a>{page.data.breadcrumbs.map((item)=><span key={item.regionId}> / <a href={`/regions/${item.regionId}`}>{item.name}</a></span>)}</nav>
     <h1>{page.kind==='complex'?`${page.data.name} 실거래가·단지정보`:`${page.data.name} 아파트 실거래가`}</h1>
-    {page.kind==='complex'?<ComplexBody data={page.data}/>:<RegionBody data={page.data}/>} 
+    {page.kind==='complex'?<ComplexBody data={page.data}/>:<RegionBody data={page.data}/>}
     <p><a href="/">홈서치 지도에서 보기</a></p>
   </main>;
 }

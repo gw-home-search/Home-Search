@@ -13,6 +13,9 @@ RUN test "${VITE_MARKET_NEWS_ENABLED}" = "true" -o "${VITE_MARKET_NEWS_ENABLED}"
 FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32
 ENV NODE_ENV=production PORT=3000
 WORKDIR /app
+RUN find /usr/local/lib/node_modules/npm -depth -delete \
+    && unlink /usr/local/bin/npm \
+    && unlink /usr/local/bin/npx
 COPY --from=build /workspace/dist/renderer/server.mjs ./server.mjs
 COPY --from=build /workspace/dist/index.html ./index.html
 USER node

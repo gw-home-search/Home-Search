@@ -54,7 +54,7 @@ WITH requested_executions AS (
            (generated_at AT TIME ZONE 'Asia/Seoul')::date = (now() AT TIME ZONE 'Asia/Seoul')::date AS fresh
     FROM public.market_insight_snapshot
     WHERE build_status = 'PUBLISHED'
-      AND period_type IN ('DAILY', 'WEEKLY')
+      AND period_type IN ('DAILY', 'ROLLING_7D')
       AND ((scope_type = 'NATIONWIDE' AND region_code IS NULL)
         OR (scope_type = 'SIDO' AND region_code = '11'))
 ), snapshot_items AS (
@@ -68,14 +68,14 @@ SELECT json_build_object(
   'execution_dates_current', (SELECT count(*) = 2 AND bool_and(run_date = (now() AT TIME ZONE 'Asia/Seoul')::date) FROM requested_executions),
   'failed_work_units', coalesce((SELECT sum(failed_count) FROM work_units), 0),
   'unfinished_work_units', coalesce((SELECT sum(unfinished_count) FROM work_units), 0),
-  'raw_first_violations', (SELECT count(*) FROM public.trade trade_row JOIN public.raw_trade_ingest raw ON raw.id = trade_row.raw_ingest_id WHERE raw.created_at > trade_row.created_at),
+  'raw_first_violations', (SELECT count(*) FROM public.trade trade_row JOIN public.raw_trade_ingest raw ON raw.id = trade_row.raw_ingest_id WHERE raw.execution_correlation_id IN (:'first_id'::uuid, :'repeat_id'::uuid) AND raw.created_at > trade_row.created_at),
   'repeat_normalized_inserted_count', (SELECT normalized_inserted_count FROM repeat_runs),
   'unexplained_failed_matches', (SELECT count(*) FROM public.raw_trade_ingest WHERE status IN ('MATCH_FAILED', 'PARSE_FAILED') AND nullif(btrim(failure_reason), '') IS NULL),
   'nation_daily_fresh', EXISTS (SELECT 1 FROM current_snapshots WHERE period_type = 'DAILY' AND scope_type = 'NATIONWIDE' AND fresh),
   'seoul_daily_fresh', EXISTS (SELECT 1 FROM current_snapshots WHERE period_type = 'DAILY' AND scope_type = 'SIDO' AND region_code = '11' AND fresh),
-  'nation_weekly_fresh', EXISTS (SELECT 1 FROM current_snapshots WHERE period_type = 'WEEKLY' AND scope_type = 'NATIONWIDE' AND fresh),
-  'seoul_weekly_fresh', EXISTS (SELECT 1 FROM current_snapshots WHERE period_type = 'WEEKLY' AND scope_type = 'SIDO' AND region_code = '11' AND fresh),
-  'seoul_weekly_item_count', coalesce((SELECT max(items.item_count) FROM current_snapshots snapshot JOIN snapshot_items items USING (snapshot_id) WHERE snapshot.period_type = 'WEEKLY' AND snapshot.scope_type = 'SIDO' AND snapshot.region_code = '11' AND snapshot.fresh), 0)
+  'nation_rolling_fresh', EXISTS (SELECT 1 FROM current_snapshots WHERE period_type = 'ROLLING_7D' AND scope_type = 'NATIONWIDE' AND fresh),
+  'seoul_rolling_fresh', EXISTS (SELECT 1 FROM current_snapshots WHERE period_type = 'ROLLING_7D' AND scope_type = 'SIDO' AND region_code = '11' AND fresh),
+  'seoul_rolling_item_count', coalesce((SELECT max(items.item_count) FROM current_snapshots snapshot JOIN snapshot_items items USING (snapshot_id) WHERE snapshot.period_type = 'ROLLING_7D' AND snapshot.scope_type = 'SIDO' AND snapshot.region_code = '11' AND snapshot.fresh), 0)
 );
 SQL
 
@@ -122,15 +122,15 @@ jq -n --arg tag "${release_tag}" --arg sha "${commit_sha}" --arg created_at "$(d
       and $a.failed_work_units == 0 and $a.unfinished_work_units == 0
       and $a.raw_first_violations == 0 and $a.repeat_normalized_inserted_count == 0
       and $a.unexplained_failed_matches == 0 and $a.nation_daily_fresh and $a.seoul_daily_fresh
-      and $a.nation_weekly_fresh and $a.seoul_weekly_fresh and $a.seoul_weekly_item_count >= 20
+      and $a.nation_rolling_fresh and $a.seoul_rolling_fresh and $a.seoul_rolling_item_count >= 20
       then "pass" else "fail" end),
     release_tag:$tag,commit_sha:$sha,created_at:$created_at,execution_id:$execution_id,
     checks:{task_exit_code:0,all_steps_completed:$a.executions_terminal,
       raw_first:($a.raw_first_violations == 0),duplicate_normalized_trades:$a.repeat_normalized_inserted_count,
-      nation_snapshot_fresh:($a.nation_daily_fresh and $a.nation_weekly_fresh),
-      seoul_snapshot_fresh:($a.seoul_daily_fresh and $a.seoul_weekly_fresh),
+      nation_snapshot_fresh:($a.nation_daily_fresh and $a.nation_rolling_fresh),
+      seoul_snapshot_fresh:($a.seoul_daily_fresh and $a.seoul_rolling_fresh),
       failed_work_units:$a.failed_work_units,unexplained_failed_matches:$a.unexplained_failed_matches,
-      seoul_weekly_item_count:$a.seoul_weekly_item_count},redactions_applied:true
+      seoul_rolling_item_count:$a.seoul_rolling_item_count},redactions_applied:true
   }' >"${rtms_evidence}"
 
 news_evidence="${tmp_dir}/news-bootstrap.json"

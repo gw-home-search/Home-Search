@@ -11,6 +11,18 @@ type AnalyticsWindow = Window & {
   'ga-disable-G-8L85Z825PE'?: boolean;
 };
 
+const DENIED_CONSENT = {
+  ad_personalization: 'denied',
+  ad_storage: 'denied',
+  ad_user_data: 'denied',
+  analytics_storage: 'denied',
+} as const;
+
+const ANALYTICS_GRANTED_CONSENT = {
+  ...DENIED_CONSENT,
+  analytics_storage: 'granted',
+} as const;
+
 export function GoogleAnalyticsConsent() {
   const [consent, setConsent] = useState<Consent | null>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -19,8 +31,7 @@ export function GoogleAnalyticsConsent() {
     const stored = readConsent();
     setConsent(stored);
     setIsOpen(stored == null);
-    if (stored === 'granted') loadGoogleAnalytics();
-    else disableGoogleAnalytics();
+    initializeGoogleAnalytics(stored);
 
     const reopen = () => setIsOpen(true);
     window.addEventListener(OPEN_CONSENT_EVENT, reopen);
@@ -33,15 +44,15 @@ export function GoogleAnalyticsConsent() {
     consentStorage().setItem(CONSENT_KEY, next);
     setConsent(next);
     setIsOpen(false);
-    if (next === 'granted') loadGoogleAnalytics();
-    else disableGoogleAnalytics();
+    updateGoogleAnalyticsConsent(next);
   };
 
   return (
     <aside aria-label="분석 쿠키 선택" className="analytics-consent" role="dialog">
       <p>
         홈서치는 서비스 개선을 위해 선택적 Google Analytics 쿠키를 사용합니다.
-        거부해도 모든 기본 기능을 이용할 수 있습니다.
+        거부하면 분석 쿠키는 저장하지 않지만 쿠키 없는 제한적인 방문 신호는 전송될 수 있으며,
+        모든 기본 기능은 그대로 이용할 수 있습니다.
       </p>
       <div>
         <button data-consent="denied" onClick={() => choose('denied')} type="button">거부</button>
@@ -65,15 +76,19 @@ function consentStorage(): Storage {
   }
 }
 
-function loadGoogleAnalytics(): void {
+function initializeGoogleAnalytics(consent: Consent | null): void {
   const analyticsWindow = window as AnalyticsWindow;
   analyticsWindow[`ga-disable-${MEASUREMENT_ID}`] = false;
   if (document.getElementById('home-search-google-tag')) {
-    analyticsWindow.gtag?.('consent', 'update', { analytics_storage: 'granted' });
+    updateGoogleAnalyticsConsent(consent ?? 'denied');
     return;
   }
   analyticsWindow.dataLayer = analyticsWindow.dataLayer ?? [];
   analyticsWindow.gtag = (...args: unknown[]) => analyticsWindow.dataLayer?.push(args);
+  analyticsWindow.gtag('consent', 'default', DENIED_CONSENT);
+  if (consent === 'granted') {
+    analyticsWindow.gtag('consent', 'update', ANALYTICS_GRANTED_CONSENT);
+  }
   analyticsWindow.gtag('js', new Date());
   analyticsWindow.gtag('config', MEASUREMENT_ID);
 
@@ -84,10 +99,15 @@ function loadGoogleAnalytics(): void {
   document.head.append(script);
 }
 
-function disableGoogleAnalytics(): void {
+function updateGoogleAnalyticsConsent(consent: Consent): void {
   const analyticsWindow = window as AnalyticsWindow;
-  analyticsWindow[`ga-disable-${MEASUREMENT_ID}`] = true;
-  analyticsWindow.gtag?.('consent', 'update', { analytics_storage: 'denied' });
+  analyticsWindow[`ga-disable-${MEASUREMENT_ID}`] = false;
+  analyticsWindow.gtag?.(
+    'consent',
+    'update',
+    consent === 'granted' ? ANALYTICS_GRANTED_CONSENT : DENIED_CONSENT,
+  );
+  if (consent === 'granted') return;
   for (const name of ['_ga', `_ga_${MEASUREMENT_ID.replace(/^G-/u, '')}`]) {
     document.cookie = `${name}=; Max-Age=0; Path=/; SameSite=Lax`;
   }

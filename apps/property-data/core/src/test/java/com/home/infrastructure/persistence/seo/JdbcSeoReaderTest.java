@@ -132,7 +132,8 @@ class JdbcSeoReaderTest extends JdbcPostgresTestSupport {
     }
 
     private void refreshPilotCatalog() {
-        jdbcClient.sql("SELECT refresh_seo_pilot_complex_catalog()")
+        jdbcClient
+                .sql("SELECT refresh_seo_pilot_complex_catalog()")
                 .query(Integer.class)
                 .single();
     }

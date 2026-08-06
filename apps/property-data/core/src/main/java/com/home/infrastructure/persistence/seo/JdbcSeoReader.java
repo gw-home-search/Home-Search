@@ -199,7 +199,8 @@ public class JdbcSeoReader implements SeoReader {
     }
 
     private SeoRegionResult pilotRegion(RegionRow region) {
-        List<SeoRegionResult.RepresentativeComplex> representatives = jdbcClient.sql("""
+        List<SeoRegionResult.RepresentativeComplex> representatives = jdbcClient
+                .sql("""
                 WITH RECURSIVE region_tree AS (
                     SELECT id FROM region WHERE id=:regionId
                     UNION ALL SELECT child.id FROM region child JOIN region_tree parent ON child.parent_id=parent.id
@@ -216,7 +217,8 @@ public class JdbcSeoReader implements SeoReader {
                 .query((rs, rowNumber) -> new SeoRegionResult.RepresentativeComplex(
                         rs.getLong("id"), rs.getString("name"), rs.getString("address")))
                 .list();
-        long count = jdbcClient.sql("""
+        long count = jdbcClient
+                .sql("""
                 WITH RECURSIVE region_tree AS (
                     SELECT id FROM region WHERE id=:regionId
                     UNION ALL SELECT child.id FROM region child JOIN region_tree parent ON child.parent_id=parent.id
@@ -240,7 +242,8 @@ public class JdbcSeoReader implements SeoReader {
     public List<SeoCatalogComplex> findComplexCatalog(SeoIndexMode mode, long afterId, int limit) {
         if (mode == SeoIndexMode.OFF) return List.of();
         if (mode == SeoIndexMode.PILOT) {
-            return jdbcClient.sql("""
+            return jdbcClient
+                    .sql("""
                     SELECT complex_id
                     FROM seo_pilot_complex_catalog
                     WHERE complex_id > :afterId
@@ -267,7 +270,8 @@ public class JdbcSeoReader implements SeoReader {
     public List<SeoCatalogRegion> findRegionCatalog(SeoIndexMode mode) {
         if (mode == SeoIndexMode.OFF) return List.of();
         if (mode == SeoIndexMode.PILOT) {
-            return jdbcClient.sql("""
+            return jdbcClient
+                    .sql("""
                     WITH RECURSIVE region_ancestors AS (
                         SELECT region.id, region.parent_id
                         FROM region

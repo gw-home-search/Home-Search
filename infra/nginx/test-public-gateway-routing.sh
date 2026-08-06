@@ -52,6 +52,7 @@ docker run --rm --detach --name "$gateway" \
     --env SEO_RENDERER_HOST=seo-renderer \
     --env SEO_RENDERER_PORT=3000 \
     --volume "$script_dir/public-gateway.conf.template:/etc/nginx/templates/default.conf.template:ro" \
+    --volume "$script_dir/../../apps/web/public/google-analytics-consent.js:/usr/share/nginx/html/google-analytics-consent.js:ro" \
     "$nginx_image" >/dev/null
 
 host_port="$(docker inspect --format='{{(index (index .NetworkSettings.Ports "8080/tcp") 0).HostPort}}' "$gateway")"
@@ -134,6 +135,10 @@ assert_route /regions/1 200
 assert_route /privacy 200
 assert_route /terms 200
 assert_route /about 200
+analytics_headers="$(curl --silent --show-error --head "${base_url}/google-analytics-consent.js" | tr -d '\r')"
+grep -Fiq 'HTTP/1.1 200' <<<"${analytics_headers}"
+grep -Eiq '^Content-Type: (application|text)/javascript' <<<"${analytics_headers}"
+grep -Fiq 'Cache-Control: no-cache' <<<"${analytics_headers}"
 assert_route /complexes/999 404
 curl --silent --show-error --head "${base_url}/complexes/invalid" | tr -d '\r' | grep -Fiq 'X-Robots-Tag: noindex, nofollow'
 ordinary_body="$(curl --silent --show-error "${base_url}/complexes/501")"

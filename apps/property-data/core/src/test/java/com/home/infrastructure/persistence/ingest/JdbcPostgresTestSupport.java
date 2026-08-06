@@ -14,62 +14,6 @@ public abstract class JdbcPostgresTestSupport extends JdbcPostgresContainerSuppo
     private static final PostgreSQLContainer<?> POSTGRES = newPostgisContainer();
     private static final Object MIGRATION_LOCK = new Object();
     private static final AtomicLong MAP_GENERATION_SEQUENCE = new AtomicLong();
-    private static final List<String> RESET_TABLES = List.of(
-            "public.complex_building_register_profile_summary",
-            "public.building_register_profile_field_evidence",
-            "public.building_register_profile_hierarchy",
-            "public.building_register_profile_building",
-            "public.building_register_profile_site",
-            "public.building_register_profile_publication",
-            "public.building_register_profile_repair_run",
-            "public.building_register_profile_projection_run",
-            "public.building_register_profile_analysis_run",
-            "public.building_register_profile_parse_run",
-            "public.building_register_collection_campaign",
-            "public.event_outbox",
-            "public.market_news_execution_failure_correction",
-            "public.market_news_execution_aggregate_correction",
-            "public.market_news_quality_label",
-            "public.market_news_quality_review_snapshot",
-            "public.market_news_quality_review_set",
-            "public.market_news_snapshot_item",
-            "public.market_news_raw_item",
-            "public.market_news_snapshot",
-            "public.market_news_relation",
-            "public.market_news_article",
-            "public.market_news_major_complex_selection",
-            "public.market_news_collection_work_unit",
-            "public.market_news_collection_execution",
-            "public.market_insight_trade_item",
-            "public.market_insight_snapshot_execution",
-            "public.market_insight_snapshot",
-            "reference.coordinate_snapshot_publish_checkpoint",
-            "reference.coordinate_snapshot_publish_chunk_checkpoint",
-            "reference.coordinate_snapshot_region_checkpoint",
-            "reference.coordinate_snapshot_stage_chunk_checkpoint",
-            "reference.parcel_coordinate_snapshot_publish",
-            "reference.parcel_coordinate_snapshot_stage",
-            "reference.parcel_coordinate_snapshot",
-            "reference.coordinate_snapshot_run",
-            "public.trade_source_key_registry",
-            "public.trade_match_evidence",
-            "public.trade",
-            "public.complex_display_coordinate",
-            "public.complex_building_link",
-            "public.complex_coordinate_case",
-            "public.complex_metadata_admin_decision",
-            "public.complex_metadata_enrichment_attempt",
-            "public.complex_name_alias",
-            "public.parcel_coordinate_override",
-            "public.complex",
-            "public.parcel",
-            "public.building_footprint_snapshot",
-            "public.odcloud_pnu_prefix_alias",
-            "public.rtms_collection_work_unit",
-            "public.rtms_ingest_run",
-            "public.raw_trade_ingest",
-            "public.rtms_collection_execution",
-            "public.region");
     private static boolean migrated;
 
     static {
@@ -100,29 +44,7 @@ public abstract class JdbcPostgresTestSupport extends JdbcPostgresContainerSuppo
     }
 
     private void truncateTables() {
-        transactionTemplate.executeWithoutResult(status -> {
-            for (String table : extraResetTables()) {
-                jdbcClient.sql("DELETE FROM " + table).update();
-            }
-            for (String table : RESET_TABLES) {
-                if (tableExists(table)) {
-                    jdbcClient.sql("DELETE FROM " + table).update();
-                }
-            }
-            resetSequences();
-        });
-    }
-
-    private boolean tableExists(String table) {
-        return Boolean.TRUE.equals(jdbcClient
-                .sql("SELECT to_regclass(:tableName) IS NOT NULL")
-                .param("tableName", table)
-                .query(Boolean.class)
-                .single());
-    }
-
-    private List<String> extraResetTables() {
-        return jdbcClient.sql("""
+        List<String> tables = jdbcClient.sql("""
 			SELECT format('%I.%I', namespace.nspname, relation.relname)
 			FROM pg_class relation
 			JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
@@ -131,20 +53,11 @@ public abstract class JdbcPostgresTestSupport extends JdbcPostgresContainerSuppo
 			  AND relation.relispartition = false
 			  AND relation.relname <> 'flyway_schema_history'
 			ORDER BY namespace.nspname, relation.relname
-			""").query(String.class).list().stream()
-                .filter(table -> !RESET_TABLES.contains(table))
-                .toList();
-    }
-
-    private void resetSequences() {
-        List<String> sequences = jdbcClient.sql("""
-			SELECT format('%I.%I', sequence_schema, sequence_name)
-			FROM information_schema.sequences
-			WHERE sequence_schema IN ('public', 'reference')
-			ORDER BY sequence_schema, sequence_name
 			""").query(String.class).list();
-        for (String sequence : sequences) {
-            jdbcClient.sql("ALTER SEQUENCE " + sequence + " RESTART WITH 1").update();
+        if (!tables.isEmpty()) {
+            jdbcClient
+                    .sql("TRUNCATE TABLE " + String.join(", ", tables) + " RESTART IDENTITY CASCADE")
+                    .update();
         }
     }
 

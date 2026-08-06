@@ -18,6 +18,11 @@ const DENIED_CONSENT = {
   analytics_storage: 'denied',
 } as const;
 
+const DEFAULT_CONSENT = {
+  ...DENIED_CONSENT,
+  wait_for_update: 500,
+} as const;
+
 const ANALYTICS_GRANTED_CONSENT = {
   ...DENIED_CONSENT,
   analytics_storage: 'granted',
@@ -85,7 +90,7 @@ function initializeGoogleAnalytics(consent: Consent | null): void {
   }
   analyticsWindow.dataLayer = analyticsWindow.dataLayer ?? [];
   analyticsWindow.gtag = (...args: unknown[]) => analyticsWindow.dataLayer?.push(args);
-  analyticsWindow.gtag('consent', 'default', DENIED_CONSENT);
+  analyticsWindow.gtag('consent', 'default', DEFAULT_CONSENT);
   if (consent === 'granted') {
     analyticsWindow.gtag('consent', 'update', ANALYTICS_GRANTED_CONSENT);
   }

@@ -38,6 +38,7 @@ it('동의 전에도 Google tag를 로드하고 Consent Mode 기본값을 config
       ad_storage: 'denied',
       ad_user_data: 'denied',
       analytics_storage: 'denied',
+      wait_for_update: 500,
     },
   ]);
   expect((window as AnalyticsWindow)['ga-disable-G-8L85Z825PE']).not.toBe(true);

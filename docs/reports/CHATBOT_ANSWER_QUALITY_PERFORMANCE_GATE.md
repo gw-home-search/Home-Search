@@ -65,6 +65,15 @@ release p95 근거로 승격하지 않는다. production snapshot에서 클래�
   release blocker다.
 - production live provider 호출과 배포는 이 검증에 포함하지 않았다.
 
+## Release 재시도 기록
+
+- `v1.0.64` release workflow `31146535375`는 ECR immutable tag
+  `home-search/public-gateway:1.0.64` 충돌로 중단됐다.
+- 일부 SHA·SemVer 이미지가 먼저 게시됐으므로 기존 tag나 이미지를 삭제하지 않고,
+  `v1.0.64`를 재실행하지 않는다.
+- 이 기록을 포함한 새 commit에서 `v1.0.65`를 생성해 release pipeline을 다시
+  실행한다.
+
 ## 보안 영향
 
 security-audit: 지적사항 = none

@@ -15,6 +15,22 @@ record PropertySearchTerms(String query, String lowerQuery, String normalizedQue
         return query.codePointCount(0, query.length()) == 2;
     }
 
+    boolean isSingleTermQuery() {
+        return query.trim().codePoints().noneMatch(Character::isWhitespace);
+    }
+
+    String rawContainsPattern() {
+        return containsPattern(lowerQuery);
+    }
+
+    String normalizedContainsPattern() {
+        return containsPattern(normalizedQuery);
+    }
+
+    private static String containsPattern(String value) {
+        return "%" + value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
+    }
+
     private static String normalizeName(String value) {
         String text = value == null ? "" : value.trim();
         return text.replaceAll("[\\s\\p{P}]+", "").toLowerCase(Locale.ROOT);

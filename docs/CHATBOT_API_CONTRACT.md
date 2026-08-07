@@ -780,6 +780,12 @@ data: {"requestId":"...","code":"CHATBOT_PROVIDER_UNAVAILABLE","message":"답변
 - 모든 model 시도가 실패했다는 이유만으로 `503`을 반환하지 않는다. 결정형 router도
   질문을 해석하지 못하거나 property baseline이 전혀 없거나 grounding/serialization
   invariant를 안전하게 복구할 수 없을 때만 `503` 또는 시작된 SSE `error`로 종료한다.
+- `{단지명} 아파트 어때` overview의 기본 bundle은 `complex_identity`와
+  `recent_trade_lookup`이다. 전용면적이 명시된 경우에만 `price_trend`를 추가하며,
+  사용자가 묻지 않은 rail·academy source는 실행하지 않는다.
+- academy·rail 복합 질문은 source별 fragment를 독립 실행한다. 한 source의
+  `unavailable`은 다른 fragment의 fact·artifact·citation·action을 제거하지 않으며
+  공개 fragment `status`는 기존 `success|failed`를 유지한다.
 
 ## 호환성 규칙
 

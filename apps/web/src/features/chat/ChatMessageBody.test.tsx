@@ -70,6 +70,35 @@ describe('복합 구조화 답변', () => {
     expect(html).not.toContain('text fallback');
   });
 
+  it('부분 성공은 성공 결과를 먼저 두고 실패 source를 하단 flat section에 표시한다', () => {
+    const message: ChatMessage = {
+      id: 'message-partial', role: 'assistant', content: 'fallback',
+      createdAt: '2026-08-07T00:00:00Z',
+      fragments: [
+        { fragmentId: 'rail', capability: 'rail_station_lookup', status: 'failed', answer: '철도 확인 실패', factIds: [], artifactIds: [], actionIds: [], limitations: ['철도 source를 현재 확인하지 못했습니다.'] },
+        { fragmentId: 'academy', capability: 'academy_lookup', status: 'success', answer: '학원 확인', factIds: ['fact-1'], artifactIds: ['artifact-1'], actionIds: [], limitations: [] },
+      ],
+      artifacts: [{ type: 'factList', version: 1, artifactId: 'artifact-1', title: '가까운 학원', items: [{ label: '학원 1', value: '직선거리 300m', factIds: ['fact-1'] }] }],
+      summary: {
+        version: 1, scopeNotice: null,
+        headline: { text: '확인 가능한 주변 정보를 정리했습니다.', factIds: ['fact-1'] },
+        criteria: [{ key: 'representativeSelection', label: '대표 선택 근거', value: '가락동 alias로 확정했습니다.', factIds: ['fact-1'] }],
+        interpretations: [], followUp: null,
+        fragmentSummaries: [
+          { fragmentId: 'rail', capability: 'rail_station_lookup', status: 'failed', headline: '철도 확인 실패', factIds: [] },
+          { fragmentId: 'academy', capability: 'academy_lookup', status: 'success', headline: '학원 정보를 확인했습니다.', factIds: ['fact-1'] },
+        ],
+      },
+    };
+
+    const html = renderToStaticMarkup(<ChatMessageBody message={message} />);
+
+    expect(html.indexOf('학원 정보를 확인했습니다.')).toBeLessThan(html.indexOf('철도 확인 실패'));
+    expect(html.indexOf('확인하지 못한 정보')).toBeLessThan(html.indexOf('철도 source를 현재 확인하지 못했습니다.'));
+    expect(html).toContain('<h4>선택 근거</h4>');
+    expect(html).not.toContain('<details class="chatbot-selection-basis"');
+  });
+
   it('출처가 없으면 근거 UI를 만들지 않고 limitation을 답변에 포함한다', () => {
     const message: ChatMessage = {
       id: 'message-no-source', role: 'assistant', content: '현재 확인 가능한 답변입니다.',

@@ -16,6 +16,20 @@ from ai_service.property_chat.academy_locations import (
 from ai_service.property_chat.comparison import CandidatePoint
 
 
+def test_academy_readiness_requires_active_fresh_covered_source(
+    academy_location_postgres_dsn: str,
+) -> None:
+    repository = PostgresAcademyLocationRepository(
+        academy_location_postgres_dsn,
+        expected_database="test",
+        expected_username="test",
+    )
+    try:
+        repository.readiness_probe()
+    finally:
+        repository.close()
+
+
 def test_academy_batch_keeps_spatial_lookup_correlated_for_each_candidate(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

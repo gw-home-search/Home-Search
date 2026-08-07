@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, date, datetime
+from time import sleep
 
 import pytest
 
@@ -105,6 +106,12 @@ class RailRepository:
 class FailingRailRepository:
     def nearby(self, **_kwargs):
         raise OSError("provider detail must not leak")
+
+
+class SlowRailRepository(RailRepository):
+    def nearby(self, **kwargs):
+        sleep(0.05)
+        return super().nearby(**kwargs)
 
 
 class AmbiguousCompoundRepository(PropertyRepository):
@@ -211,6 +218,20 @@ def test_deterministic_router_preserves_clear_academy_and_rail_compound() -> Non
     ]
 
 
+def test_deterministic_router_uses_catalog_order_for_reversed_compound() -> None:
+    planned = DeterministicQueryRouter(today=date(2026, 8, 3)).plan(
+        ChatbotQueryRequest(
+            question="잠실엘스 가까운 역·노선과 주변 학원 위치를 함께 알려줘"
+        )
+    )
+
+    assert isinstance(planned, QueryPlanBundle)
+    assert [fragment.capability for fragment in planned.fragments] == [
+        "academy_lookup",
+        "rail_station_lookup",
+    ]
+
+
 @pytest.mark.parametrize(
     ("question", "expected_capabilities"),
     [
@@ -227,6 +248,10 @@ def test_deterministic_router_preserves_clear_academy_and_rail_compound() -> Non
             ("academy_lookup", "rail_station_lookup"),
         ),
         (
+            "잠실엘스 가까운 역·노선과 주변 학원 위치를 함께 알려줘",
+            ("academy_lookup", "rail_station_lookup"),
+        ),
+        (
             "헬리오시티 위치와 세대수·사용승인일을 알려줘",
             ("complex_identity",),
         ),
@@ -240,7 +265,7 @@ def test_deterministic_router_preserves_clear_academy_and_rail_compound() -> Non
         ),
         (
             "반포자이 주변 대규모점포 위치와 가까운 역·노선을 알려줘",
-            ("retail_location", "rail_station_lookup"),
+            ("rail_station_lookup", "retail_location"),
         ),
         (
             "올림픽파크포레온 위치와 세대수·최근 실거래를 함께 알려줘",
@@ -327,15 +352,56 @@ def test_academy_and_rail_partial_keeps_academy_when_rail_fails() -> None:
     ))
 
     assert response["status"] == "partial_success"
-    assert response["executionSummary"] == {"total": 2, "succeeded": 2, "failed": 0}
-    assert response["conversationResolution"]["goals"][1]["status"] == "degraded"
+    assert response["executionSummary"] == {"total": 2, "succeeded": 1, "failed": 1}
+    assert response["fragments"][0]["status"] == "success"
+    assert response["fragments"][1]["status"] == "failed"
+    assert response["conversationResolution"]["goals"][1]["status"] == "unavailable"
     assert "학원 위치 1곳" in response["uiSummary"]["headline"]["text"]
-    assert "철도역·노선" in response["uiSummary"]["headline"]["text"]
+    assert "가까운 역·노선" in response["uiSummary"]["headline"]["text"]
     assert any(
         citation["sourceName"] == "상가(상권)정보 API 교육업종"
         for citation in response["citations"]
     )
     assert "provider detail" not in str(response)
+
+
+def test_academy_and_rail_timeout_keeps_academy_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "ai_service.property_chat.engine._fragment_timeout_seconds",
+        lambda capability: 0.01 if capability == "rail_station_lookup" else 3.0,
+    )
+    plans = (
+        QueryPlan("academy_lookup", "잠실엘스", radius_meters=800),
+        QueryPlan("rail_station_lookup", "잠실엘스", radius_meters=1_500),
+    )
+    engine = GroundedChatbotEngine(
+        repository=PropertyRepository(),
+        language_model=CompoundLanguageModel(plans),
+        enabled_capabilities=frozenset(),
+        enabled_reference_capabilities=frozenset({"academy_lookup", "rail_station_lookup"}),
+        academy_location_repository=AcademyRepository(),
+        rail_station_repository=SlowRailRepository(),
+        answer_first_enabled=True,
+    )
+
+    response = asyncio.run(engine.query(
+        request=ChatbotQueryRequest(
+            question="잠실엘스 주변 학원 위치와 가까운 역·노선을 함께 알려줘"
+        ),
+        user=AuthenticatedUser(user_id=1),
+        request_id="request-academy-rail-timeout",
+    ))
+
+    assert response["status"] == "partial_success"
+    assert response["executionSummary"] == {"total": 2, "succeeded": 1, "failed": 1}
+    assert response["fragments"][0]["status"] == "success"
+    assert response["fragments"][1]["status"] == "failed"
+    assert any(
+        citation["sourceName"] == "상가(상권)정보 API 교육업종"
+        for citation in response["citations"]
+    )
 
 
 def test_query_plan_bundle_merges_compatible_lists_and_rejects_conflicts() -> None:
@@ -456,7 +522,7 @@ def test_compound_query_preserves_success_when_one_fragment_is_unavailable() -> 
     assert response["uiArtifacts"][0]["type"] == "factList"
 
 
-def test_answer_first_compound_shares_one_capability_aware_complex() -> None:
+def test_answer_first_compound_clarifies_before_capability_observation() -> None:
     repository = AmbiguousCompoundRepository()
     plans = (
         QueryPlan("complex_identity", "동명 단지"),
@@ -479,10 +545,10 @@ def test_answer_first_compound_shares_one_capability_aware_complex() -> None:
         request_id="request-shared-compound",
     ))
 
-    assert repository.summary_calls == 1
-    assert repository.recent_complex_ids == [502]
-    assert {action["complexId"] for action in response["uiActions"]} == {502}
-    assert sum(action.get("autoRun") is True for action in response["uiActions"]) == 1
+    assert repository.summary_calls == 0
+    assert repository.recent_complex_ids == []
+    assert any("동명 단지" in limitation for limitation in response["limitations"])
+    assert sum(action.get("autoRun") is True for action in response["uiActions"]) == 0
 
 
 def test_compound_query_preserves_success_when_one_fragment_raises() -> None:

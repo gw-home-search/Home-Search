@@ -86,22 +86,23 @@ def with_terminal_outcome(response: dict[str, object]) -> dict[str, object]:
     if response.get("status") == "success" and evidence_status != "partial":
         outcome = terminal_outcome("ANSWERED", "COMPLETED")
     elif response.get("status") == "partial_success" or evidence_status == "partial":
-        limitations = response.get("limitations")
-        execution = response.get("executionSummary")
-        ambiguous_single = (
-            isinstance(limitations, list)
-            and any(isinstance(item, str) and "동명 단지" in item for item in limitations)
-            and isinstance(execution, dict)
-            and execution.get("total") == 1
+        resolution = response.get("conversationResolution")
+        assumptions = (
+            resolution.get("assumptions") if isinstance(resolution, dict) else None
         )
-        if ambiguous_single:
+        ambiguous_entity = isinstance(assumptions, list) and any(
+            isinstance(item, dict)
+            and item.get("code") == "AMBIGUOUS_COMPLEX_CANDIDATES"
+            for item in assumptions
+        )
+        if ambiguous_entity:
             outcome = terminal_outcome("CLARIFICATION", "AMBIGUOUS_ENTITY")
             enriched["success"] = False
             enriched["status"] = "failed"
-            resolution = enriched.get("conversationResolution")
-            if isinstance(resolution, dict):
+            enriched_resolution = enriched.get("conversationResolution")
+            if isinstance(enriched_resolution, dict):
                 enriched["conversationResolution"] = {
-                    **resolution, "answerMode": "NO_RESULT"
+                    **enriched_resolution, "answerMode": "NO_RESULT"
                 }
         else:
             outcome = terminal_outcome("PARTIAL", "PARTIAL_EVIDENCE")

@@ -9,6 +9,7 @@ import pytest
 from ai_service.auth import AuthenticatedUser
 from ai_service.chat import ChatbotProviderUnavailable
 from ai_service.models import ChatbotQueryRequest
+from ai_service.terminal_response import with_terminal_outcome
 from ai_service.property_chat.engine import (
     GroundedChatbotEngine,
     GroundingValidationError,
@@ -83,6 +84,14 @@ class FakeRepository:
         return self.latest_trade_data_as_of
 
 
+class UnavailablePropertyRepository(FakeRepository):
+    def find_complexes(
+        self, name: str, region_name: str | None, limit: int
+    ) -> list[ComplexRecord]:
+        del name, region_name, limit
+        raise OSError("property database unavailable")
+
+
 class FallbackTradeRepository(FakeRepository):
     def __init__(self) -> None:
         super().__init__()
@@ -110,14 +119,28 @@ class TrendFallbackRepository(FakeRepository):
         return [TradeRecord(7010, complex_id, date(2026, 6, 1), 240_000, 84.8, 10)]
 
 
+class AreaGuardRepository(FakeRepository):
+    def monthly_trends(
+        self,
+        complex_id: int,
+        start_date: date,
+        end_date: date,
+        exclusive_area_square_meters: float | None,
+    ) -> list[MonthlyTrendRecord]:
+        del complex_id, start_date, end_date, exclusive_area_square_meters
+        raise AssertionError("area-less monthly trend query must not run")
+
+
 class FakeLanguageModel:
     def __init__(self, plan: QueryPlan, draft: DraftAnswer) -> None:
         self.plan = plan
         self.draft = draft
         self.received_fact_ids: list[str] = []
         self.received_facts: list[EvidenceFact] = []
+        self.plan_calls = 0
 
     async def plan_query(self, _request: ChatbotQueryRequest) -> QueryPlan:
+        self.plan_calls += 1
         return self.plan
 
     async def draft_answer(self, *, facts, limitations, question) -> DraftAnswer:
@@ -144,9 +167,6 @@ def test_broad_question_revalidates_selected_complex_and_returns_overview_fragme
     repository.trades = [
         TradeRecord(7001, 11471, date(2026, 7, 15), 250_000, 84.8, 12)
     ]
-    repository.trends = [
-        MonthlyTrendRecord(11471, date(2026, 7, 1), 250_000, 1, 250_000, 250_000)
-    ]
     model = DraftFailingLanguageModel(
         QueryPlan("complex_identity", "이 단지"),
         DraftAnswer([]),
@@ -171,15 +191,53 @@ def test_broad_question_revalidates_selected_complex_and_returns_overview_fragme
         request_id="request-overview",
     ))
 
-    assert response["status"] == "partial_success"
+    assert response["status"] == "success"
     assert [fragment["capability"] for fragment in response["fragments"]] == [
         "complex_identity",
         "recent_trade_lookup",
-        "price_trend",
-        "rail_station_lookup",
     ]
-    assert response["executionSummary"] == {"total": 4, "succeeded": 3, "failed": 1}
+    assert response["executionSummary"] == {"total": 2, "succeeded": 2, "failed": 0}
     assert response["conversationMemoryPatch"]["complexId"] == 11471
+    assert model.plan_calls == 0
+
+
+def test_compound_trade_and_area_less_trend_keeps_trade_without_mixed_area_query() -> None:
+    repository = AreaGuardRepository()
+    repository.complexes = [complex_record()]
+    repository.trades = [
+        TradeRecord(7001, 11471, date(2026, 7, 15), 250_000, 84.8, 12)
+    ]
+    model = DraftFailingLanguageModel(
+        QueryPlan("complex_identity", "잠실엘스"),
+        DraftAnswer([]),
+    )
+    engine = GroundedChatbotEngine(
+        repository=repository,
+        language_model=model,
+        enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+        answer_first_enabled=True,
+        answer_first_fallback_capabilities=ALL_PROPERTY_CAPABILITIES,
+        today=lambda: date(2026, 7, 20),
+    )
+
+    response = asyncio.run(engine.query(
+        request=ChatbotQueryRequest(
+            question="잠실엘스 최근 거래와 가격 흐름을 함께 알려줘"
+        ),
+        user=AuthenticatedUser(user_id=1),
+        request_id="request-compound-area-guard",
+    ))
+
+    assert [fragment["capability"] for fragment in response["fragments"]] == [
+        "recent_trade_lookup",
+        "price_trend",
+    ]
+    assert [fragment["status"] for fragment in response["fragments"]] == [
+        "success",
+        "failed",
+    ]
+    assert response["status"] == "partial_success"
+    assert response["evidenceSummary"]["factCount"] >= 1
 
 
 def complex_record(complex_id: int = 11471, display_name: str = "잠실동 잠실엘스") -> ComplexRecord:
@@ -460,6 +518,7 @@ def test_recent_trade_exact_empty_does_not_widen_period_or_area() -> None:
         language_model=model,
         enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
         answer_first_enabled=True,
+        today=lambda: date(2026, 7, 22),
         ),
         "잠실엘스 전용 84.8㎡ 최근 실거래 알려줘",
         "request-reference-trade",
@@ -573,8 +632,10 @@ def test_all_empty_candidates_keep_the_original_representative() -> None:
         "request-all-empty-candidates",
     )
 
-    assert response["conversationMemoryPatch"]["complexId"] == 11471
-    assert "대표 단지" in response["limitations"][0]
+    assert response["conversationMemoryPatch"] is None
+    assert "동명 단지" in response["limitations"][0]
+    assert response["uiActions"] == []
+    assert repository.trade_query is None
 
 
 def test_recent_trade_accepts_server_supplied_korean_amount_display_claim() -> None:
@@ -751,7 +812,117 @@ def test_ambiguous_complex_is_not_selected_arbitrarily() -> None:
     assert repository.trade_query is None
 
 
-def test_answer_first_multi_candidate_trade_selects_exact_data_and_keeps_alternatives() -> None:
+def test_answer_first_overview_does_not_choose_a_partial_name_by_trade_activity() -> None:
+    repository = FakeRepository()
+    repository.complexes = [complex_record(1, "반포자이"), complex_record(2, "개포자이")]
+    model = DraftFailingLanguageModel(
+        QueryPlan("complex_identity", "unused"), DraftAnswer([])
+    )
+
+    response = run_query(
+        GroundedChatbotEngine(
+            repository=repository,
+            language_model=model,
+            enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+            answer_first_enabled=True,
+        ),
+        "자이 어때?",
+        "request-ambiguous-overview",
+    )
+
+    assert response["status"] == "partial_success"
+    assert any("동명 단지" in item for item in response["limitations"]), response["limitations"]
+    assert response["uiActions"] == []
+    assert repository.trade_query is None
+    assert model.plan_calls == 0
+    response["limitations"] = ["지역이나 주소를 더 알려주세요."]
+    terminal = with_terminal_outcome(response)
+    assert terminal["terminalOutcome"]["status"] == "CLARIFICATION"
+
+
+def test_property_core_failure_propagates_to_temporary_failure_boundary() -> None:
+    engine = GroundedChatbotEngine(
+        repository=UnavailablePropertyRepository(),
+        language_model=DraftFailingLanguageModel(
+            QueryPlan("complex_identity", "unused"), DraftAnswer([])
+        ),
+        enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+        answer_first_enabled=True,
+    )
+
+    with pytest.raises(ChatbotProviderUnavailable):
+        run_query(engine, "반포자이 위치 알려줘", "request-property-core-failure")
+
+
+def test_answer_first_overview_clarifies_multiple_long_partial_names() -> None:
+    repository = FakeRepository()
+    repository.complexes = [
+        replace(complex_record(1, "마포래미안"), match_tier=3),
+        replace(complex_record(2, "서초래미안"), match_tier=3),
+    ]
+    model = DraftFailingLanguageModel(
+        QueryPlan("complex_identity", "unused"), DraftAnswer([])
+    )
+
+    response = run_query(
+        GroundedChatbotEngine(
+            repository=repository,
+            language_model=model,
+            enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+            answer_first_enabled=True,
+        ),
+        "래미안 어때?",
+        "request-ambiguous-long-overview",
+    )
+
+    assert with_terminal_outcome(response)["terminalOutcome"]["status"] == "CLARIFICATION"
+    assert response["conversationMemoryPatch"] is None
+    assert response["uiActions"] == []
+    assert repository.trade_query is None
+
+
+def test_answer_first_overview_keeps_unique_alias_before_trade_activity() -> None:
+    class AliasRepository(FakeRepository):
+        def candidate_observation_summaries(
+            self, complex_ids, start_date, end_date, area, capability
+        ):
+            del start_date, end_date, area
+            return tuple(
+                CandidateObservationSummary(
+                    complex_id,
+                    3 if complex_id == 2 else 0,
+                    date(2026, 7, 1) if complex_id == 2 else None,
+                    (capability,) if complex_id == 2 else (),
+                )
+                for complex_id in complex_ids
+            )
+
+    repository = AliasRepository()
+    repository.complexes = [
+        replace(complex_record(1, "래미안퍼스티지"), match_tier=2),
+        replace(complex_record(2, "퍼스티지자이"), match_tier=3),
+    ]
+    model = DraftFailingLanguageModel(
+        QueryPlan("complex_identity", "unused"), DraftAnswer([])
+    )
+
+    response = run_query(
+        GroundedChatbotEngine(
+            repository=repository,
+            language_model=model,
+            enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+            answer_first_enabled=True,
+        ),
+        "퍼스티지 어때?",
+        "request-unique-alias-overview",
+    )
+
+    assert response["conversationMemoryPatch"]["complexId"] == 1
+    assert repository.trade_query is not None
+    assert repository.trade_query[0] == 1
+
+
+def test_answer_first_multi_candidate_trade_requires_clarification() -> None:
     class MultiCandidateRepository(FakeRepository):
         def candidate_observation_summaries(
             self, complex_ids, start_date, end_date, area, capability
@@ -823,58 +994,17 @@ def test_answer_first_multi_candidate_trade_selects_exact_data_and_keeps_alterna
             language_model=model,
             enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
             answer_first_enabled=True,
+            today=lambda: date(2026, 7, 31),
         ),
         "마포래미안푸르지오 전용 84㎡의 최근 실거래 5건을 거래일과 층까지 알려줘",
         "request-mapo",
     )
 
-    trade_table = next(item for item in response["uiArtifacts"] if item["type"] == "tradeTable")
-    alternative_list = next(
-        item for item in response["uiArtifacts"]
-        if item["type"] == "factList" and item["title"] == "다른 후보 단지"
-    )
-    assert [row["tradeId"] for row in trade_table["rows"]] == [9005, 9004]
-    expected_lead = (
-        "마포래미안푸르지오4단지의 2025-07-31~2026-07-31·전용 84㎡ 실거래 "
-        "2건을 확인했습니다. 가장 최근 거래는 2026-06-20, 전용 84.6㎡, "
-        "25억원, 18층입니다."
-    )
-    assert response["answer"].startswith(expected_lead)
-    assert response["uiSummary"]["headline"]["text"] == expected_lead
-    assert response["uiReport"]["opening"]["text"] == expected_lead
-    assert response["uiReport"]["primaryArtifactId"] == trade_table["artifactId"]
-    assert all(
-        not item["text"].startswith("대표 선택 근거:")
-        for item in response["uiReport"]["basis"]
-    )
-    assert response["uiSummary"]["criteria"][-1] == {
-        "key": "representativeSelection",
-        "label": "대표 선택 근거",
-        "value": (
-            "요청한 기간·면적의 데이터 2건이 확인되고 세대수 1,237세대도 "
-            "확인되는 마포래미안푸르지오4단지를 대표로 선택했습니다."
-        ),
-        "factIds": ["property-complex-7756", "candidate-observation-7756"],
-    }
-    assert response["conversationMemoryPatch"]["complexId"] == 7756
-    assert alternative_list["items"][0]["factIds"] == [
-        "property-complex-7753",
-        "candidate-observation-7753",
-    ]
-    assert response["uiActions"][0] == {
-        "type": "focusComplex",
-        "version": 1,
-        "actionId": "action-request-mapo-focus-complex-7756",
-        "label": "마포래미안푸르지오4단지 지도에서 보기",
-        "parcelId": 8015,
-        "complexId": 7756,
-        "center": {"lat": 37.5555141, "lng": 126.9537536},
-        "level": 4,
-        "openDetail": True,
-        "autoRun": True,
-        "factIds": ["property-complex-7756"],
-    }
-    assert repository.trade_query == (7756, date(2025, 7, 31), date(2026, 7, 31), 84, 5)
+    assert with_terminal_outcome(response)["terminalOutcome"]["status"] == "CLARIFICATION"
+    assert repository.trade_query is None
+    assert response["conversationMemoryPatch"] is None
+    assert response["uiActions"]
+    assert all(action["autoRun"] is False for action in response["uiActions"])
 
 
 def test_answer_first_helio_trend_counts_month_rows_not_candidates() -> None:
@@ -902,12 +1032,12 @@ def test_answer_first_helio_trend_counts_month_rows_not_candidates() -> None:
         ComplexRecord(
             12417, "작동 헬리오시티", "11710103", "작동", "서울 송파구 작동",
             37.49, 127.10, True, datetime(2026, 7, 31, tzinfo=UTC),
-            unit_count=20, parcel_id=9016,
+            unit_count=20, parcel_id=9016, match_tier=3,
         ),
         ComplexRecord(
             12416, "가락동 헬리오시티", "11710107", "가락동", "서울 송파구 가락동",
             37.497, 127.107, True, datetime(2026, 7, 31, tzinfo=UTC),
-            unit_count=9510, parcel_id=9015,
+            unit_count=9510, parcel_id=9015, match_tier=2,
         ),
     ]
     rows = (
@@ -935,6 +1065,7 @@ def test_answer_first_helio_trend_counts_month_rows_not_candidates() -> None:
         language_model=model,
         enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
         answer_first_enabled=True,
+        today=lambda: date(2026, 8, 1),
     ), "헬리오시티 전용 59㎡의 최근 1년 월별 가격 흐름과 거래량을 보여줘", "request-helio")
 
     trend = next(item for item in response["uiArtifacts"] if item["type"] == "trendTable")
@@ -972,6 +1103,7 @@ def test_monthly_trend_exposes_amount_and_volume_facts() -> None:
             complex_name="잠실엘스",
             start_date=date(2026, 1, 1),
             end_date=date(2026, 6, 30),
+            exclusive_area_square_meters=84.0,
         ),
         DraftAnswer(
             sentences=[
@@ -993,7 +1125,7 @@ def test_monthly_trend_exposes_amount_and_volume_facts() -> None:
             language_model=model,
             enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
         ),
-        "잠실엘스 최근 반년 가격 추이와 거래량",
+        "잠실엘스 전용 84㎡ 최근 반년 가격 추이와 거래량",
         "request-3",
     )
 
@@ -1279,13 +1411,14 @@ def test_answer_first_helio_location_example_resolves_map_ready_identity(
         replace(
             complex_record(), complex_id=12417, parcel_id=9016,
             display_name="작동 헬리오시티", region_name="작동",
-            address="서울 송파구 작동", unit_count=20,
+            address="서울 송파구 작동", unit_count=20, match_tier=3,
         ),
         replace(
             complex_record(), complex_id=12416, parcel_id=9015,
             display_name="가락동 헬리오시티", region_name="가락동",
             address="서울 송파구 가락동", unit_count=9510,
             use_date=date(2018, 12, 28), latitude=37.497, longitude=127.107,
+            match_tier=2,
         ),
     ]
     model = DraftFailingLanguageModel(

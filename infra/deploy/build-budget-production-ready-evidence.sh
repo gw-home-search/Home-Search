@@ -33,11 +33,11 @@ jq -e '
   .format_version == 2 and .tag != "v1.0.4"
   and (.commit_sha | test("^[0-9a-f]{40}$"))
   and .build_architecture == "linux/amd64"
-  and (.images | length) == 17 and (.platform_images | length) == 2
+  and (.images | length) == 18 and (.platform_images | length) == 2
   and all((.images + .platform_images)[]; (.digest | test("^sha256:[0-9a-f]{64}$")))
   and .vulnerability_critical_gate_passed == true
   and .vulnerability_policy_gate_passed == true
-' "${release}" >/dev/null || { echo '상태: Fail - release 17+2 provenance gate가 pass가 아닙니다.' >&2; exit 1; }
+' "${release}" >/dev/null || { echo '상태: Fail - release 18+2 provenance gate가 pass가 아닙니다.' >&2; exit 1; }
 tag="$(jq -er '.tag' "${release}")"
 sha="$(jq -er '.commit_sha' "${release}")"
 for artifact in acceptance.json security.json observability.json release-exceptions.json; do

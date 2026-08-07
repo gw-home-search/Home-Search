@@ -29,7 +29,7 @@ Production과 staging의 state·resource를 재해석하거나 축소하면 roll
 - SSM container의 초기 `UNSET`은 provider write-only `value_wo`로 기록한다. provider
   refresh에 필요한 plan/apply의 `ssm:GetParameter`는 budget parameter prefix로만
   제한하며 복호화 값은 state, plan, artifact, log에 저장하지 않는다.
-- release는 17개 application image와 2개 budget platform image의 같은
+- release는 18개 application image와 2개 budget platform image의 같은
   `linux/amd64` digest 집합이어야 한다. `v1.0.4`는 staging origin 위험 때문에
   배포하지 않는다.
 - 평시는 CPU credit `standard`다. 승인된 import/recovery만 최대 8시간

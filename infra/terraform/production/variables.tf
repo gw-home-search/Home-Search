@@ -102,14 +102,14 @@ variable "core_desired_count" {
   }
 }
 variable "image_uris" {
-  description = "The 17 release-manifest ECR image URIs pinned with @sha256 digests."
+  description = "The 18 release-manifest ECR image URIs pinned with @sha256 digests."
   type        = map(string)
   validation {
     condition = (
-      length(var.image_uris) == 17
+      length(var.image_uris) == 18
       && alltrue([for uri in values(var.image_uris) : can(regex("^[0-9]+[.]dkr[.]ecr[.]ap-northeast-2[.]amazonaws[.]com/home-search/[a-z0-9-]+@sha256:[0-9a-f]{64}$", uri))])
     )
-    error_message = "image_uris must contain all 17 immutable ap-northeast-2 ECR digest URIs."
+    error_message = "image_uris must contain all 18 immutable ap-northeast-2 ECR digest URIs."
   }
 }
 variable "adot_collector_image_uri" {

@@ -7,7 +7,7 @@ tmp_dir="$(mktemp -d)"
 cleanup() { find "${tmp_dir}" -depth -delete 2>/dev/null || true; }
 trap cleanup EXIT
 
-applications=(admin-api admin-gateway admin-migration admin-ops ai backup chat-bff ml ops-bootstrap property-api property-batch property-flyway public-gateway source-data-migration user-api user-flyway user-insight-worker)
+applications=(admin-api admin-gateway admin-migration admin-ops ai backup chat-bff ml ops-bootstrap property-api property-batch property-flyway public-gateway seo-renderer source-data-migration user-api user-flyway user-insight-worker)
 platform=(budget-postgres budget-valkey)
 jq -n --argjson apps "$(printf '%s\n' "${applications[@]}" | jq -Rsc 'split("\n")[:-1]')" \
   --argjson platform "$(printf '%s\n' "${platform[@]}" | jq -Rsc 'split("\n")[:-1]')" '
@@ -22,7 +22,7 @@ jq -n --argjson apps "$(printf '%s\n' "${applications[@]}" | jq -Rsc 'split("\n"
 "${script}" "${tmp_dir}/manifest.json" s3://migration-bucket/data/v2 \
   aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "${tmp_dir}/release.auto.tfvars.json"
 jq -e '
-  (.image_uris | length) == 17 and (.platform_image_uris | length) == 2
+  (.image_uris | length) == 18 and (.platform_image_uris | length) == 2
   and .deployment_release_tag == "v2.0.0"
   and .migration_artifact_s3_uri == "s3://migration-bucket/data/v2"
 ' "${tmp_dir}/release.auto.tfvars.json" >/dev/null
@@ -41,4 +41,4 @@ if "${script}" "${tmp_dir}/old.json" s3://migration-bucket/data/v2 \
   exit 1
 fi
 
-echo '상태: Pass - budget release tfvars의 17+2 digest와 v1.0.4 차단을 확인했습니다.'
+echo '상태: Pass - budget release tfvars의 18+2 digest와 v1.0.4 차단을 확인했습니다.'

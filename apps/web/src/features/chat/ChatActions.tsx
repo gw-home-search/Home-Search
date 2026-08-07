@@ -26,33 +26,42 @@ export function ChatActions({
           && executedActionIds.has(action.actionId);
         const selected = action.type === 'focusComplex'
           && action.complexId === selectedComplexId;
-        const focusLabel = selected
-          ? detailState === 'ready'
-            ? '지도에 표시됨 · 단지 상세 열림'
-            : detailState === 'error'
-              ? '지도에 표시됨 · 상세 다시 시도'
-              : '지도에 표시됨 · 상세 여는 중'
-          : action.type === 'focusComplex' && focusActionStatuses?.get(action.actionId) === 'moving'
-            ? '지도로 이동 중'
-            : action.type === 'focusComplex' && focusActionStatuses?.get(action.actionId) === 'failed'
-              ? '지도를 이동하지 못했습니다 · 다시 시도'
-              : action.label;
+        const focusStatus = action.type === 'focusComplex'
+          ? focusActionStatuses?.get(action.actionId)
+          : undefined;
+        if (executed) {
+          return <span className="chatbot-map-status" key={action.actionId} role="status">✓ 지도에 표시됨</span>;
+        }
+        if (selected && detailState === 'ready') {
+          return <span className="chatbot-map-status" key={action.actionId} role="status">✓ 지도와 단지 상세에 표시됨</span>;
+        }
+        if (selected && detailState === 'loading') {
+          return <span className="chatbot-map-status" key={action.actionId} role="status">지도와 상세 여는 중</span>;
+        }
+        if (!selected && focusStatus === 'moving') {
+          return <span className="chatbot-map-status" key={action.actionId} role="status">지도로 이동 중</span>;
+        }
+        const label = selected && detailState === 'error'
+          ? '상세 다시 열기'
+          : focusStatus === 'failed'
+            ? '지도를 이동하지 못했습니다 · 다시 시도'
+            : action.label;
         return (
-          <button
-            aria-disabled={executed || onExecute == null}
-            aria-label={action.label}
-            aria-pressed={action.type === 'focusComplex'
-              ? selected
-              : undefined}
-            className="chatbot-map-action"
-            key={action.actionId}
-            onClick={() => {
-              if (!executed) onExecute?.(action);
-            }}
-            type="button"
-          >
-            {executed ? '지도에 표시됨' : focusLabel}
-          </button>
+          <span className="chatbot-map-action-row" key={action.actionId}>
+            {selected && detailState === 'error'
+              ? <span className="chatbot-map-status">지도에 표시됨</span>
+              : null}
+            <button
+              aria-disabled={onExecute == null}
+              aria-label={action.label}
+              aria-pressed={action.type === 'focusComplex' ? selected : undefined}
+              className="chatbot-map-action"
+              onClick={() => onExecute?.(action)}
+              type="button"
+            >
+              {label}
+            </button>
+          </span>
         );
       })}
       <span aria-live="polite" className="chatbot-action-live" role="status">

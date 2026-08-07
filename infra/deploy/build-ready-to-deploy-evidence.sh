@@ -35,7 +35,7 @@ release_tag="$(jq -er '.tag | select(test("^v[0-9]+[.][0-9]+[.][0-9]+$"))' "${re
 jq -e '
   .format_version == 2
   and (.commit_sha | test("^[0-9a-f]{40}$"))
-  and ((.images | keys | sort) == ["admin-api","admin-gateway","admin-migration","admin-ops","ai","backup","chat-bff","ml","ops-bootstrap","property-api","property-batch","property-flyway","public-gateway","source-data-migration","user-api","user-flyway","user-insight-worker"])
+  and ((.images | keys | sort) == ["admin-api","admin-gateway","admin-migration","admin-ops","ai","backup","chat-bff","ml","ops-bootstrap","property-api","property-batch","property-flyway","public-gateway","seo-renderer","source-data-migration","user-api","user-flyway","user-insight-worker"])
   and all(.images[];
     (.digest | test("^sha256:[0-9a-f]{64}$"))
     and (.uri | test("^[0-9]{12}[.]dkr[.]ecr[.]ap-northeast-2[.]amazonaws[.]com/home-search/[a-z0-9-]+@sha256:[0-9a-f]{64}$")))

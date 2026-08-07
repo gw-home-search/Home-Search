@@ -3,6 +3,7 @@ package com.home.chatbff.ai;
 import com.home.chatbff.auth.VerifiedChatUser;
 import com.home.chatbff.web.ChatbotQueryRequest;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.core.codec.DecodingException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
@@ -34,10 +35,14 @@ final class WebClientChatbotAiClient implements ChatbotAiClient {
                 .header("X-Request-Id", requestId)
                 .bodyValue(request)
                 .retrieve()
-                .onStatus(HttpStatusCode::isError, ignored -> Mono.error(new ChatbotProviderUnavailableException()))
+                .onStatus(
+                        HttpStatusCode::isError,
+                        response -> Mono.error(new ChatbotUpstreamHttpException(
+                                response.statusCode().value())))
                 .bodyToMono(JsonNode.class)
                 .filter(JsonNode::isObject)
-                .switchIfEmpty(Mono.error(new ChatbotProviderUnavailableException()))
+                .switchIfEmpty(Mono.error(new ChatbotInvalidJsonException()))
+                .onErrorMap(DecodingException.class, ignored -> new ChatbotInvalidJsonException())
                 .onErrorMap(WebClientException.class, ignored -> new ChatbotProviderUnavailableException());
     }
 
@@ -52,9 +57,13 @@ final class WebClientChatbotAiClient implements ChatbotAiClient {
                 .accept(MediaType.TEXT_EVENT_STREAM)
                 .bodyValue(request)
                 .retrieve()
-                .onStatus(HttpStatusCode::isError, ignored -> Mono.error(new ChatbotProviderUnavailableException()))
+                .onStatus(
+                        HttpStatusCode::isError,
+                        response -> Mono.error(new ChatbotUpstreamHttpException(
+                                response.statusCode().value())))
                 .bodyToFlux(SSE_TYPE)
                 .map(this::normalizeEvent)
+                .onErrorMap(DecodingException.class, ignored -> new ChatbotInvalidJsonException())
                 .onErrorMap(WebClientException.class, ignored -> new ChatbotProviderUnavailableException());
     }
 
@@ -62,12 +71,12 @@ final class WebClientChatbotAiClient implements ChatbotAiClient {
         String name = event.event();
         JsonNode data = event.data();
         if (name == null || data == null || !data.isObject()) {
-            throw new ChatbotProviderUnavailableException();
+            throw new ChatbotInvalidJsonException();
         }
         if (name.equals("final")) {
             JsonNode response = data.get("response");
             if (response == null || !response.isObject()) {
-                throw new ChatbotProviderUnavailableException();
+                throw new ChatbotInvalidJsonException();
             }
             return new ChatbotAiStreamEvent(name, response);
         }

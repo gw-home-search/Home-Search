@@ -6,6 +6,8 @@ import { AuthProvider } from '../features/auth/AuthProvider';
 import type { AuthClient } from '../features/auth/api/authClient';
 import { readInsightMetric } from '../features/insights/insightMetricConfig';
 import { MARKET_NEWS_ENABLED } from '../features/news/newsFeature';
+import { LegalPage } from '../legal/LegalPage';
+import { GoogleAnalyticsConsent } from '../shared/analytics/GoogleAnalyticsConsent';
 import './App.css';
 
 export type AppProps = MapAppProps & {
@@ -38,8 +40,12 @@ function RoutedApp({
       <Routes>
         <Route element={<AuthCallbackPage />} path="/auth/success" />
         <Route element={<AuthCallbackPage />} path="/auth/failure" />
+        <Route element={<LegalPage kind="privacy" />} path="/privacy" />
+        <Route element={<LegalPage kind="terms" />} path="/terms" />
+        <Route element={<LegalPage kind="about" />} path="/about" />
         <Route element={<MapRoute mapProps={mapProps} />} path="*" />
       </Routes>
+      <GoogleAnalyticsConsent />
     </AuthProvider>
   );
 }
@@ -54,6 +60,7 @@ function MapRoute({ mapProps }: { mapProps: MapAppProps }) {
     && location.pathname !== '/insights'
     && location.pathname !== '/insights/news'
     && !isMyPagePath(location.pathname)
+    && !/^\/(?:regions|complexes)\/[1-9][0-9]*$/u.test(location.pathname)
   ) {
     return <Navigate replace to="/" />;
   }

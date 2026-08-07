@@ -372,6 +372,10 @@ def _select_supervisor_graph(mode: str, percent: int, user_id: int) -> bool:
 
 
 def _agentic_request(question: str) -> bool:
+    from .property_chat.question_normalizer import normalize_question
+
+    if normalize_question(question).overview:
+        return False
     if re.search(r"(실거래|거래내역|가격\s*(?:흐름|추이)|시세\s*추이)", question):
         return False
     if re.search(r"(최신|현재|공고|고시|계획|예정|개통)", question):
@@ -385,6 +389,27 @@ def _out_of_scope_request(question: str) -> bool:
         r"시세\s*예측|즐겨찾기|알람|메일\s*(?:발송|구독)|순위\s*매겨)",
         question,
     ) is not None
+
+
+def _price_trend_requires_area(question: str) -> bool:
+    if re.search(r"(?:추천|골라\s*줘|비교|차이|대조)", question):
+        return False
+    requests_trend = re.search(
+        r"(?:가격\s*(?:흐름|추이)|시세\s*추이|월별|거래량)", question,
+        re.IGNORECASE,
+    ) is not None
+    has_area = re.search(
+        r"(?:전용\s*)?[0-9]+(?:\.[0-9]+)?\s*(?:㎡|m2|제곱미터)",
+        question,
+        re.IGNORECASE,
+    ) is not None
+    requests_other_supported_fact = re.search(
+        r"(?:실거래|최근\s*거래|거래\s*(?:내역|결과)|주소|기본정보|"
+        r"단지\s*정보|학원|교습소|철도|지하철|가까운\s*역|학교|"
+        r"대규모점포|대형마트|백화점|쇼핑시설|어린이집|유치원)",
+        question,
+    ) is not None
+    return requests_trend and not has_area and not requests_other_supported_fact
 
 
 def _requested_candidate_count(question: str) -> int:
@@ -494,6 +519,26 @@ class ConfiguredChatbotEngine:
                 ),
                 reason="OUT_OF_SCOPE",
             )
+        if _price_trend_requires_area(request.question):
+            response = unavailable_response(
+                request_id,
+                answer=(
+                    "가격 흐름은 서로 다른 면적을 섞지 않도록 전용면적을 지정해 주세요. "
+                    "예: 전용 84㎡ 최근 1년 가격 흐름"
+                ),
+                reason="INSUFFICIENT_EVIDENCE",
+            )
+            response["conversationResolution"] = {
+                "version": 1,
+                "answerMode": "NO_RESULT",
+                "goals": [{"capability": "price_trend", "status": "unavailable"}],
+                "assumptions": [],
+                "omissions": ["가격 흐름 집계에 필요한 전용면적이 지정되지 않았습니다."],
+            }
+            evidence = response["evidenceSummary"]
+            assert isinstance(evidence, dict)
+            evidence["capabilities"] = ["price_trend"]
+            return response
         started_at = time.monotonic()
         try:
             async with asyncio.timeout(timeout_seconds):

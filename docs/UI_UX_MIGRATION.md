@@ -128,6 +128,18 @@ Mobile is not the first project target, but the layout should not block it:
 - Filter changes refresh complex markers.
 - Detail drawer clearly shows complex info and trade list.
 
+## Search landing routes
+
+- `/regions/:id`와 `/complexes/:id`는 server-rendered landing content와 React
+  hydration에서 동일한 표현 컴포넌트를 사용한다.
+- 각 문서는 고유 title, description, 절대 canonical, Open Graph/Twitter,
+  breadcrumb와 `Place` 또는 `ApartmentComplex` JSON-LD를 제공한다.
+- 외부 데이터 문자열은 text로 escape하며 `Offer`와 `RealEstateListing`을
+  생성하지 않는다.
+- SPA가 해당 URL에서 시작해도 `/`로 redirect하지 않는다. 사용자는 landing에서
+  root 지도 화면으로 이동할 수 있다.
+- bot과 일반 사용자에 대한 User-Agent 기반 본문 분기는 금지한다.
+
 ## Additive Map Insights Route
 
 - Public `/insights` renders the same `MapApp`, Kakao map, and filter bar as
@@ -180,3 +192,19 @@ Mobile is not the first project target, but the layout should not block it:
 - Detail adds a fourth mobile tab, `뉴스`, and a desktop `관련 뉴스` section
   after basic information. Its independent request may fail without blocking
   information, prices, trades, or charts.
+
+## Chatbot Answer Presentation
+
+- `focusComplex/v1` auto-run의 이동·상세 열기가 완료되면 button을 제거하고
+  `✓ 지도와 단지 상세에 표시됨` 상태 문구를 표시한다. 실패 또는 restore처럼 실제
+  실행이 필요한 경우에만 button을 유지한다.
+- 단지 선택 근거는 `<details>`가 아닌 flat section으로 표시한다. exact unique 단지는
+  서버가 선택 근거를 생성하지 않는다.
+- `trendTable/v1`은 실제 table semantics와 네 열을 유지하며 고정 최소 폭이나 내부
+  horizontal scroll을 두지 않는다. 금액은 `25억 5,500만원` 형식을 공통 사용하고,
+  관찰 월 수·총 거래 수·최근 관찰월을 표 위에 분리한다.
+- partial 답변은 성공 fragment를 먼저 표시하고 실패 source는 하단
+  `확인하지 못한 정보`에 모은다. `TEMPORARY_FAILURE`는 같은 assistant turn의
+  `다시 시도`와 request ID를 노출하지 않는 `문제 코드 복사`를 제공한다.
+- mobile chat이 열리면 compact public footer를 숨기고 composer 하단에
+  `env(safe-area-inset-bottom)`을 반영한다.

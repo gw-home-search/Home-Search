@@ -41,8 +41,8 @@ if [[ -n "${command_override}" ]]; then
   container_name="${family#home-search-budget-production-}"
   case "${container_name}" in
     property-flyway)
-      jq -e '. == ["-target=40", "validate"]' <<<"${command_override}" >/dev/null || {
-        echo '상태: Fail - property-flyway override는 exact V40 validate만 허용합니다.' >&2
+      jq -e '. == ["-target=41", "validate"]' <<<"${command_override}" >/dev/null || {
+        echo '상태: Fail - property-flyway override는 exact V41 validate만 허용합니다.' >&2
         exit 2
       }
       ;;

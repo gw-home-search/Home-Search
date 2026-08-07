@@ -411,10 +411,8 @@ describe('챗봇 패널', () => {
     await click(actionButton);
     expect(onUiAction).toHaveBeenCalledTimes(1);
     expect(onUiAction).toHaveBeenCalledWith(action);
-    expect(actionButton?.textContent).toBe('지도에 표시됨');
-    expect(actionButton?.getAttribute('aria-disabled')).toBe('true');
-    await click(actionButton);
-    expect(onUiAction).toHaveBeenCalledTimes(1);
+    await waitFor(() => host?.textContent?.includes('✓ 지도에 표시됨') === true);
+    expect(host ? buttonByText(host, '지도에서 병원 보기') : null).toBeNull();
 
     const saved = await store.list();
     expect(saved[0]?.messages[1]?.actions).toEqual([action]);

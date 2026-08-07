@@ -8,7 +8,7 @@ cleanup() { find "${tmp_dir}" -depth -delete 2>/dev/null || true; }
 trap cleanup EXIT
 mkdir "${tmp_dir}/bin" "${tmp_dir}/s3"
 
-versions_before="$(seq 1 40 | grep -v '^3$' | grep -v '^40$' | jq -Rsc 'split("\n")[:-1] | map(tonumber)')"
+versions_before="$(seq 1 41 | grep -v '^3$' | grep -v '^41$' | jq -Rsc 'split("\n")[:-1] | map(tonumber)')"
 data='{"complex":{"rows":10,"identity_checksum":"a"},"complex_name_alias":{"rows":20,"identity_checksum":"b"},"parcel":{"rows":30,"identity_checksum":"c"},"trade":{"rows":40,"identity_checksum":"d"}}'
 cat >"${tmp_dir}/bin/psql" <<'SH'
 #!/usr/bin/env bash
@@ -33,7 +33,7 @@ PATH="${tmp_dir}/bin:${PATH}" FAKE_PSQL_JSON="${tmp_dir}/before-input.json" FAKE
   HOME_BACKUP_S3_URI=s3://home-search-budget-production-backup-123456789012/logical \
   bash "${script}" before v1.0.11 >/dev/null
 
-versions_after="$(jq '. + [40]' <<<"${versions_before}")"
+versions_after="$(jq '. + [41]' <<<"${versions_before}")"
 jq -n --argjson versions "${versions_after}" --argjson data "${data}" \
   '{status:"pass",history:[$versions[] | {version:.,type:"SQL",success:true}],data:$data}' >"${tmp_dir}/after-input.json"
 PATH="${tmp_dir}/bin:${PATH}" FAKE_PSQL_JSON="${tmp_dir}/after-input.json" FAKE_S3_ROOT="${tmp_dir}/s3" AUDIT_PHASE=after \
@@ -50,14 +50,14 @@ PATH="${tmp_dir}/bin:${PATH}" FAKE_PSQL_JSON="${tmp_dir}/after-input.json" FAKE_
   HOME_BACKUP_PGHOST=database HOME_BACKUP_PGPORT=5432 HOME_BACKUP_PGUSER=backup HOME_BACKUP_PGPASSWORD=password \
   HOME_BACKUP_S3_URI=s3://home-search-budget-production-backup-123456789012/logical \
   bash "${script}" after v1.0.12 >/dev/null
-jq -e '.previous_version == 40 and .target_version == 40' "${tmp_dir}/s3/after.json" >/dev/null
+jq -e '.previous_version == 41 and .target_version == 41' "${tmp_dir}/s3/after.json" >/dev/null
 
 jq '.data.trade.rows = 41' "${tmp_dir}/after-input.json" >"${tmp_dir}/changed-input.json"
 if PATH="${tmp_dir}/bin:${PATH}" FAKE_PSQL_JSON="${tmp_dir}/changed-input.json" FAKE_S3_ROOT="${tmp_dir}/s3" AUDIT_PHASE=after \
   HOME_BACKUP_PGHOST=database HOME_BACKUP_PGPORT=5432 HOME_BACKUP_PGUSER=backup HOME_BACKUP_PGPASSWORD=password \
   HOME_BACKUP_S3_URI=s3://home-search-budget-production-backup-123456789012/logical \
   bash "${script}" after v1.0.11 >/dev/null 2>&1; then
-  echo '상태: Fail - V40 전후 data identity 변경을 허용했습니다.' >&2
+  echo '상태: Fail - V41 전후 data identity 변경을 허용했습니다.' >&2
   exit 1
 fi
-echo '상태: Pass - V39/V40 history와 data identity audit를 확인했습니다.'
+echo '상태: Pass - V39/V40/V41 history와 data identity audit를 확인했습니다.'

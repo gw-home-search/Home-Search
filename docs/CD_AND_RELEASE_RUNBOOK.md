@@ -136,7 +136,7 @@ outbox/lag 5분 초과 또는 DLQ 신규 event가 있으면 traffic 확대를 �
 `Deploy budget production`은 기존 `Deploy production`과 별개다. 먼저
 `operation=registry`로 budget platform ECR을 만든 뒤 새 environment-neutral
 release를 발행하고, `operation=deploy`로 exact tag/SHA와 data-only S3
-manifest SHA를 전달한다. release는 17개 application image와
+manifest SHA를 전달한다. release는 18개 application image와
 `budget-postgres`, `budget-valkey` digest를 모두 포함해야 한다.
 
 `budget-production-plan`은 승인 없는 read-only plan, `budget-production`은

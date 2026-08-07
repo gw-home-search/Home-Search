@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && npm run build:renderer",
+    "build:renderer": "tsc --noEmit -p tsconfig.renderer.json && vite build --config vite.renderer.config.ts",
     "lint": "eslint .",
     "test": "vitest run",
     "test:live-api": "node scripts/live-api-smoke.mjs",
@@ -14,7 +15,7 @@
   "dependencies": {
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "react-router-dom": "^7.18.1",
+    "react-router-dom": "7.18.2",
     "recharts": "^3.8.1"
   },
   "devDependencies": {

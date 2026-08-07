@@ -34,9 +34,9 @@ release="${evidence_dir}/release-manifest.json"
 tag="$(jq -er '.tag' "${release}")"
 sha="$(jq -er '.commit_sha | select(test("^[0-9a-f]{40}$"))' "${release}")"
 jq -e '
-  ["admin-api","admin-gateway","admin-migration","admin-ops","ai","backup","chat-bff","ml","ops-bootstrap","property-api","property-batch","property-flyway","public-gateway","source-data-migration","user-api","user-flyway","user-insight-worker"] as $applications
+  ["admin-api","admin-gateway","admin-migration","admin-ops","ai","backup","chat-bff","ml","ops-bootstrap","property-api","property-batch","property-flyway","public-gateway","seo-renderer","source-data-migration","user-api","user-flyway","user-insight-worker"] as $applications
   | ["budget-postgres","budget-valkey"] as $platform
-  | .format_version == 2 and (.images | length) == 17 and (.platform_images | length) == 2
+  | .format_version == 2 and (.images | length) == 18 and (.platform_images | length) == 2
   and ((.images | keys | sort) == $applications) and ((.platform_images | keys | sort) == $platform)
   and all((.images + .platform_images) | to_entries[];
     (.value.digest | test("^sha256:[0-9a-f]{64}$"))
@@ -80,7 +80,7 @@ jq -e --argjson expected "${platform_names}" '
 
 for phase in before after; do
   jq -e --arg phase "${phase}" '.status == "pass" and .phase == $phase
-    and (.previous_version == 39 or .previous_version == 40) and .target_version == 40
+    and (.previous_version == 39 or .previous_version == 40 or .previous_version == 41) and .target_version == 41
     and .failed == 0 and .missing == 0 and .out_of_order == 0
     and (.data | keys | sort) == ["complex","complex_name_alias","parcel","trade"]' "${evidence_dir}/migration-${phase}.json" >/dev/null
 done

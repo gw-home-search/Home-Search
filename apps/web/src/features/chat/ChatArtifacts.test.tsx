@@ -48,8 +48,8 @@ describe('조회표 artifact UI', () => {
       type: 'trendTable', version: 1, artifactId: 'trend-table-1',
       title: '월별 가격 관찰값', amountUnit: '10_000_KRW',
       rows: [{
-        month: '2026-06', averageAmountTenThousandKrw: 245000,
-        minimumAmountTenThousandKrw: 240000, maximumAmountTenThousandKrw: 250000,
+        month: '2026-06', averageAmountTenThousandKrw: 255500,
+        minimumAmountTenThousandKrw: 250000, maximumAmountTenThousandKrw: 270000,
         tradeCount: 3, availability: 'available', reason: null,
         factIds: ['trend-1'],
       }],
@@ -59,7 +59,13 @@ describe('조회표 artifact UI', () => {
 
     expect(html).toContain('25억원');
     expect(html).toContain('2026-06');
+    expect(html).toContain('25억 5,500만원');
+    expect(html).toContain('27억원');
     expect(html).toContain('3건');
+    expect(html).toContain('관찰된 달');
+    expect(html).toContain('1개월');
+    expect(html).toContain('최근 관찰');
+    expect(html).toContain('<caption>월별 가격 관찰값 조회 결과</caption>');
     expect(html).toContain('chatbot-trade-table');
     expect(html).toContain('chatbot-trend-table');
   });

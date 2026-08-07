@@ -182,7 +182,13 @@ resource "aws_scheduler_schedule_group" "data_refresh" {
 }
 
 resource "aws_scheduler_schedule" "rtms_daily_refresh" {
-  count                        = local.data_enabled ? 1 : 0
+  count = local.data_enabled ? 1 : 0
+  lifecycle {
+    precondition {
+      condition     = !var.rtms_refresh_schedule_enabled || var.rtms_refresh_task_definition_arn != ""
+      error_message = "rtms_refresh_task_definition_arn must pin a reviewed immutable revision before enabling RTMS Scheduler."
+    }
+  }
   name                         = "${local.name}-rtms-daily-refresh"
   group_name                   = aws_scheduler_schedule_group.data_refresh[0].name
   schedule_expression          = "cron(30 7 * * ? *)"
@@ -199,7 +205,7 @@ resource "aws_scheduler_schedule" "rtms_daily_refresh" {
       }]
     })
     ecs_parameters {
-      task_definition_arn = aws_ecs_task_definition.one_shot["rtms-daily-refresh"].arn
+      task_definition_arn = var.rtms_refresh_task_definition_arn != "" ? var.rtms_refresh_task_definition_arn : "arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:task-definition/${local.name}-rtms-daily-refresh:1"
       launch_type         = "EC2"
       task_count          = 1
     }

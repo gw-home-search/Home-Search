@@ -20,7 +20,7 @@ from ai_service.terminal_response import (
 )
 
 from .answer_document import CompoundAnswerDocument
-from .models import QueryPlan
+from .models import CAPABILITY_EXECUTION_ORDER, QueryPlan
 from .supervisor import (
     DependencyPlanner,
     GoalExecutionResult,
@@ -245,7 +245,14 @@ def _compose_canonical(
 ) -> dict[str, object]:
     by_id = {result.goal_id: result for result in state.get("goal_results", [])}
     ordered = [by_id[goal.goal_id] for goal in GoalOrderingPolicy().order(state["goals"])]
-    documents = [result.document for result in ordered if result.document is not None]
+    capability_rank = {
+        capability: index
+        for index, capability in enumerate(CAPABILITY_EXECUTION_ORDER)
+    }
+    documents = sorted(
+        (result.document for result in ordered if result.document is not None),
+        key=lambda document: capability_rank[document.plan.capability],
+    )
     if not documents:
         response = _insufficient_evidence_response(
             runtime.context.request_id,

@@ -131,16 +131,30 @@ class WebClientChatbotAiClientTest {
     }
 
     @Test
-    @DisplayName("AI 5xx와 연결 실패는 provider unavailable로 통일한다")
-    void mapsHttpAndConnectionErrors() {
+    @DisplayName("AI HTTP, 연결 실패, malformed JSON을 서로 다른 내부 outcome으로 보존한다")
+    void classifiesHttpConnectionAndMalformedJson() {
         server = HttpServer.create()
                 .host("127.0.0.1")
                 .port(0)
                 .handle((request, response) -> response.status(503).send())
                 .bindNow();
 
-        assertProviderUnavailable(client(URI.create("http://127.0.0.1:" + server.port())));
+        assertThatThrownBy(() -> query(client(URI.create("http://127.0.0.1:" + server.port()))))
+                .isInstanceOfSatisfying(
+                        ChatbotUpstreamHttpException.class,
+                        exception -> assertThat(exception.statusCode()).isEqualTo(503));
         assertProviderUnavailable(client(URI.create("http://127.0.0.1:1")));
+
+        server.disposeNow();
+        server = HttpServer.create()
+                .host("127.0.0.1")
+                .port(0)
+                .handle((request, response) -> response.status(400).send())
+                .bindNow();
+        assertThatThrownBy(() -> query(client(URI.create("http://127.0.0.1:" + server.port()))))
+                .isInstanceOfSatisfying(
+                        ChatbotUpstreamHttpException.class,
+                        exception -> assertThat(exception.statusCode()).isEqualTo(400));
 
         server.disposeNow();
         server = HttpServer.create()
@@ -150,7 +164,8 @@ class WebClientChatbotAiClientTest {
                                 HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                         .sendString(Mono.just("[]")))
                 .bindNow();
-        assertProviderUnavailable(client(URI.create("http://127.0.0.1:" + server.port())));
+        assertThatThrownBy(() -> query(client(URI.create("http://127.0.0.1:" + server.port()))))
+                .isExactlyInstanceOf(ChatbotInvalidJsonException.class);
     }
 
     @Test
@@ -182,12 +197,12 @@ class WebClientChatbotAiClientTest {
     }
 
     private static void assertProviderUnavailable(WebClientChatbotAiClient client) {
-        assertThatThrownBy(() -> client.query(
-                                new ChatbotQueryRequest("최근 거래", null),
-                                "Bearer token",
-                                "request-1",
-                                new VerifiedChatUser(42L))
-                        .block(Duration.ofSeconds(3)))
-                .isExactlyInstanceOf(ChatbotProviderUnavailableException.class);
+        assertThatThrownBy(() -> query(client)).isExactlyInstanceOf(ChatbotProviderUnavailableException.class);
+    }
+
+    private static JsonNode query(WebClientChatbotAiClient client) {
+        return client.query(
+                        new ChatbotQueryRequest("최근 거래", null), "Bearer token", "request-1", new VerifiedChatUser(42L))
+                .block(Duration.ofSeconds(3));
     }
 }

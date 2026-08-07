@@ -372,7 +372,7 @@ class AnswerDocument:
             facts=self.used_facts,
             preferred_primary_artifact_id=self.primary_artifact_id,
         )
-        return {
+        response = {
             "success": success,
             "status": legacy_status,
             "question": self.request.question,
@@ -387,8 +387,10 @@ class AnswerDocument:
             "answer": answer,
             "resolvedQuestion": self.request.question,
             "conversationResolution": _conversation_resolution((self,)),
-            "conversationMemoryPatch": _conversation_memory_patch(
-                self.plan, self.used_facts
+            "conversationMemoryPatch": (
+                None
+                if "AMBIGUOUS_COMPLEX_CANDIDATES" in self.fallback_steps
+                else _conversation_memory_patch(self.plan, self.used_facts)
             ),
             "uiActions": list(self.actions),
             "uiArtifacts": list(public_artifacts),
@@ -405,6 +407,8 @@ class AnswerDocument:
                 "citationCount": len(citations),
             },
         }
+        _validate_public_response(response, self.used_facts)
+        return response
 
 
 @dataclass(frozen=True)
@@ -454,17 +458,13 @@ class CompoundAnswerDocument:
             and isinstance(ui_summary["headline"].get("text"), str)
             else None
         )
-        successful_first = tuple(sorted(
-            self.fragments,
-            key=lambda fragment: fragment.readiness == "unavailable",
-        ))
-        detail_text = " ".join(
-            section.text
-            for fragment in successful_first
-            for section in fragment.sections
-        )
         answer = (
-            f"{compound_lead} {detail_text}" if compound_lead else detail_text
+            compound_lead
+            or " ".join(dict.fromkeys(
+                section.text
+                for fragment in self.fragments
+                for section in fragment.sections
+            ))
         ).strip()
         if not answer or len(answer) > 20_000:
             raise ValueError("compound answer text exceeds the public contract")
@@ -493,7 +493,7 @@ class CompoundAnswerDocument:
             for action in actions
             if isinstance((action_id := action.get("actionId")), str)
         }
-        return {
+        response = {
             "success": succeeded > 0,
             "status": status,
             "question": self.request.question,
@@ -511,7 +511,14 @@ class CompoundAnswerDocument:
             "answer": answer,
             "resolvedQuestion": self.request.question,
             "conversationResolution": _conversation_resolution(self.fragments),
-            "conversationMemoryPatch": _conversation_memory_patch(None, facts),
+            "conversationMemoryPatch": (
+                None
+                if any(
+                    "AMBIGUOUS_COMPLEX_CANDIDATES" in fragment.fallback_steps
+                    for fragment in self.fragments
+                )
+                else _conversation_memory_patch(None, facts)
+            ),
             "uiActions": list(actions),
             "uiArtifacts": list(artifacts),
             "uiSummary": ui_summary,
@@ -528,6 +535,8 @@ class CompoundAnswerDocument:
                 "citationCount": len(citations),
             },
         }
+        _validate_public_response(response, facts)
+        return response
 
 
 def _fragment_dict(
@@ -793,6 +802,146 @@ def _citations(facts: tuple[EvidenceFact, ...]) -> list[dict[str, object]]:
             fact_ids,
         ) in enumerate(grouped.items(), start=1)
     ]
+
+
+def _validate_public_response(
+    response: dict[str, object],
+    facts: tuple[EvidenceFact, ...],
+) -> None:
+    facts_by_id = {fact.fact_id: fact for fact in facts}
+    if len(facts_by_id) != len(facts):
+        raise ValueError("response contains duplicate evidence facts")
+
+    citations = response.get("citations")
+    if not isinstance(citations, list):
+        raise ValueError("response citations are invalid")
+    cited_fact_ids: list[str] = []
+    for citation in citations:
+        if not isinstance(citation, dict):
+            raise ValueError("response citation is invalid")
+        cited_fact_ids.extend(
+            _validated_reference_ids(citation.get("factIds"), set(facts_by_id))
+        )
+    if len(cited_fact_ids) != len(set(cited_fact_ids)):
+        raise ValueError("response citations contain duplicate fact references")
+    if set(cited_fact_ids) != set(facts_by_id):
+        raise ValueError("response citations do not cover all evidence facts")
+
+    evidence = response.get("evidenceSummary")
+    if (
+        not isinstance(evidence, dict)
+        or evidence.get("factCount") != len(facts_by_id)
+        or evidence.get("citationCount") != len(citations)
+    ):
+        raise ValueError("response evidence summary is inconsistent")
+
+    allowed_fact_ids = set(facts_by_id)
+    for field in ("uiArtifacts", "uiActions", "uiSummary", "uiReport"):
+        _validate_nested_fact_references(response.get(field), allowed_fact_ids)
+
+    artifacts = response.get("uiArtifacts")
+    actions = response.get("uiActions")
+    if not isinstance(artifacts, list) or not isinstance(actions, list):
+        raise ValueError("response UI collections are invalid")
+    artifact_ids = _unique_object_ids(artifacts, "artifactId")
+    action_ids = _unique_object_ids(actions, "actionId")
+    _validate_focus_actions(actions, facts_by_id)
+
+    fragments = response.get("fragments")
+    if not isinstance(fragments, list):
+        raise ValueError("response fragments are invalid")
+    for fragment in fragments:
+        if not isinstance(fragment, dict):
+            raise ValueError("response fragment is invalid")
+        _validated_reference_ids(fragment.get("factIds"), allowed_fact_ids)
+        _validated_reference_ids(fragment.get("artifactIds"), artifact_ids)
+        _validated_reference_ids(fragment.get("actionIds"), action_ids)
+
+    _validate_named_references(response.get("uiReport"), "artifactIds", artifact_ids)
+    _validate_named_references(response.get("uiReport"), "actionIds", action_ids)
+
+
+def _validate_nested_fact_references(value: object, allowed: set[str]) -> None:
+    if isinstance(value, dict):
+        for key, nested in value.items():
+            if key == "factIds":
+                _validated_reference_ids(nested, allowed)
+            else:
+                _validate_nested_fact_references(nested, allowed)
+    elif isinstance(value, list):
+        for nested in value:
+            _validate_nested_fact_references(nested, allowed)
+
+
+def _validate_named_references(
+    value: object,
+    key_name: str,
+    allowed: set[str],
+) -> None:
+    if isinstance(value, dict):
+        for key, nested in value.items():
+            if key == key_name:
+                _validated_reference_ids(nested, allowed)
+            else:
+                _validate_named_references(nested, key_name, allowed)
+    elif isinstance(value, list):
+        for nested in value:
+            _validate_named_references(nested, key_name, allowed)
+
+
+def _validated_reference_ids(value: object, allowed: set[str]) -> list[str]:
+    if (
+        not isinstance(value, list)
+        or any(not isinstance(item, str) or not item for item in value)
+        or len(value) != len(set(value))
+    ):
+        raise ValueError("response reference ids are invalid")
+    if not set(value).issubset(allowed):
+        raise ValueError("response references an unknown evidence fact or object")
+    return value
+
+
+def _unique_object_ids(items: list[object], key: str) -> set[str]:
+    identifiers: list[str] = []
+    for item in items:
+        if not isinstance(item, dict):
+            raise ValueError("response UI object is invalid")
+        identifier = item.get(key)
+        if not isinstance(identifier, str) or not identifier:
+            raise ValueError(f"response {key} is invalid")
+        identifiers.append(identifier)
+    if len(identifiers) != len(set(identifiers)):
+        raise ValueError(f"response contains duplicate {key} values")
+    return set(identifiers)
+
+
+def _validate_focus_actions(
+    actions: list[object],
+    facts_by_id: dict[str, EvidenceFact],
+) -> None:
+    auto_run_count = 0
+    for action in actions:
+        assert isinstance(action, dict)
+        auto_run_count += int(action.get("autoRun") is True)
+        if action.get("type") != "focusComplex":
+            continue
+        fact_ids = _validated_reference_ids(action.get("factIds"), set(facts_by_id))
+        matching = [
+            facts_by_id[fact_id]
+            for fact_id in fact_ids
+            if facts_by_id[fact_id].payload.get("complexId") == action.get("complexId")
+        ]
+        center = action.get("center")
+        if (
+            len(matching) != 1
+            or not isinstance(center, dict)
+            or matching[0].payload.get("parcelId") != action.get("parcelId")
+            or matching[0].payload.get("latitude") != center.get("lat")
+            or matching[0].payload.get("longitude") != center.get("lng")
+        ):
+            raise ValueError("focusComplex action does not match its evidence fact")
+    if auto_run_count > 1:
+        raise ValueError("response contains more than one auto-run action")
 
 
 def _compound_presentation(

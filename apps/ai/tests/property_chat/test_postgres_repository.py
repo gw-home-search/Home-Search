@@ -118,6 +118,19 @@ def test_complex_lookup_escapes_like_wildcards_and_applies_region(
     assert [record.complex_id for record in literal_wildcard] == [2]
     assert [record.complex_id for record in exact] == [1]
     assert exact[0].parcel_id == 101
+    assert exact[0].match_tier == 0
+
+
+def test_property_readiness_requires_a_readable_complex_fact(
+    property_postgres_dsn: str,
+) -> None:
+    repository = PostgresPropertyFactRepository(
+        property_postgres_dsn, expected_database="test", expected_username="test"
+    )
+    try:
+        repository.readiness_probe()
+    finally:
+        repository.close()
 
 
 def test_region_context_resolves_exact_province_and_district_ancestors(

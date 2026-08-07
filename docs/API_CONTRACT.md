@@ -1770,6 +1770,31 @@ Status:
 These endpoints are additive admin operations. Public map, search, detail, and
 trade API URLs and response shapes do not change.
 
+## Search index HTML and sitemap surface
+
+검색엔진과 일반 사용자는 User-Agent 분기 없이 동일한 HTML을 받는다. 이 표면은
+기존 `/api/v1/**` JSON 계약에 추가되는 웹 문서 계약이며 JSON URL과 응답 shape를
+변경하지 않는다.
+
+- `GET /regions/{regionId}`: 지역 landing HTML. 색인 가능하면 `200 index,follow`,
+  유효하지만 콘텐츠가 부족하면 `200 noindex,follow`다.
+- `GET /complexes/{complexId}`: 단지 landing HTML. 존재하지 않거나 확정적으로
+  대체된 단지는 `404 noindex`다.
+- `GET /robots.txt`: `text/plain` 검색 정책과 절대 sitemap URL.
+- `GET /sitemap.xml`: sitemap index.
+- `GET /sitemaps/pages.xml`, `/sitemaps/regions.xml`,
+  `/sitemaps/complexes-NNNN.xml`: 고정·지역·단지 URL 목록. 단지 파일은 최대
+  10,000 URL이며 초기 `PILOT`는 최대 1,000개 단지만 포함한다.
+
+Renderer 또는 property-data 의존성 장애는 빈 SPA `200`으로 숨기지 않고
+`503`, `Retry-After`, `noindex`를 반환한다. 미등록 웹 경로는 실제 `404`다.
+`/my/**`, `/auth/**`, `/api/**`, `/internal/**`는 `noindex,nofollow`, 초기
+`/insights/**`는 `noindex,follow`이며 sitemap에 포함하지 않는다.
+
+Property-data의 `/internal/v1/seo/**` 조회는 renderer 전용이다. Public gateway는
+기존 원칙대로 모든 `/internal/**` 요청을 `404`로 차단하며, 이 내부 조회는
+prediction use case를 호출하지 않고 이미 공개 가능한 정보만 반환한다.
+
 ## later-scope APIs
 
 Keep these out of the current critical path:

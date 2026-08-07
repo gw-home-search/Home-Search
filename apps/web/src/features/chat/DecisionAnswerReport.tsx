@@ -67,10 +67,10 @@ export function DecisionAnswerReport({
         </section>
       ) : null}
       {message.summary?.criteria.find(({ key }) => key === 'representativeSelection') ? (
-        <details className="chatbot-selection-basis">
-          <summary>단지 선택 기준</summary>
+        <section className="chatbot-selection-basis">
+          <h4>선택 근거</h4>
           <p>{message.summary.criteria.find(({ key }) => key === 'representativeSelection')?.value}</p>
-        </details>
+        </section>
       ) : null}
       {report.highlights.length > 0 ? (
         <section className="chatbot-report-highlights">

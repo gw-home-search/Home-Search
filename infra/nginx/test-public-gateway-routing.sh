@@ -14,10 +14,11 @@ network="home-search-public-gateway-test-${suffix}"
 property_upstream="home-search-property-upstream-${suffix}"
 user_upstream="home-search-user-upstream-${suffix}"
 chatbot_upstream="home-search-chatbot-upstream-${suffix}"
+seo_upstream="home-search-seo-upstream-${suffix}"
 gateway="home-search-public-gateway-${suffix}"
 
 cleanup() {
-    docker stop --time 1 "$gateway" "$property_upstream" "$user_upstream" "$chatbot_upstream" >/dev/null 2>&1 || true
+    docker stop --time 1 "$gateway" "$property_upstream" "$user_upstream" "$chatbot_upstream" "$seo_upstream" >/dev/null 2>&1 || true
     docker network remove "$network" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -35,6 +36,10 @@ docker run --rm --detach --name "$chatbot_upstream" \
     --network "$network" --network-alias chat-bff \
     --volume "$script_dir/chatbot-public-test-upstream.conf:/etc/nginx/conf.d/default.conf:ro" \
     "$nginx_image" >/dev/null
+docker run --rm --detach --name "$seo_upstream" \
+    --network "$network" --network-alias seo-renderer \
+    --volume "$script_dir/public-gateway-seo-test-upstream.conf:/etc/nginx/conf.d/default.conf:ro" \
+    "$nginx_image" >/dev/null
 docker run --rm --detach --name "$gateway" \
     --network "$network" \
     --publish 127.0.0.1::8080 \
@@ -44,7 +49,10 @@ docker run --rm --detach --name "$gateway" \
     --env USER_API_PORT=8080 \
     --env CHAT_BFF_HOST=chat-bff \
     --env CHAT_BFF_PORT=8083 \
+    --env SEO_RENDERER_HOST=seo-renderer \
+    --env SEO_RENDERER_PORT=3000 \
     --volume "$script_dir/public-gateway.conf.template:/etc/nginx/templates/default.conf.template:ro" \
+    --volume "$script_dir/../../apps/web/public/google-analytics-consent.js:/usr/share/nginx/html/google-analytics-consent.js:ro" \
     "$nginx_image" >/dev/null
 
 host_port="$(docker inspect --format='{{(index (index .NetworkSettings.Ports "8080/tcp") 0).HostPort}}' "$gateway")"
@@ -118,6 +126,28 @@ done
 assert_route /api/v1/chatbot/query 200 chat-bff-json "Bearer route-test"
 assert_route /api/v1/chatbot/query/stream 200 chat-bff-sse "Bearer route-test"
 
+robots_content_type="$(curl --silent --show-error --head "${base_url}/robots.txt" | tr -d '\r' | awk -F': ' 'tolower($1)=="content-type"{print tolower($2)}')"
+[[ "${robots_content_type}" == text/plain* ]] || { echo "상태: Fail - robots.txt Content-Type이 text/plain이 아닙니다." >&2; exit 1; }
+assert_route /sitemap.xml 200
+assert_route /sitemaps/pages.xml 200
+assert_route /complexes/501 200
+assert_route /regions/1 200
+assert_route /privacy 200
+assert_route /terms 200
+assert_route /about 200
+analytics_headers="$(curl --silent --show-error --head "${base_url}/google-analytics-consent.js" | tr -d '\r')"
+grep -Fiq 'HTTP/1.1 200' <<<"${analytics_headers}"
+grep -Eiq '^Content-Type: (application|text)/javascript' <<<"${analytics_headers}"
+grep -Fiq 'Cache-Control: no-cache' <<<"${analytics_headers}"
+assert_route /complexes/999 404
+curl --silent --show-error --head "${base_url}/complexes/invalid" | tr -d '\r' | grep -Fiq 'X-Robots-Tag: noindex, nofollow'
+ordinary_body="$(curl --silent --show-error "${base_url}/complexes/501")"
+bot_body="$(curl --silent --show-error --user-agent 'Googlebot' "${base_url}/complexes/501")"
+[[ "${ordinary_body}" == "${bot_body}" ]] || { echo "상태: Fail - User-Agent별 SEO 본문이 다릅니다." >&2; exit 1; }
+curl --silent --show-error --head "${base_url}/my/favorites" | tr -d '\r' | grep -Fiq 'X-Robots-Tag: noindex, nofollow'
+assert_route /not-registered 404
+curl --silent --show-error --head "${base_url}/not-registered" | tr -d '\r' | grep -Fiq 'X-Robots-Tag: noindex, nofollow'
+
 oauth_headers="$(curl --silent --show-error --max-time 5 \
     --header 'Host: staging.homesearch.world' \
     --header 'X-Forwarded-Proto: https' \
@@ -156,4 +186,15 @@ for path in \
     assert_route "$path" 404
 done
 
-echo "상태: Pass - OAuth 외부 origin, insight exact route ownership, 인증 전달, namespace fallback 차단을 확인했습니다."
+docker stop --time 1 "$seo_upstream" >/dev/null
+seo_failure_headers="$(mktemp)"
+seo_failure_status="$(curl --silent --show-error --max-time 10 --dump-header "$seo_failure_headers" --output /dev/null --write-out '%{http_code}' "${base_url}/complexes/501")"
+[[ "$seo_failure_status" == "503" ]] || { echo "상태: Fail - renderer 장애가 503으로 변환되지 않았습니다." >&2; exit 1; }
+grep -Fiq 'Retry-After: 60' "$seo_failure_headers"
+grep -Fiq 'X-Robots-Tag: noindex, nofollow' "$seo_failure_headers"
+rm -f "$seo_failure_headers"
+
+legal_failure_status="$(curl --silent --show-error --max-time 10 --output /dev/null --write-out '%{http_code}' "${base_url}/privacy")"
+[[ "$legal_failure_status" == "503" ]] || { echo "상태: Fail - 법적 페이지 renderer 장애가 503으로 변환되지 않았습니다." >&2; exit 1; }
+
+echo "상태: Pass - OAuth/API 경계와 SEO 200/404/503, robots, UA 동일성을 확인했습니다."

@@ -21,6 +21,7 @@ from .chat import (
 )
 from .models import ChatbotQueryRequest
 from .operational_metrics import SUPERVISOR_METRICS
+from .readiness import ReadinessChecker, get_readiness_checker
 from .terminal_response import safe_final_response, with_terminal_outcome
 
 
@@ -99,6 +100,18 @@ async def unexpected_generation_error(request: Request, _exception: Exception) -
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/ready")
+async def ready(
+    checker: ReadinessChecker = Depends(get_readiness_checker),
+) -> JSONResponse:
+    result = await checker.check()
+    status_code = 503 if result.status == "NOT_READY" else 200
+    return JSONResponse(
+        status_code=status_code,
+        content={"status": result.status, "checks": result.checks},
+    )
 
 
 @app.get("/metrics", include_in_schema=False)

@@ -103,6 +103,39 @@ def _property_observation(fact: EvidenceFact) -> str | None:
 
 def _facility_observation(fact: EvidenceFact) -> str | None:
     payload = fact.payload
+    distance = payload.get("distanceMeters")
+    observed_date = payload.get("observedDate")
+    station_name = payload.get("stationName")
+    lines = payload.get("lines")
+    if (
+        isinstance(station_name, str)
+        and isinstance(lines, list)
+        and lines
+        and all(isinstance(line, str) and line for line in lines)
+        and isinstance(distance, int | float)
+    ):
+        station_label = station_name if station_name.endswith("역") else f"{station_name}역"
+        date_text = (
+            f" · 기준일 {observed_date}" if isinstance(observed_date, str) else ""
+        )
+        return (
+            f"{station_label}({'·'.join(lines)}) 직선거리 {distance:g}m"
+            f"{date_text}"
+        )
+
+    academy_name = payload.get("facilityName")
+    address = payload.get("address")
+    if (
+        fact.source_id == "place.sbiz-academy"
+        and isinstance(academy_name, str)
+        and isinstance(distance, int | float)
+    ):
+        address_text = f"({address})" if isinstance(address, str) and address else ""
+        date_text = (
+            f" · 기준일 {observed_date}" if isinstance(observed_date, str) else ""
+        )
+        return f"{academy_name}{address_text} 직선거리 {distance:g}m{date_text}"
+
     name = next(
         (
             payload.get(key)
@@ -111,7 +144,6 @@ def _facility_observation(fact: EvidenceFact) -> str | None:
         ),
         None,
     )
-    distance = payload.get("distanceMeters")
     if isinstance(name, str) and isinstance(distance, int | float):
         return f"{name} 직선거리 {distance:g}m"
 

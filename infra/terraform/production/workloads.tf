@@ -132,8 +132,8 @@ locals {
       image = "ai", port = 8000, sg = "ai", cpu = 1024, memory = 2048
       environment = [
         { name = "HOME_AI_JWT_PUBLIC_KEY_PATHS", value = "{\"production-1\":\"/run/keys/public.pem\"}" },
-        { name = "HOME_AI_OPENAI_TIMEOUT_SECONDS", value = "30" },
-        { name = "HOME_AI_QUERY_TIMEOUT_SECONDS", value = "60" },
+        { name = "HOME_AI_OPENAI_TIMEOUT_SECONDS", value = "8" },
+        { name = "HOME_AI_QUERY_TIMEOUT_SECONDS", value = "45" },
         { name = "HOME_AI_DEPLOYMENT_TIER", value = "production" },
         { name = "HOME_AI_SUPERVISOR_GRAPH_MODE", value = "active" },
         { name = "HOME_AI_SUPERVISOR_GRAPH_CANARY_PERCENT", value = "100" },
@@ -160,7 +160,7 @@ locals {
         { name = "SERVER_SHUTDOWN", value = "graceful" },
         { name = "SPRING_LIFECYCLE_TIMEOUT_PER_SHUTDOWN_PHASE", value = "90s" },
         { name = "HOME_CHAT_BFF_AI_BASE_URL", value = "http://ai.${local.namespace_name}:8000" },
-        { name = "HOME_CHAT_BFF_AI_TIMEOUT", value = "60s" },
+        { name = "HOME_CHAT_BFF_AI_TIMEOUT", value = "70s" },
         { name = "HOME_CHAT_BFF_JWT_PUBLIC_KEY_PATHS", value = "production-1=/run/keys/public.pem" },
         { name = "SPRING_DATA_REDIS_HOST", value = aws_elasticache_replication_group.this.primary_endpoint_address },
         { name = "SPRING_DATA_REDIS_PORT", value = "6379" },
@@ -365,7 +365,7 @@ resource "aws_ecs_task_definition" "service" {
         length(setsubtract(local.image_names, toset(keys(var.image_uris)))) == 0
         && length(setsubtract(toset(keys(var.image_uris)), local.image_names)) == 0
       )
-      error_message = "image_uris keys must exactly match the 17-image release manifest."
+      error_message = "image_uris keys must exactly match the 18-image release manifest."
     }
   }
 }

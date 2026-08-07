@@ -211,6 +211,9 @@ resource "aws_iam_role_policy" "task_execution" {
           try(length(local.application_key_parameters[each.key]) > 0, false) ? [
             "arn:aws:ecr:${var.aws_region}:${data.aws_caller_identity.current.account_id}:repository/home-search/ops-bootstrap",
           ] : [],
+          each.key == "public-gateway" ? [
+            "arn:aws:ecr:${var.aws_region}:${data.aws_caller_identity.current.account_id}:repository/home-search/seo-renderer",
+          ] : [],
         ))
       },
       {

@@ -26,7 +26,7 @@ locals {
     "property-api", "property-batch", "property-flyway",
     "admin-api", "admin-migration", "admin-ops",
     "user-api", "user-insight-worker", "user-flyway", "source-data-migration",
-    "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml", "ai", "chat-bff",
+    "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml", "ai", "chat-bff", "seo-renderer",
   ])
   service_log_names = toset([
     "property-api", "property-batch", "property-event-relay", "property-event-maintenance", "property-flyway",

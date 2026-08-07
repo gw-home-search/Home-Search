@@ -10,3 +10,78 @@
 @import "../features/chat/chat-artifacts.css";
 @import "../features/my-page/my-page.css";
 @import "./styles/responsive.css";
+
+.public-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px 16px;
+  padding: 24px;
+  color: var(--hs-map-color-muted);
+  font-size: 12px;
+}
+
+.public-footer a,
+.public-footer button {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.public-footer--compact {
+  position: fixed;
+  right: 12px;
+  bottom: 8px;
+  z-index: var(--hs-map-z-appbar);
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--hs-map-color-surface) 92%, transparent);
+}
+
+.app-shell[data-chat-open="true"] .public-footer--compact {
+  display: none;
+}
+
+.legal-page {
+  min-height: 100vh;
+  overflow: auto;
+  background: var(--hs-map-color-surface);
+  color: var(--hs-map-color-ink);
+}
+
+.legal-header,
+.legal-document {
+  width: min(760px, calc(100% - 40px));
+  margin: 0 auto;
+}
+
+.legal-header { padding: 24px 0 8px; font-weight: 800; }
+.legal-header a { color: inherit; text-decoration: none; }
+.legal-document { padding: 32px 0; line-height: 1.75; }
+.legal-document h1 { margin: 0 0 32px; font-size: 32px; }
+.legal-document h2 { margin: 32px 0 8px; font-size: 20px; }
+.legal-document a { color: var(--hs-map-color-action); }
+
+.analytics-consent {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 10000;
+  width: min(440px, calc(100% - 40px));
+  padding: 18px;
+  border: 1px solid var(--hs-map-color-header-line);
+  border-radius: 12px;
+  background: var(--hs-map-color-surface);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 20%);
+  color: var(--hs-map-color-ink);
+}
+
+.analytics-consent p { margin: 0 0 14px; line-height: 1.5; }
+.analytics-consent > div { display: flex; justify-content: flex-end; gap: 8px; }
+.analytics-consent button { padding: 8px 14px; border: 1px solid currentColor; border-radius: 8px; background: transparent; color: inherit; cursor: pointer; }
+.analytics-consent button[data-consent="granted"] { background: var(--hs-map-color-action); color: white; }

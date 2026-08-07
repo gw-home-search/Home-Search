@@ -12,11 +12,11 @@ on:
         required: true
         type: string
       property_migration_target:
-        description: "Exact Property Flyway target; only 40 is approved"
+        description: "Exact Property Flyway target; only 41 is approved"
         required: true
-        default: "40"
+        default: "41"
         type: choice
-        options: ["40"]
+        options: ["41"]
       enable_market_news_public:
         description: "Enable the compatible public market-news API"
         required: true
@@ -172,20 +172,20 @@ jobs:
           cp "${manifest}" deployment-evidence/release-manifest.json
           jq -e --arg tag "${RELEASE_TAG}" --arg sha "${RELEASE_SHA}" '
             .format_version == 2 and .tag == $tag and .commit_sha == $sha
-            and (.images | length) == 17 and (.platform_images | length) == 2
+            and (.images | length) == 18 and (.platform_images | length) == 2
             and .build_flags.market_news_enabled == true
             and (.sbom_set_sha256 | test("^[0-9a-f]{64}$"))
             and (.vulnerability_set_sha256 | test("^[0-9a-f]{64}$"))
             and .vulnerability_critical_gate_passed and .vulnerability_policy_gate_passed
           ' deployment-evidence/release-manifest.json >/dev/null
-          [[ "$(find release-evidence -type f -name '*.spdx.json' | wc -l | tr -d ' ')" == 19 ]]
+          [[ "$(find release-evidence -type f -name '*.spdx.json' | wc -l | tr -d ' ')" == 20 ]]
           ! LC_ALL=C grep -R -a -Fq 'staging.homesearch.world' release-evidence
           latest_release_tag="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-version:refname | head -1)"
           jq -n --arg tag "${RELEASE_TAG}" --arg sha "${RELEASE_SHA}" --arg created_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --arg latest_release_tag "${latest_release_tag}" \
             '{status:"pass",release_tag:$tag,commit_sha:$sha,created_at:$created_at,checks:{
               origin_main_sha:$sha,latest_release_tag:$latest_release_tag,candidate_release_tag:$tag,
-              branch:"main",search_v40_present:true,protected_path_approval:"current-task-only"},redactions_applied:true}' \
+              branch:"main",search_v41_present:true,protected_path_approval:"current-task-only"},redactions_applied:true}' \
             >deployment-evidence/source-baseline.json
           baseline=''
           baseline_source=live-recovery
@@ -361,6 +361,8 @@ jobs:
           migration_uri=''; migration_sha=''
           live_scheduled_backup_task_definition="$(aws scheduler get-schedule --name home-search-budget-production-logical-backup --group-name home-search-budget-production-backup --query 'Target.EcsParameters.TaskDefinitionArn' --output text)"
           [[ "${live_scheduled_backup_task_definition}" =~ ^arn:aws:ecs:ap-northeast-2:[0-9]{12}:task-definition/home-search-budget-production-scheduled-backup:[0-9]+$ ]]
+          live_rtms_refresh_task_definition="$(aws scheduler get-schedule --name home-search-budget-production-rtms-daily-refresh --group-name home-search-budget-production-data-refresh --query 'Target.EcsParameters.TaskDefinitionArn' --output text)"
+          [[ "${live_rtms_refresh_task_definition}" =~ ^arn:aws:ecs:ap-northeast-2:[0-9]{12}:task-definition/home-search-budget-production-rtms-daily-refresh:[0-9]+$ ]]
           live_data_import_task_definition="$(terraform -chdir=infra/terraform/budget-production output -json one_shot_task_definition_arns | jq -er '.["data-import-reconcile"]')"
           live_data_import_definition="$(aws ecs describe-task-definition --task-definition "${live_data_import_task_definition}" --include TAGS --output json)"
           live_data_import_image="$(jq -er '.taskDefinition.containerDefinitions[0].image' <<<"${live_data_import_definition}")"
@@ -383,6 +385,7 @@ jobs:
             --argjson task_definitions "${live_application_task_definition_arns}" \
             --argjson desired_counts "${live_application_desired_counts}" \
             --arg scheduled_backup_task_definition "${live_scheduled_backup_task_definition}" \
+            --arg rtms_refresh_task_definition "${live_rtms_refresh_task_definition}" \
             --arg data_import_image "${live_data_import_image}" \
             --arg data_import_release_tag "${live_data_import_release_tag}" \
             --arg ai_mode "${ai_supervisor_graph_mode}" \
@@ -393,6 +396,7 @@ jobs:
             | .application_service_task_definition_arns=$task_definitions
             | .application_service_desired_counts=$desired_counts
             | .scheduled_backup_task_definition_arn=$scheduled_backup_task_definition
+            | .rtms_refresh_task_definition_arn=$rtms_refresh_task_definition
             | .data_import_preserved_image_uri=$data_import_image
             | .data_import_preserved_release_tag=$data_import_release_tag
             | .ai_supervisor_graph_mode=$ai_mode
@@ -631,7 +635,7 @@ jobs:
             '{status:"pass",release_tag:$tag,commit_sha:$sha,created_at:$created_at,model_version:$version,
               manifest_sha256:$manifest_sha256,checks:{allowlist_exact:true,checksums_match:true,immutable_upload:true},redactions_applied:true}' \
             >deployment-evidence/model-artifact.json
-      - name: Require V39 or V40 live history before target V40
+      - name: Require V39, V40, or V41 live history before target V41
         env: { RELEASE_TAG: "${{ inputs.release_tag }}" }
         run: |
           set -Eeuo pipefail
@@ -649,17 +653,17 @@ jobs:
           PROPERTY_MIGRATION_TARGET: "${{ inputs.property_migration_target }}"
         run: |
           set -Eeuo pipefail
-          [[ "${PROPERTY_MIGRATION_TARGET}" == 40 ]]
+          [[ "${PROPERTY_MIGRATION_TARGET}" == 41 ]]
           cluster="$(jq -er '.ecs_cluster_name.value' deployment-evidence/rollout-outputs.json)"
           tasks="$(jq -ec '.one_shot_task_definition_arns.value' deployment-evidence/rollout-outputs.json)"
           flyway_task="$(jq -er '.["property-flyway"]' <<<"${tasks}")"
           backup_task="$(jq -er '.["scheduled-backup"]' <<<"${tasks}")"
-          previous_version="$(jq -er '.previous_version | select(. == 39 or . == 40)' deployment-evidence/migration-before.raw.json)"
-          if [[ "${previous_version}" == 39 ]]; then
+          previous_version="$(jq -er '.previous_version | select(. == 39 or . == 40 or . == 41)' deployment-evidence/migration-before.raw.json)"
+          if [[ "${previous_version}" != 41 ]]; then
             infra/deploy/run-budget-ecs-task.sh "${cluster}" "${flyway_task}" "budget-${GITHUB_RUN_ID}"
           fi
           infra/deploy/run-budget-ecs-task.sh "${cluster}" "${flyway_task}" "budget-${GITHUB_RUN_ID}" \
-            '["-target=40","validate"]'
+            '["-target=41","validate"]'
           infra/deploy/run-budget-ecs-task.sh "${cluster}" "${backup_task}" "budget-${GITHUB_RUN_ID}" \
             "$(jq -cn --arg tag "${RELEASE_TAG}" '["property-search-audit","after",$tag]')"
           bucket="$(jq -er '.backup_bucket_name.value' deployment-evidence/rollout-outputs.json)"
@@ -667,7 +671,7 @@ jobs:
             aws s3 cp "s3://${bucket}/logical/rollout-audit/${RELEASE_TAG}/${phase}.json" \
               "deployment-evidence/migration-${phase}.raw.json" --only-show-errors
             jq --arg phase "${phase}" --argjson previous_version "${previous_version}" \
-              '{status:"pass",phase:$phase,previous_version:$previous_version,target_version:40,
+              '{status:"pass",phase:$phase,previous_version:$previous_version,target_version:41,
                 failed:0,missing:0,out_of_order:0,data:.data}' \
               "deployment-evidence/migration-${phase}.raw.json" >"deployment-evidence/migration-${phase}.json"
           done

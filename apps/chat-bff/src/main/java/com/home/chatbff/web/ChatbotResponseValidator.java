@@ -1,6 +1,7 @@
 package com.home.chatbff.web;
 
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
@@ -13,6 +14,7 @@ import tools.jackson.databind.JsonNode;
 
 @Component
 final class ChatbotResponseValidator {
+    private static final int MAX_RESPONSE_BYTES = 128 * 1024;
     private static final Set<String> LEGACY_STATUSES = Set.of("success", "partial_success", "failed");
     private static final Set<String> EVIDENCE_STATUSES = Set.of("supported", "partial", "unavailable");
     private static final Set<String> EVIDENCE_GRADES = Set.of("A", "B", "C", "D");
@@ -24,7 +26,9 @@ final class ChatbotResponseValidator {
             "UNAVAILABLE", Set.of("INSUFFICIENT_EVIDENCE", "OUT_OF_SCOPE", "TEMPORARY_FAILURE"));
 
     boolean isValid(JsonNode response) {
-        if (response == null || !response.isObject()) return false;
+        if (response == null
+                || !response.isObject()
+                || response.toString().getBytes(StandardCharsets.UTF_8).length > MAX_RESPONSE_BYTES) return false;
         JsonNode answer = response.get("answer");
         if (answer == null
                 || !answer.isTextual()
@@ -51,7 +55,8 @@ final class ChatbotResponseValidator {
                 || limitations == null
                 || !limitations.isArray()
                 || !validTextArray(limitations, 50, 2_000, false)
-                || !validEvidenceSummary(evidence, citations)) return false;
+                || !validEvidenceSummary(evidence, citations)
+                || !validUiReferences(response, citedFactIds(citations))) return false;
         JsonNode outcome = response.get("terminalOutcome");
         if (outcome == null) return true;
         if (!outcome.isObject()
@@ -85,10 +90,7 @@ final class ChatbotResponseValidator {
     }
 
     private boolean validEvidenceSummary(JsonNode evidence, JsonNode citations) {
-        Set<String> factIds = new HashSet<>();
-        for (JsonNode citation : citations) {
-            for (JsonNode factId : citation.path("factIds")) factIds.add(factId.asText());
-        }
+        Set<String> factIds = citedFactIds(citations);
         return evidence != null
                 && evidence.isObject()
                 && EVIDENCE_STATUSES.contains(evidence.path("status").asText(""))
@@ -99,6 +101,82 @@ final class ChatbotResponseValidator {
                 && evidence.path("citationCount").isIntegralNumber()
                 && evidence.path("citationCount").canConvertToInt()
                 && evidence.path("citationCount").asInt(-1) == citations.size();
+    }
+
+    private Set<String> citedFactIds(JsonNode citations) {
+        Set<String> factIds = new HashSet<>();
+        for (JsonNode citation : citations) {
+            for (JsonNode factId : citation.path("factIds")) factIds.add(factId.asText());
+        }
+        return factIds;
+    }
+
+    private boolean validUiReferences(JsonNode response, Set<String> citedFactIds) {
+        JsonNode artifacts = response.get("uiArtifacts");
+        JsonNode actions = response.get("uiActions");
+        JsonNode fragments = response.get("fragments");
+        Set<String> artifactIds = new HashSet<>();
+        Set<String> actionIds = new HashSet<>();
+        if (artifacts != null) {
+            if (!artifacts.isArray() || artifacts.size() > 100) return false;
+            for (JsonNode artifact : artifacts) {
+                if (!artifact.isObject() || !validIdentifier(artifact.get("artifactId"))) return false;
+                if (!artifactIds.add(artifact.path("artifactId").asText())) return false;
+                if (!referencedFactsAreCited(artifact, citedFactIds)) return false;
+            }
+        }
+        int autoRunCount = 0;
+        if (actions != null) {
+            if (!actions.isArray() || actions.size() > 50) return false;
+            for (JsonNode action : actions) {
+                if (!action.isObject() || !validIdentifier(action.get("actionId"))) return false;
+                if (!actionIds.add(action.path("actionId").asText())) return false;
+                if (!referencedFactsAreCited(action, citedFactIds)
+                        || !validIdentifierArray(action.get("factIds"), 1, 100)) return false;
+                JsonNode autoRun = action.get("autoRun");
+                if (autoRun != null && !autoRun.isBoolean()) return false;
+                if (autoRun != null && autoRun.asBoolean()) autoRunCount++;
+            }
+        }
+        if (autoRunCount > 1) return false;
+        if (fragments == null) return true;
+        if (!fragments.isArray() || fragments.size() > 20) return false;
+        for (JsonNode fragment : fragments) {
+            if (!fragment.isObject()
+                    || !referencesExist(fragment.get("artifactIds"), artifactIds)
+                    || !referencesExist(fragment.get("actionIds"), actionIds)) return false;
+        }
+        return true;
+    }
+
+    private boolean referencedFactsAreCited(JsonNode node, Set<String> citedFactIds) {
+        if (node.isObject()) {
+            var fields = node.properties();
+            for (var field : fields) {
+                if (field.getKey().equals("factIds")) {
+                    JsonNode values = field.getValue();
+                    if (!validIdentifierArray(values, 1, 100)) return false;
+                    for (JsonNode value : values) {
+                        if (!citedFactIds.contains(value.asText())) return false;
+                    }
+                } else if (!referencedFactsAreCited(field.getValue(), citedFactIds)) {
+                    return false;
+                }
+            }
+        } else if (node.isArray()) {
+            for (JsonNode child : node) {
+                if (!referencedFactsAreCited(child, citedFactIds)) return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean referencesExist(JsonNode values, Set<String> availableIds) {
+        if (!validIdentifierArray(values, 0, 100)) return false;
+        for (JsonNode value : values) {
+            if (!availableIds.contains(value.asText())) return false;
+        }
+        return true;
     }
 
     private boolean validIdentifierArray(JsonNode value, int minimum, int maximum) {

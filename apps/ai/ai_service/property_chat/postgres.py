@@ -70,6 +70,14 @@ class PostgresPropertyFactRepository:
     def close(self) -> None:
         self._pool.close()
 
+    def readiness_probe(self) -> None:
+        with self._pool.connection(timeout=1.5) as connection:
+            row = connection.execute(
+                "SELECT 1 FROM ai_read.complex_fact LIMIT 1"
+            ).fetchone()
+        if row is None:
+            raise RuntimeError("property readiness data is unavailable")
+
     def find_complex_by_id(self, complex_id: int) -> ComplexRecord | None:
         if isinstance(complex_id, bool) or complex_id <= 0:
             raise ValueError("complex id must be positive")
@@ -95,7 +103,8 @@ class PostgresPropertyFactRepository:
         if not 1 <= limit <= 6:
             raise ValueError("complex lookup limit is outside the supported range")
         literal_name_pattern = f"%{_escape_like(normalized_name)}%"
-        compact_name_pattern = f"%{_escape_like(re.sub(r'\s+', '', normalized_name))}%"
+        compact_name = re.sub(r"\s+", "", normalized_name)
+        compact_name_pattern = f"%{_escape_like(compact_name)}%"
         region_pattern = (
             f"%{_escape_like(region_name.strip())}%" if region_name is not None else None
         )
@@ -104,7 +113,17 @@ class PostgresPropertyFactRepository:
                 """
                 SELECT complex_id, parcel_id, display_name, region_code, region_name, address,
                        latitude, longitude, marker_safe, data_updated_at,
-                       unit_count, use_date
+                       unit_count, use_date,
+                       CASE
+                           WHEN lower(display_name) = lower(%s)
+                             OR lower(name) = lower(%s)
+                             OR lower(trade_name) = lower(%s) THEN 0
+                           WHEN regexp_replace(lower(display_name), '[[:space:]]+', '', 'g') = lower(%s)
+                             OR regexp_replace(lower(name), '[[:space:]]+', '', 'g') = lower(%s)
+                             OR regexp_replace(lower(trade_name), '[[:space:]]+', '', 'g') = lower(%s)
+                             THEN 1
+                           ELSE 3
+                       END AS match_tier
                 FROM ai_read.complex_fact
                 WHERE (
                     display_name ILIKE %s ESCAPE '\\'
@@ -131,6 +150,12 @@ class PostgresPropertyFactRepository:
                 LIMIT %s
                 """,
                 (
+                    normalized_name,
+                    normalized_name,
+                    normalized_name,
+                    compact_name,
+                    compact_name,
+                    compact_name,
                     literal_name_pattern,
                     literal_name_pattern,
                     literal_name_pattern,

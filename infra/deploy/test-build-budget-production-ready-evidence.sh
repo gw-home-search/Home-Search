@@ -9,7 +9,7 @@ trap cleanup EXIT
 evidence="${tmp_dir}/evidence"
 mkdir "${evidence}"
 
-applications=(admin-api admin-gateway admin-migration admin-ops ai backup chat-bff ml ops-bootstrap property-api property-batch property-flyway public-gateway source-data-migration user-api user-flyway user-insight-worker)
+applications=(admin-api admin-gateway admin-migration admin-ops ai backup chat-bff ml ops-bootstrap property-api property-batch property-flyway public-gateway seo-renderer source-data-migration user-api user-flyway user-insight-worker)
 platform=(budget-postgres budget-valkey)
 jq -n --argjson apps "$(printf '%s\n' "${applications[@]}" | jq -Rsc 'split("\n")[:-1]')" --argjson platform "$(printf '%s\n' "${platform[@]}" | jq -Rsc 'split("\n")[:-1]')" '
   def image($name): {digest:("sha256:"+("a"*64))};

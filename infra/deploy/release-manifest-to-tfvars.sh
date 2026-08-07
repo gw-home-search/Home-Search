@@ -22,7 +22,7 @@ output_directory="$(dirname "${output}")"
 images=(
   property-api property-batch property-flyway admin-api admin-migration admin-ops
   user-api user-insight-worker user-flyway source-data-migration public-gateway admin-gateway
-  backup ops-bootstrap ml ai chat-bff
+  backup ops-bootstrap ml ai chat-bff seo-renderer
 )
 expected_images="$(printf '%s\n' "${images[@]}" | jq -Rsc 'split("\n")[:-1] | sort')"
 adot_pattern='^(public[.]ecr[.]aws/aws-observability/aws-otel-collector|[0-9]{12}[.]dkr[.]ecr[.]ap-northeast-2[.]amazonaws[.]com/home-search/aws-otel-collector)@sha256:[0-9a-f]{64}$'
@@ -53,7 +53,7 @@ jq -e --argjson expected "${expected_images}" '
     and $image.uri == (($image.uri | split("/")[0]) + "/" + $image.repository + "@" + $image.digest)
   ] | all)
 ' "${manifest}" >/dev/null || {
-  echo '상태: Fail - release manifest metadata 또는 17-image digest set이 유효하지 않습니다.' >&2
+  echo '상태: Fail - release manifest metadata 또는 18-image digest set이 유효하지 않습니다.' >&2
   exit 1
 }
 

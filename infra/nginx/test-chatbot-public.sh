@@ -10,7 +10,7 @@ chatbot_upstream="home-search-chatbot-bff-upstream-${suffix}"
 gateway="home-search-chatbot-nginx-gateway-${suffix}"
 tmp_dir="$(mktemp -d)"
 
-[[ "$(grep -Fc 'proxy_read_timeout 70s;' "$script_dir/property-chatbot-public.conf")" == "2" ]]
+[[ "$(grep -Fc 'proxy_read_timeout 75s;' "$script_dir/property-chatbot-public.conf")" == "2" ]]
 
 cleanup() {
     docker stop --time 1 "$gateway" "$chatbot_upstream" "$property_upstream" >/dev/null 2>&1 || true

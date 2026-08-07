@@ -24,22 +24,25 @@ describe('지도 action 상태', () => {
   it('선택 단지와 상세 loading 상태를 함께 표시한다', () => {
     const html = selectedDetailMarkup('loading');
 
-    expect(html).toContain('지도에 표시됨 · 상세 여는 중');
-    expect(html).toContain('aria-pressed="true"');
+    expect(html).toContain('지도와 상세 여는 중');
+    expect(html).toContain('role="status"');
+    expect(html).not.toContain('<button');
   });
 
   it('선택 단지와 상세 ready 상태를 함께 표시한다', () => {
     const html = selectedDetailMarkup('ready');
 
-    expect(html).toContain('지도에 표시됨 · 단지 상세 열림');
-    expect(html).toContain('aria-pressed="true"');
+    expect(html).toContain('✓ 지도와 단지 상세에 표시됨');
+    expect(html).toContain('role="status"');
+    expect(html).not.toContain('<button');
   });
 
   it('선택 단지와 상세 error 상태를 함께 표시한다', () => {
     const html = selectedDetailMarkup('error');
 
-    expect(html).toContain('지도에 표시됨 · 상세 다시 시도');
-    expect(html).toContain('aria-pressed="true"');
+    expect(html).toContain('지도에 표시됨');
+    expect(html).toContain('상세 다시 열기');
+    expect(html).toContain('<button');
   });
 
   it('선택 단지와 상세 상태가 없으면 기본 action label을 표시한다', () => {

@@ -617,6 +617,19 @@ class ChatBffHttpContractTest {
 
     private ObjectNode responseWithFocusComplexAction() {
         var response = successfulResponse("대표 단지의 실거래를 확인했습니다.");
+        var citation = objectMapper.createObjectNode();
+        citation.put("citationId", "citation-property-complex-7756");
+        citation.put("sourceId", "property-complex");
+        citation.put("sourceName", "Home Search 단지");
+        citation.putNull("sourceUrl");
+        citation.put("evidenceGrade", "A");
+        citation.put("datasetVersion", "property-current");
+        citation.put("dataAsOf", "2026-08-07");
+        citation.putNull("observedAt");
+        citation.putArray("factIds").add("property-complex-7756");
+        response.withArray("citations").add(citation);
+        response.put("dataAsOf", "2026-08-07");
+        response.withObject("evidenceSummary").put("factCount", 1).put("citationCount", 1);
         var action = objectMapper.createObjectNode();
         action.put("type", "focusComplex");
         action.put("version", 1);

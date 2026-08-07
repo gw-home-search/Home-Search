@@ -9,7 +9,7 @@ evidence="${tmp_dir}/evidence"
 mkdir -p "${evidence}"
 
 images='{}'
-for name in property-api property-batch property-flyway admin-api admin-migration admin-ops user-api user-insight-worker user-flyway source-data-migration public-gateway admin-gateway backup ops-bootstrap ml ai chat-bff; do
+for name in property-api property-batch property-flyway admin-api admin-migration admin-ops user-api user-insight-worker user-flyway source-data-migration public-gateway admin-gateway backup ops-bootstrap ml ai chat-bff seo-renderer; do
   images="$(jq --arg name "${name}" --arg digest "sha256:$(printf 'a%.0s' {1..64})" \
     --arg uri "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home-search/${name}@sha256:$(printf 'a%.0s' {1..64})" \
     '. + {($name):{digest:$digest,uri:$uri}}' <<<"${images}")"

@@ -1,12 +1,12 @@
 import {renderToStaticMarkup} from 'react-dom/server';
-import {SeoLandingContent} from './SeoLandingContent';
+import {renderSeoLandingMarkup} from './seoLandingMarkup';
 import type {SeoPage} from './types';
 import {LegalPage,type LegalPageKind} from '../legal/LegalPage';
 import {GoogleAnalyticsConsent} from '../shared/analytics/GoogleAnalyticsConsent';
 
 const DEFAULT_TEMPLATE='<!doctype html><html lang="ko"><head><meta charset="UTF-8"></head><body><div id="root"></div></body></html>';
 export function renderSeoDocument(page:SeoPage,template=DEFAULT_TEMPLATE):string {
-  const metadata=pageMetadata(page); const content=renderToStaticMarkup(<SeoLandingContent page={page}/>);
+  const metadata=pageMetadata(page); const content=renderSeoLandingMarkup(page);
   const head=[`<title>${escapeHtml(metadata.title)}</title>`,`<meta name="description" content="${escapeHtml(metadata.description)}">`,`<meta name="robots" content="${page.data.indexable?'index,follow':'noindex,follow'}">`,`<link rel="canonical" href="${escapeHtml(metadata.canonical)}">`,'<meta property="og:type" content="website">',`<meta property="og:title" content="${escapeHtml(metadata.title)}">`,`<meta property="og:description" content="${escapeHtml(metadata.description)}">`,`<meta property="og:url" content="${escapeHtml(metadata.canonical)}">`,`<meta property="og:image" content="${escapeHtml(`${page.canonicalOrigin}/home-search-logo.png`)}">`,'<meta name="twitter:card" content="summary_large_image">',`<meta name="twitter:title" content="${escapeHtml(metadata.title)}">`,`<meta name="twitter:description" content="${escapeHtml(metadata.description)}">`,`<meta name="twitter:image" content="${escapeHtml(`${page.canonicalOrigin}/home-search-logo.png`)}">`,`<script type="application/ld+json">${safeJson(structuredData(page,metadata.canonical))}</script>`].join('');
   const cleaned=template
     .replace(/<title>[\s\S]*?<\/title>/iu,'')

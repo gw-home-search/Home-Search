@@ -62,7 +62,8 @@ docker run --rm --detach --name "${admin_upstream}" --network "${network}" \
 docker run --rm --detach --name "${chat_bff_upstream}" --network "${network}" \
   --network-alias chat-bff --volume "${tmp_dir}/chat-bff.conf:/etc/nginx/conf.d/default.conf:ro" nginx:1.27-alpine >/dev/null
 docker run --rm --detach --name "${public_gateway}" --network "${network}" \
-  --publish 127.0.0.1::8080 --env USER_API_PORT=8080 --env CHAT_BFF_PORT=8080 "${public_image}" >/dev/null
+  --publish 127.0.0.1::8080 --env USER_API_PORT=8080 --env CHAT_BFF_PORT=8080 \
+  --env SEO_RENDERER_HOST=property-api --env SEO_RENDERER_PORT=8080 "${public_image}" >/dev/null
 docker run --rm --detach --name "${admin_gateway}" --network "${network}" \
   --publish 127.0.0.1::8080 --env ADMIN_API_PORT=8080 "${admin_image}" >/dev/null
 
@@ -107,7 +108,7 @@ for endpoint in \
 done
 
 curl --silent --fail --dump-header "${tmp_dir}/spa.headers" \
-  "http://127.0.0.1:${public_port}/complex/501" | grep -q '<div id="root"></div>'
+  "http://127.0.0.1:${public_port}/my" | grep -q '<div id="root"></div>'
 grep -Eqi '^Cache-Control: no-cache' "${tmp_dir}/spa.headers"
 
 asset_path="$(docker exec "${public_gateway}" sh -c \

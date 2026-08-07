@@ -40,6 +40,27 @@ describe('SEO renderer 렌더링', () => {
     expect(new Set(ids)).toHaveLength(ids.length);
   });
 
+  it('지역 breadcrumb와 대표 단지의 외부 문자열을 escape한다', () => {
+    const html = renderSeoDocument({
+      kind: 'region',
+      canonicalOrigin: 'https://homesearch.world',
+      data: {
+        regionId: 11,
+        name: '서울<script>alert(1)</script>',
+        indexable: true,
+        indexableComplexCount: 1,
+        breadcrumbs: [{regionId: 11, name: '</a><script>alert(2)</script>'}],
+        representativeComplexes: [{complexId: 501, name: '<img src=x onerror=alert(3)>', address: '서울 & 표본'}],
+      },
+    });
+
+    expect(html).not.toContain('<script>alert');
+    expect(html).not.toContain('<img src=x');
+    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+    expect(html).toContain('&lt;img src=x onerror=alert(3)&gt;');
+    expect(html).toContain('서울 &amp; 표본');
+  });
+
   it('법적 페이지를 실제 HTML과 고유 canonical로 렌더링한다', () => {
     const html = renderLegalDocument('privacy', 'https://homesearch.world');
 

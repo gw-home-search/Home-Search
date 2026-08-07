@@ -152,6 +152,39 @@ public class JdbcComplexSearchReader implements ComplexSearchReader {
 		HAVING count(DISTINCT hit.token_no) = (SELECT token_count FROM query_meta)
 		""";
 
+    private static final String SINGLE_TERM_CONTAINS_CANDIDATES = """
+		SELECT c.id AS complex_id
+		FROM complex c
+		WHERE lower(c.display_name) LIKE :rawPattern ESCAPE chr(92)
+		UNION
+		SELECT c.id AS complex_id
+		FROM complex c
+		WHERE lower(c.name) LIKE :rawPattern ESCAPE chr(92)
+		UNION
+		SELECT c.id AS complex_id
+		FROM complex c
+		WHERE lower(COALESCE(c.trade_name, '')) LIKE :rawPattern ESCAPE chr(92)
+		UNION
+		SELECT c.id AS complex_id
+		FROM complex c
+		WHERE :normalizedQuery <> ''
+		  AND c.search_name LIKE :normalizedPattern ESCAPE chr(92)
+		UNION
+		SELECT alias.complex_id
+		FROM complex_name_alias alias
+		WHERE lower(alias.alias_name) LIKE :rawPattern ESCAPE chr(92)
+		UNION
+		SELECT alias.complex_id
+		FROM complex_name_alias alias
+		WHERE :normalizedQuery <> ''
+		  AND alias.normalized_name LIKE :normalizedPattern ESCAPE chr(92)
+		UNION
+		SELECT c.id AS complex_id
+		FROM parcel address_parcel
+		JOIN complex c ON c.parcel_id = address_parcel.id
+		WHERE lower(COALESCE(address_parcel.address, '')) LIKE :rawPattern ESCAPE chr(92)
+		""";
+
     private static final String TWO_CHARACTER_CONTAINS_CANDIDATES = """
 		WITH query_token AS (
 		    SELECT
@@ -286,17 +319,35 @@ public class JdbcComplexSearchReader implements ComplexSearchReader {
                 switch (stage) {
                     case EXACT -> EXACT_CANDIDATES;
                     case PREFIX -> PREFIX_CANDIDATES;
-                    case CONTAINS ->
-                        terms.isSingleTwoCodePointQuery() ? TWO_CHARACTER_CONTAINS_CANDIDATES : CONTAINS_CANDIDATES;
+                    case CONTAINS -> containsCandidatesFor(terms);
                 };
         String projection = suggestion ? SUGGESTION_PROJECTION : SEARCH_PROJECTION;
         JdbcClient.StatementSpec statement = jdbcClient.sql(projection.formatted(candidates));
         statement = switch (stage) {
             case EXACT ->
                 statement.param("lowerQuery", terms.lowerQuery()).param("normalizedQuery", terms.normalizedQuery());
-            case PREFIX, CONTAINS -> statement.param("query", terms.query());
+            case PREFIX -> statement.param("query", terms.query());
+            case CONTAINS -> {
+                if (terms.isSingleTwoCodePointQuery()) {
+                    yield statement.param("query", terms.query());
+                }
+                if (terms.isSingleTermQuery()) {
+                    yield statement
+                            .param("rawPattern", terms.rawContainsPattern())
+                            .param("normalizedPattern", terms.normalizedContainsPattern())
+                            .param("normalizedQuery", terms.normalizedQuery());
+                }
+                yield statement.param("query", terms.query());
+            }
         };
         return statement.param("limit", limit);
+    }
+
+    static String containsCandidatesFor(PropertySearchTerms terms) {
+        if (terms.isSingleTwoCodePointQuery()) {
+            return TWO_CHARACTER_CONTAINS_CANDIDATES;
+        }
+        return terms.isSingleTermQuery() ? SINGLE_TERM_CONTAINS_CANDIDATES : CONTAINS_CANDIDATES;
     }
 
     private SearchComplexResult mapSearchComplex(ResultSet resultSet, int rowNumber) throws SQLException {

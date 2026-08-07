@@ -79,7 +79,18 @@ release p95 근거로 승격하지 않는다. production snapshot에서 클래�
   Node.js `22.23.2`를 `CVE-2026-58043` High로 오탐해 중단됐다. Node.js 공식
   advisory는 `22.23.2`를 해당 취약점의 수정 release로 명시한다.
 - issue `#361`에 근거와 owner를 기록하고 `2026-08-14` 만료형 예외를 등록했다.
-  20개 repository에서 충돌이 없는 `v1.0.68`을 새 commit에 생성한다.
+  20개 repository에서 충돌이 없는 `v1.0.68`을 새 commit에 생성했다.
+- `v1.0.68` release workflow `31151452925`는 image 20개, SBOM, 취약점
+  policy gate와 release manifest 생성을 모두 통과했다.
+- production rollout workflow `31152843357`은 배포 전 baseline에서
+  `/api/v1/search/complexes?query=마포래미안푸르지오`가 기존
+  `QueryTimeoutException`으로 HTTP 500을 반환해 중단됐다. plan·preflight 단계에서
+  차단되어 service나 DB에는 변경이 적용되지 않았다.
+- 긴 단일 검색어의 contains 후보 SQL은 token relation에서 만든 pattern 대신 direct
+  bound pattern을 사용하도록 수정한다. 복합 검색어 AND 의미, 2글자 검색 제한,
+  literal wildcard escaping은 유지하며 timeout 값과 공개 response shape는 바꾸지 않는다.
+- release manifest의 20개 repository에서 충돌이 없음을 확인한 `v1.0.69`를 수정
+  commit의 release 후보로 사용한다.
 
 ## 보안 영향
 

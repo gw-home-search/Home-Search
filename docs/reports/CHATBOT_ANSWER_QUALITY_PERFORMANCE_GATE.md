@@ -74,11 +74,19 @@ release p95 근거로 승격하지 않는다. production snapshot에서 클래�
 - 사전검사에서 `home-search/public-gateway:1.0.65`와 `:1.0.66`도 이미 존재함을
   확인했다. 두 tag 역시 덮어쓰거나 삭제하지 않는다.
 - 20개 release repository에서 충돌이 없음을 확인한 `v1.0.67`을 새 commit에
-  생성해 release pipeline을 다시 실행한다.
+  생성해 release pipeline을 다시 실행했다.
+- `v1.0.67` workflow `31148753095`는 image 게시와 manifest 생성 후 Grype가
+  Node.js `22.23.2`를 `CVE-2026-58043` High로 오탐해 중단됐다. Node.js 공식
+  advisory는 `22.23.2`를 해당 취약점의 수정 release로 명시한다.
+- issue `#361`에 근거와 owner를 기록하고 `2026-08-14` 만료형 예외를 등록했다.
+  20개 repository에서 충돌이 없는 `v1.0.68`을 새 commit에 생성한다.
 
 ## 보안 영향
 
-security-audit: 지적사항 = none
+security-audit: 지적사항 = listed
+
+- `CVE-2026-58043`은 fixed release `22.23.2`에 대한 scanner false positive로
+  issue `#361`과 `2026-08-14` 만료 조건 아래 한시적으로 승인했다.
 
 질문 원문, 답변, prompt, SQL, provider 응답, token, cookie, DSN을 metric label이나
 terminal log에 추가하지 않는다. BFF는 전체 응답 128KiB와 auto-run action 1개,

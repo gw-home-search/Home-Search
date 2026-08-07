@@ -94,6 +94,44 @@ public class JdbcComplexSearchReader implements ComplexSearchReader {
 		HAVING count(DISTINCT hit.token_no) = (SELECT token_count FROM query_meta)
 		""";
 
+    private static final String SINGLE_TERM_PREFIX_CANDIDATES = """
+		SELECT c.id AS complex_id
+		FROM complex c
+		WHERE lower(c.display_name) LIKE :rawPrefix ESCAPE chr(92)
+		UNION
+		SELECT c.id AS complex_id
+		FROM complex c
+		WHERE lower(c.name) LIKE :rawPrefix ESCAPE chr(92)
+		UNION
+		SELECT c.id AS complex_id
+		FROM complex c
+		WHERE lower(c.trade_name) LIKE :rawPrefix ESCAPE chr(92)
+		UNION
+		SELECT c.id AS complex_id
+		FROM complex c
+		WHERE :normalizedQuery <> ''
+		  AND c.search_name LIKE :normalizedPrefix ESCAPE chr(92)
+		UNION
+		SELECT alias.complex_id
+		FROM complex_name_alias alias
+		WHERE lower(alias.alias_name) LIKE :rawPrefix ESCAPE chr(92)
+		UNION
+		SELECT alias.complex_id
+		FROM complex_name_alias alias
+		WHERE :normalizedQuery <> ''
+		  AND alias.normalized_name LIKE :normalizedPrefix ESCAPE chr(92)
+		UNION
+		SELECT c.id AS complex_id
+		FROM parcel address_parcel
+		JOIN complex c ON c.parcel_id = address_parcel.id
+		WHERE (tsvector_to_array(to_tsvector('simple', :lowerQuery)))[1] IS NOT NULL
+		  AND to_tsvector('simple', lower(COALESCE(address_parcel.address, '')))
+		      @@ to_tsquery(
+		          'simple',
+		          quote_literal((tsvector_to_array(to_tsvector('simple', :lowerQuery)))[1]) || ':*'
+		      )
+		""";
+
     private static final String CONTAINS_CANDIDATES = """
 		WITH query_tokens AS (
 		    SELECT
@@ -318,7 +356,7 @@ public class JdbcComplexSearchReader implements ComplexSearchReader {
         String candidates =
                 switch (stage) {
                     case EXACT -> EXACT_CANDIDATES;
-                    case PREFIX -> PREFIX_CANDIDATES;
+                    case PREFIX -> prefixCandidatesFor(terms);
                     case CONTAINS -> containsCandidatesFor(terms);
                 };
         String projection = suggestion ? SUGGESTION_PROJECTION : SEARCH_PROJECTION;
@@ -326,7 +364,16 @@ public class JdbcComplexSearchReader implements ComplexSearchReader {
         statement = switch (stage) {
             case EXACT ->
                 statement.param("lowerQuery", terms.lowerQuery()).param("normalizedQuery", terms.normalizedQuery());
-            case PREFIX -> statement.param("query", terms.query());
+            case PREFIX -> {
+                if (terms.isSingleTermQuery()) {
+                    yield statement
+                            .param("rawPrefix", terms.rawPrefixPattern())
+                            .param("normalizedPrefix", terms.normalizedPrefixPattern())
+                            .param("normalizedQuery", terms.normalizedQuery())
+                            .param("lowerQuery", terms.lowerQuery());
+                }
+                yield statement.param("query", terms.query());
+            }
             case CONTAINS -> {
                 if (terms.isSingleTwoCodePointQuery()) {
                     yield statement.param("query", terms.query());
@@ -348,6 +395,10 @@ public class JdbcComplexSearchReader implements ComplexSearchReader {
             return TWO_CHARACTER_CONTAINS_CANDIDATES;
         }
         return terms.isSingleTermQuery() ? SINGLE_TERM_CONTAINS_CANDIDATES : CONTAINS_CANDIDATES;
+    }
+
+    static String prefixCandidatesFor(PropertySearchTerms terms) {
+        return terms.isSingleTermQuery() ? SINGLE_TERM_PREFIX_CANDIDATES : PREFIX_CANDIDATES;
     }
 
     private SearchComplexResult mapSearchComplex(ResultSet resultSet, int rowNumber) throws SQLException {

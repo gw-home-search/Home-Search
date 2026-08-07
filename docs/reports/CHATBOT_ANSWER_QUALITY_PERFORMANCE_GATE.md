@@ -91,6 +91,17 @@ release p95 근거로 승격하지 않는다. production snapshot에서 클래�
   literal wildcard escaping은 유지하며 timeout 값과 공개 response shape는 바꾸지 않는다.
 - release manifest의 20개 repository에서 충돌이 없음을 확인한 `v1.0.69`를 수정
   commit의 release 후보로 사용한다.
+- `v1.0.69` release workflow `31157846809`는 image 20개, SBOM, 취약점 policy
+  gate와 release manifest 생성을 통과했다.
+- 정식 rollout의 기존-service baseline 교착을 해소하기 위해 property-api 한
+  service만 `v1.0.69` digest로 교체해 확인했지만 긴 단일 검색어는 여전히 약 6초
+  후 HTTP 500을 반환했다. 새 task는 기존 revision `:33`으로 즉시 rollback했고,
+  ECS stable과 일반 검색 HTTP 200 복구를 확인했다.
+- 원인은 `EXACT → PREFIX → CONTAINS` 순서에서 relation-derived `PREFIX` SQL이 먼저
+  timeout되어 신규 contains 경로에 도달하지 못한 것이다. 두 번째 최적화는 단일
+  검색어의 prefix pattern도 direct binding으로 바꾸며, timeout과 schema는 유지한다.
+- `v1.0.69`는 재사용하지 않는다. 20개 repository 사전검사를 통과한 새 tag를 다음
+  수정 commit에만 생성한다.
 
 ## 보안 영향
 

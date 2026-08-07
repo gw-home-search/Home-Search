@@ -19,6 +19,14 @@ record PropertySearchTerms(String query, String lowerQuery, String normalizedQue
         return query.trim().codePoints().noneMatch(Character::isWhitespace);
     }
 
+    String rawPrefixPattern() {
+        return prefixPattern(lowerQuery);
+    }
+
+    String normalizedPrefixPattern() {
+        return prefixPattern(normalizedQuery);
+    }
+
     String rawContainsPattern() {
         return containsPattern(lowerQuery);
     }
@@ -28,7 +36,15 @@ record PropertySearchTerms(String query, String lowerQuery, String normalizedQue
     }
 
     private static String containsPattern(String value) {
-        return "%" + value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
+        return "%" + escapeLikePattern(value) + "%";
+    }
+
+    private static String prefixPattern(String value) {
+        return escapeLikePattern(value) + "%";
+    }
+
+    private static String escapeLikePattern(String value) {
+        return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }
 
     private static String normalizeName(String value) {

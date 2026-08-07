@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from ai_service.auth import AuthenticatedUser, get_authenticator
 from ai_service.chat import ChatbotProviderUnavailable, get_chatbot_engine
 from ai_service.main import app
+from ai_service.readiness import ReadinessResult, get_readiness_checker
 
 
 class AcceptingAuthenticator:
@@ -98,6 +99,20 @@ class CompoundEngine:
         }
 
 
+class ReadyChecker:
+    async def check(self) -> ReadinessResult:
+        return ReadinessResult("READY", {
+            "property": "ready", "academy": "ready", "rail": "ready", "openai": "configured",
+        })
+
+
+class NotReadyChecker:
+    async def check(self) -> ReadinessResult:
+        return ReadinessResult("NOT_READY", {
+            "property": "not_ready", "academy": "unavailable", "rail": "unavailable", "openai": "configured",
+        })
+
+
 def setup_function() -> None:
     app.dependency_overrides.clear()
 
@@ -112,6 +127,31 @@ def test_health_is_public_and_returns_request_id() -> None:
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
     assert response.headers["X-Request-Id"]
+
+
+def test_ready_reports_sanitized_capability_state() -> None:
+    app.dependency_overrides[get_readiness_checker] = ReadyChecker
+
+    response = TestClient(app).get("/ready")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "READY",
+        "checks": {
+            "property": "ready", "academy": "ready", "rail": "ready", "openai": "configured",
+        },
+    }
+    assert response.headers["X-Request-Id"]
+
+
+def test_ready_returns_503_when_property_core_is_not_ready() -> None:
+    app.dependency_overrides[get_readiness_checker] = NotReadyChecker
+
+    response = TestClient(app).get("/ready")
+
+    assert response.status_code == 503
+    assert response.json()["status"] == "NOT_READY"
+    assert "dsn" not in response.text.lower()
 
 
 def test_chatbot_query_rejects_missing_token_with_problem_detail() -> None:

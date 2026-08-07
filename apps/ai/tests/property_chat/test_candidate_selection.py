@@ -9,6 +9,7 @@ from ai_service.property_chat.candidate_selection import (
     CandidateMatch,
     CandidateObservationSummary,
     DeterministicCandidateSelector,
+    select_compound_primary,
     validate_grounded_selection,
 )
 from ai_service.property_chat.models import ComplexRecord
@@ -88,6 +89,59 @@ def test_deterministic_selector_uses_exact_data_before_household_count() -> None
     assert selection.reason_code == "EXACT_OBSERVATION"
 
 
+def test_candidate_selector_covers_empty_and_comparison_boundaries() -> None:
+    with pytest.raises(ValueError, match="requires candidates"):
+        DeterministicCandidateSelector().select(())
+    with pytest.raises(ValueError, match="summary is invalid"):
+        CandidateObservationSummary(0, -1, None)
+
+    first = replace(candidate(7753, units=388), selected_context_match=True)
+    second = candidate(7756, units=1_237)
+    selection = DeterministicCandidateSelector().select(
+        (second, first), comparison=True
+    )
+
+    assert selection.primary == first
+    assert selection.comparison_secondary == second
+    assert selection.alternatives == ()
+    assert selection.source == "EXPLICIT_CONTEXT"
+    assert selection.reason_code == "REPRESENTATIVE_COMPLEX"
+
+
+def test_candidate_selector_marks_verified_zero_observations() -> None:
+    selection = DeterministicCandidateSelector().select(
+        (candidate(7753, units=388),),
+        (CandidateObservationSummary(7753, 0, None),),
+    )
+
+    assert selection.reason_code == "NO_EXACT_OBSERVATION"
+    assert selection.all_exact_results_empty is True
+    assert selection.reason_fact_ids == (
+        "property-complex-7753",
+        "candidate-observation-7753",
+    )
+
+
+def test_compound_selector_uses_supported_capabilities_and_latest_date() -> None:
+    candidates = (candidate(7753, units=5_000), candidate(7756, units=1_237))
+    groups = (
+        (
+            CandidateObservationSummary(7753, 1, date(2026, 5, 1)),
+            CandidateObservationSummary(7756, 2, date(2026, 6, 1)),
+        ),
+        (CandidateObservationSummary(7756, 1, date(2026, 7, 1)),),
+    )
+
+    assert select_compound_primary(candidates, groups).complex.complex_id == 7756
+    with pytest.raises(ValueError, match="requires candidates"):
+        select_compound_primary((), ())
+    with pytest.raises(ValueError, match="candidate is invalid"):
+        select_compound_primary(
+            candidates,
+            ((CandidateObservationSummary(9999, 1, date(2026, 7, 1)),),),
+        )
+
+
 def test_focus_complex_action_requires_marker_safe_fact_identity_and_korea_bounds() -> None:
     match = candidate(7756, units=1_237)
     fact = _complex_fact(match.complex)
@@ -127,17 +181,16 @@ def test_focus_complex_action_requires_marker_safe_fact_identity_and_korea_bound
         )
 
 
-def test_marker_unsafe_primary_never_auto_runs_a_safe_alternative() -> None:
+def test_marker_unsafe_exact_complex_does_not_create_focus_action() -> None:
     primary = candidate(7756, units=1_237)
     primary = replace(
         primary,
         complex=replace(primary.complex, marker_safe=False),
     )
 
-    actions = _focus_complex_actions(primary, (candidate(7753, units=388),))
+    actions = _focus_complex_actions(primary)
 
-    assert [action.complex_id for action in actions] == [7753]
-    assert actions[0].auto_run is False
+    assert actions == ()
 
 
 def test_action_bounds_keep_six_focus_four_nearby_and_one_auto_run() -> None:

@@ -4,6 +4,7 @@ import pytest
 
 from ai_service.chat import (
     ConfiguredChatbotEngine,
+    _price_trend_requires_area,
     _select_supervisor_graph,
     get_supervisor_graph_canary_percent,
     get_supervisor_graph_mode,
@@ -69,3 +70,47 @@ def test_explicit_later_scope_question_returns_typed_out_of_scope_without_provid
         "version": 1, "status": "UNAVAILABLE",
         "reason": "OUT_OF_SCOPE", "retryable": False,
     }
+
+
+@pytest.mark.parametrize(
+    "question",
+    (
+        "헬리오시티 가격 흐름 보여줘",
+    ),
+)
+def test_price_trend_without_area_requests_required_condition_before_provider(
+    monkeypatch: pytest.MonkeyPatch,
+    question: str,
+) -> None:
+    monkeypatch.setattr(
+        "ai_service.chat.get_property_fact_repository",
+        lambda: (_ for _ in ()).throw(AssertionError("repository must not run")),
+    )
+
+    response = asyncio.run(ConfiguredChatbotEngine().query(
+        request=ChatbotQueryRequest(question=question),
+        user=AuthenticatedUser(user_id=42),
+        request_id="request-missing-trend-area",
+    ))
+
+    assert response["terminalOutcome"] == {
+        "version": 1,
+        "status": "UNAVAILABLE",
+        "reason": "INSUFFICIENT_EVIDENCE",
+        "retryable": False,
+    }
+    assert "전용면적" in response["answer"]
+    assert response["evidenceSummary"]["capabilities"] == ["price_trend"]
+
+
+@pytest.mark.parametrize(
+    "question",
+    (
+        "송파구에서 거래량 많은 단지 3곳 추천해줘",
+        "잠실엘스와 반포자이 거래량을 비교해줘",
+    ),
+)
+def test_recommendation_and_comparison_are_not_blocked_by_trend_area_preflight(
+    question: str,
+) -> None:
+    assert _price_trend_requires_area(question) is False

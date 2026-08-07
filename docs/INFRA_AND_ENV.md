@@ -964,6 +964,20 @@ Renderer runtime 변수:
 - `HOME_SEO_SITEMAP_CACHE_TTL=6h`
 - `HOME_SEO_STALE_IF_ERROR=24h`
 
+Chatbot runtime budget은 AI OpenAI 시도 `8s`, AI 전체 query `45s`, chat-bff
+upstream `70s`, public Nginx `75s` 순으로 둔다. AI `/health`는 liveness만,
+내부 `/ready`는 property DB·OpenAI 필수 설정과 academy/rail optional source 상태를
+구분한다. optional source만 실패하면 `DEGRADED`/HTTP 200, core 실패는
+`NOT_READY`/HTTP 503이다. public gateway는 `/ready`를 공개하지 않는다.
+
+chat-bff는 요청당 `chatbot_terminal` JSON log를 한 건만 남기며 질문·답변·token·
+cookie·prompt·DSN을 기록하지 않는다. budget-production은 이 log에서 request,
+answered, partial, safe-final, timeout, contract/missing-final, latency metric을 만들고
+safe-final 건수·비율, contract failure, upstream timeout, 전체 p95 latency alarm을
+운영한다. 질문 원문 대신 bounded `intent`만 기록하며 `DIRECT_PROPERTY`와
+`COMPLEX_OVERVIEW`는 10초, `REFERENCE_COMPOUND`와 `COMPARISON`은 15초,
+`TREND`는 10초, `RECOMMENDATION`은 20초 p95 alarm을 별도로 둔다.
+
 `rtms_refresh_schedule_enabled`는 누락일 first/repeat runtime audit가 모두 통과한
 뒤에만 `true`로 apply한다. Schedule 계약은 매일 `cron(30 7 * * ? *)`,
 `Asia/Seoul`, event age 3,600초, retry 1회다.

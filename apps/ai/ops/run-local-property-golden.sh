@@ -275,7 +275,7 @@ then
 fi
 activation_timeout_seconds="$timeout_seconds"
 if [[ "$case_id" == "comparison-jamsil-ells-helio-84" || "$case_id" == "budget-recommendation-songpa-84-retail" ]]; then
-    activation_timeout_seconds=30
+    activation_timeout_seconds=8
 fi
 
 if [[ "$case_id" == "criteria-recommendation-academy-transit" ]]; then

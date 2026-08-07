@@ -302,6 +302,280 @@ resource "aws_cloudwatch_metric_alarm" "ai_temporary_failure" {
 }
 
 locals {
+  chatbot_terminal_filters = local.private_enabled ? {
+    request = {
+      pattern = "{ $.event = \"chatbot_terminal\" }"
+      metric  = "ChatbotRequestCount"
+      value   = "1"
+    }
+    partial = {
+      pattern = "{ $.event = \"chatbot_terminal\" && $.outcome = \"PARTIAL\" }"
+      metric  = "ChatbotPartialCount"
+      value   = "1"
+    }
+    answered = {
+      pattern = "{ $.event = \"chatbot_terminal\" && $.outcome = \"SUCCESS\" }"
+      metric  = "ChatbotAnsweredCount"
+      value   = "1"
+    }
+    safe_final = {
+      pattern = "{ $.event = \"chatbot_terminal\" && $.safeFinal = true }"
+      metric  = "ChatbotSafeFinalCount"
+      value   = "1"
+    }
+    timeout = {
+      pattern = "{ $.event = \"chatbot_terminal\" && $.outcome = \"UPSTREAM_TIMEOUT\" }"
+      metric  = "ChatbotUpstreamTimeoutCount"
+      value   = "1"
+    }
+    contract_rejected = {
+      pattern = "{ $.event = \"chatbot_terminal\" && $.outcome = \"CONTRACT_REJECTED\" }"
+      metric  = "ChatbotContractRejectedCount"
+      value   = "1"
+    }
+    missing_final = {
+      pattern = "{ $.event = \"chatbot_terminal\" && $.outcome = \"MISSING_FINAL\" }"
+      metric  = "ChatbotMissingFinalCount"
+      value   = "1"
+    }
+    latency = {
+      pattern = "{ $.event = \"chatbot_terminal\" && $.latencyMs = * }"
+      metric  = "ChatbotLatencyMs"
+      value   = "$.latencyMs"
+    }
+  } : {}
+}
+
+resource "aws_cloudwatch_log_metric_filter" "chatbot_terminal" {
+  for_each       = local.chatbot_terminal_filters
+  name           = "${local.name}-chatbot-${replace(each.key, "_", "-")}"
+  pattern        = each.value.pattern
+  log_group_name = aws_cloudwatch_log_group.runtime["chat-bff"].name
+  metric_transformation {
+    name      = each.value.metric
+    namespace = "HomeSearch/BudgetProduction"
+    value     = each.value.value
+    unit      = each.key == "latency" ? "Milliseconds" : "Count"
+  }
+}
+
+locals {
+  chatbot_intent_latency_filters = local.private_enabled ? {
+    direct_property = {
+      intent = "DIRECT_PROPERTY"
+      metric = "ChatbotDirectPropertyLatencyMs"
+    }
+    complex_overview = {
+      intent = "COMPLEX_OVERVIEW"
+      metric = "ChatbotComplexOverviewLatencyMs"
+    }
+    reference_compound = {
+      intent = "REFERENCE_COMPOUND"
+      metric = "ChatbotReferenceCompoundLatencyMs"
+    }
+    trend = {
+      intent = "TREND"
+      metric = "ChatbotTrendLatencyMs"
+    }
+    comparison = {
+      intent = "COMPARISON"
+      metric = "ChatbotComparisonLatencyMs"
+    }
+    recommendation = {
+      intent = "RECOMMENDATION"
+      metric = "ChatbotRecommendationLatencyMs"
+    }
+  } : {}
+  chatbot_intent_latency_alarms = {
+    direct_property = {
+      metric    = "ChatbotDirectPropertyLatencyMs"
+      threshold = 10000
+    }
+    complex_overview = {
+      metric    = "ChatbotComplexOverviewLatencyMs"
+      threshold = 10000
+    }
+    reference_compound = {
+      metric    = "ChatbotReferenceCompoundLatencyMs"
+      threshold = 15000
+    }
+    trend = {
+      metric    = "ChatbotTrendLatencyMs"
+      threshold = 10000
+    }
+    comparison = {
+      metric    = "ChatbotComparisonLatencyMs"
+      threshold = 15000
+    }
+    recommendation = {
+      metric    = "ChatbotRecommendationLatencyMs"
+      threshold = 20000
+    }
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "chatbot_intent_latency" {
+  for_each       = local.chatbot_intent_latency_filters
+  name           = "${local.name}-chatbot-${replace(each.key, "_", "-")}-latency"
+  pattern        = "{ $.event = \"chatbot_terminal\" && $.intent = \"${each.value.intent}\" && $.latencyMs = * }"
+  log_group_name = aws_cloudwatch_log_group.runtime["chat-bff"].name
+  metric_transformation {
+    name      = each.value.metric
+    namespace = "HomeSearch/BudgetProduction"
+    value     = "$.latencyMs"
+    unit      = "Milliseconds"
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "ai_capability_unavailable" {
+  count          = local.private_enabled ? 1 : 0
+  name           = "${local.name}-ai-capability-unavailable"
+  pattern        = "{ $.event = \"chatbot_capability_terminal\" && $.outcome = %^(unavailable|timeout|failed)$% }"
+  log_group_name = aws_cloudwatch_log_group.runtime["ai"].name
+  metric_transformation {
+    name       = "UnavailableCount"
+    namespace  = "HomeSearch/BudgetProduction"
+    value      = "1"
+    unit       = "Count"
+    dimensions = { Capability = "$.capability" }
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "chatbot_safe_final_warning" {
+  count               = local.private_enabled ? 1 : 0
+  alarm_name          = "${local.name}-chatbot-safe-final-warning"
+  alarm_description   = "Chatbot emitted at least one safe final in five minutes."
+  namespace           = "HomeSearch/BudgetProduction"
+  metric_name         = "ChatbotSafeFinalCount"
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = 0
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = local.alarm_actions
+}
+
+resource "aws_cloudwatch_metric_alarm" "chatbot_safe_final_ratio_critical" {
+  count               = local.private_enabled ? 1 : 0
+  alarm_name          = "${local.name}-chatbot-safe-final-ratio-critical"
+  alarm_description   = "Chatbot safe-final ratio reached five percent with at least five requests."
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  threshold           = 5
+  evaluation_periods  = 1
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = local.alarm_actions
+  metric_query {
+    id          = "ratio"
+    expression  = "IF(requests >= 5, 100 * safe / requests, 0)"
+    label       = "Chatbot safe-final percent"
+    return_data = true
+  }
+  metric_query {
+    id          = "safe"
+    return_data = false
+    metric {
+      namespace   = "HomeSearch/BudgetProduction"
+      metric_name = "ChatbotSafeFinalCount"
+      period      = 300
+      stat        = "Sum"
+    }
+  }
+  metric_query {
+    id          = "requests"
+    return_data = false
+    metric {
+      namespace   = "HomeSearch/BudgetProduction"
+      metric_name = "ChatbotRequestCount"
+      period      = 300
+      stat        = "Sum"
+    }
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "chatbot_contract_critical" {
+  count               = local.private_enabled ? 1 : 0
+  alarm_name          = "${local.name}-chatbot-contract-critical"
+  alarm_description   = "Chatbot contract was rejected or SSE final was missing."
+  evaluation_periods  = 1
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = 0
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = local.alarm_actions
+  metric_query {
+    id          = "critical"
+    expression  = "rejected + missing"
+    label       = "Chatbot contract critical count"
+    return_data = true
+  }
+  metric_query {
+    id          = "rejected"
+    return_data = false
+    metric {
+      namespace   = "HomeSearch/BudgetProduction"
+      metric_name = "ChatbotContractRejectedCount"
+      period      = 300
+      stat        = "Sum"
+    }
+  }
+  metric_query {
+    id          = "missing"
+    return_data = false
+    metric {
+      namespace   = "HomeSearch/BudgetProduction"
+      metric_name = "ChatbotMissingFinalCount"
+      period      = 300
+      stat        = "Sum"
+    }
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "chatbot_latency_warning" {
+  count               = local.private_enabled ? 1 : 0
+  alarm_name          = "${local.name}-chatbot-p95-latency-warning"
+  alarm_description   = "Chatbot p95 latency exceeded thirty seconds."
+  namespace           = "HomeSearch/BudgetProduction"
+  metric_name         = "ChatbotLatencyMs"
+  extended_statistic  = "p95"
+  period              = 300
+  evaluation_periods  = 1
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = 30000
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = local.alarm_actions
+}
+
+resource "aws_cloudwatch_metric_alarm" "chatbot_intent_latency_warning" {
+  for_each            = local.private_enabled ? local.chatbot_intent_latency_alarms : {}
+  alarm_name          = "${local.name}-chatbot-${replace(each.key, "_", "-")}-p95-latency-warning"
+  alarm_description   = "Chatbot bounded intent p95 latency exceeded its release threshold."
+  namespace           = "HomeSearch/BudgetProduction"
+  metric_name         = each.value.metric
+  extended_statistic  = "p95"
+  period              = 300
+  evaluation_periods  = 1
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = each.value.threshold
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = local.alarm_actions
+}
+
+resource "aws_cloudwatch_metric_alarm" "chatbot_upstream_timeout_critical" {
+  count               = local.private_enabled ? 1 : 0
+  alarm_name          = "${local.name}-chatbot-upstream-timeout-critical"
+  alarm_description   = "Chatbot upstream timeout occurred at least once."
+  namespace           = "HomeSearch/BudgetProduction"
+  metric_name         = "ChatbotUpstreamTimeoutCount"
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = 0
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = local.alarm_actions
+}
+
+locals {
   backup_log_filters = local.data_enabled ? {
     failure = { pattern = "{ $.metric = \"backup_run_failure\" }", metric = "OperationalFailureCount" }
   } : {}

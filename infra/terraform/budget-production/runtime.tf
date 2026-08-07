@@ -145,8 +145,8 @@ locals {
       health         = ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)\" || exit 1"]
       environment = [
         { name = "HOME_AI_JWT_PUBLIC_KEY_PATHS", value = "{\"budget-production-1\":\"/run/keys/public.pem\"}" },
-        { name = "HOME_AI_OPENAI_TIMEOUT_SECONDS", value = "30" },
-        { name = "HOME_AI_QUERY_TIMEOUT_SECONDS", value = "60" },
+        { name = "HOME_AI_OPENAI_TIMEOUT_SECONDS", value = "8" },
+        { name = "HOME_AI_QUERY_TIMEOUT_SECONDS", value = "45" },
         { name = "HOME_AI_DEPLOYMENT_TIER", value = "production" },
         { name = "HOME_AI_SUPERVISOR_GRAPH_MODE", value = var.ai_supervisor_graph_mode },
         { name = "HOME_AI_SUPERVISOR_GRAPH_CANARY_PERCENT", value = tostring(var.ai_supervisor_graph_canary_percent) },
@@ -172,7 +172,7 @@ locals {
         { name = "SERVER_SHUTDOWN", value = "graceful" },
         { name = "SPRING_LIFECYCLE_TIMEOUT_PER_SHUTDOWN_PHASE", value = "90s" },
         { name = "HOME_CHAT_BFF_AI_BASE_URL", value = "http://${local.host_gateway}:18084" },
-        { name = "HOME_CHAT_BFF_AI_TIMEOUT", value = "60s" },
+        { name = "HOME_CHAT_BFF_AI_TIMEOUT", value = "70s" },
         { name = "HOME_CHAT_BFF_JWT_PUBLIC_KEY_PATHS", value = "budget-production-1=/run/keys/public.pem" },
         { name = "SPRING_DATA_REDIS_HOST", value = local.host_gateway },
         { name = "SPRING_DATA_REDIS_PORT", value = "16379" },

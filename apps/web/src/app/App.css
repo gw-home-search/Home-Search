@@ -43,6 +43,10 @@
   background: color-mix(in srgb, var(--hs-map-color-surface) 92%, transparent);
 }
 
+.app-shell[data-chat-open="true"] .public-footer--compact {
+  display: none;
+}
+
 .legal-page {
   min-height: 100vh;
   overflow: auto;

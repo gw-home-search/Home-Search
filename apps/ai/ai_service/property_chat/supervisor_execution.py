@@ -9,7 +9,6 @@ from ai_service.chat import ChatbotProviderUnavailable
 from ai_service.models import ChatbotQueryRequest
 
 from .answer_document import AnswerDocument
-from .candidate_selection import CandidateMatch, select_compound_primary
 from .models import QueryPlan
 from .supervisor import GoalExecutionResult, GoalSpec, ResolvedEntity
 
@@ -97,13 +96,18 @@ class GroundedGoalExecutor:
             status=status,
             document=document,
             limitations=document.limitations,
-            retryable=document.recoverable and status in {"PARTIAL", "UNAVAILABLE"},
+            retryable=False,
         )
 
     async def resolve_entities(self, goals: Sequence[GoalSpec]) -> tuple[ResolvedEntity, ...]:
         finder = getattr(self._repository, "find_complexes", None)
         if finder is None:
             return ()
+        identity_counts: dict[tuple[str, str | None], int] = {}
+        for goal in goals:
+            if goal.capability not in {"recommendation", "comparison"}:
+                identity = (goal.plan.complex_name, goal.plan.region_name)
+                identity_counts[identity] = identity_counts.get(identity, 0) + 1
         seen: set[tuple[str, str | None]] = set()
         resolved: list[ResolvedEntity] = []
         for goal in goals:
@@ -116,19 +120,8 @@ class GroundedGoalExecutor:
             records = tuple(await asyncio.to_thread(
                 finder, goal.plan.complex_name, goal.plan.region_name, 6
             ))
-            related_goals = tuple(item for item in goals if (
-                item.plan.complex_name, item.plan.region_name
-            ) == identity)
-            shared_primary = (
-                await self._select_shared_primary(records, related_goals)
-                if self._answer_first_enabled
-                and len(records) > 1
-                and len(related_goals) > 1
-                else None
-            )
-            self._resolved_records[identity] = (
-                (shared_primary,) if shared_primary is not None else records
-            )
+            if identity_counts[identity] > 1:
+                self._resolved_records[identity] = records
             ids = tuple(record.complex_id for record in records)
             status = (
                 "NOT_FOUND"
@@ -138,8 +131,6 @@ class GroundedGoalExecutor:
                 and records[0].display_name.casefold() == goal.plan.complex_name.casefold()
                 else "UNIQUE"
                 if len(ids) == 1
-                else "UNIQUE"
-                if self._answer_first_enabled
                 else "AMBIGUOUS"
             )
             self._resolution_states[identity] = status
@@ -147,48 +138,11 @@ class GroundedGoalExecutor:
                 mention=goal.plan.complex_name,
                 candidate_ids=ids,
                 selected_id=(
-                    shared_primary.complex_id
-                    if shared_primary is not None
-                    else ids[0]
-                    if len(ids) == 1
-                    else ids[0]
-                    if ids and self._answer_first_enabled
-                    else None
+                    ids[0] if len(ids) == 1 else None
                 ),
                 status=status,
             ))
         return tuple(resolved)
-
-    async def _select_shared_primary(
-        self,
-        records: tuple[object, ...],
-        goals: tuple[GoalSpec, ...],
-    ) -> object:
-        loader = getattr(self._repository, "candidate_observation_summaries", None)
-        observation_groups = []
-        if loader is not None:
-            for goal in goals:
-                plan = goal.plan
-                if plan.capability not in {"recent_trade_lookup", "price_trend"}:
-                    continue
-                summaries = await asyncio.to_thread(
-                    loader,
-                    tuple(record.complex_id for record in records),
-                    plan.start_date,
-                    plan.end_date,
-                    plan.exclusive_area_square_meters,
-                    plan.capability,
-                )
-                observation_groups.append(tuple(summaries))
-        matches = tuple(
-            CandidateMatch(
-                complex=record,
-                search_ordinal=index,
-                match_tier=record.match_tier,
-            )
-            for index, record in enumerate(records)
-        )
-        return select_compound_primary(matches, tuple(observation_groups)).complex
 
     async def with_verified_recommendation_candidates(
         self,

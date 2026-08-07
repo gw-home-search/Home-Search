@@ -74,7 +74,7 @@ case "$*" in
     test "$HOME_AI_OPENAI_PRIMARY_MODEL" = 'gpt-5.6-luna'
     test "$HOME_AI_OPENAI_SECONDARY_MODEL" = 'gpt-5.6-terra'
     case "$HOME_AI_REFERENCE_ACTIVATION_CASE_ID" in
-      comparison-jamsil-ells-helio-84 | budget-recommendation-songpa-84-retail) test "$HOME_AI_OPENAI_TIMEOUT_SECONDS" = '30' ;;
+      comparison-jamsil-ells-helio-84 | budget-recommendation-songpa-84-retail) test "$HOME_AI_OPENAI_TIMEOUT_SECONDS" = '8' ;;
       *) test "$HOME_AI_OPENAI_TIMEOUT_SECONDS" = '15' ;;
     esac
     test "$HOME_AI_GOLDEN_LIVE_CONFIRM" = 'RUN_ONE_LIVE_GOLDEN_CASE'

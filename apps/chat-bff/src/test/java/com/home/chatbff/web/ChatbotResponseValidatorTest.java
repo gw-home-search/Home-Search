@@ -130,6 +130,7 @@ class ChatbotResponseValidatorTest {
         assertInvalid(response -> response.withArray("limitations").add(1));
         assertInvalid(response -> response.withArray("limitations").add("a".repeat(2_001)));
         assertInvalid(response -> response.withArray("limitations").add(" "));
+        assertInvalid(response -> response.put("oversizedPadding", "a".repeat(128 * 1024)));
     }
 
     @Test
@@ -209,6 +210,42 @@ class ChatbotResponseValidatorTest {
         });
         assertInvalid(response -> setOutcome(response, "UNAVAILABLE", "TEMPORARY_FAILURE", false));
         assertInvalid(response -> setOutcome(response, "ANSWERED", "COMPLETED", true));
+    }
+
+    @Test
+    void validatesArtifactActionAndFragmentReferenceClosure() throws Exception {
+        ObjectNode response = validResponse();
+        response.set("uiArtifacts", objectMapper.readTree("""
+                [{"artifactId":"artifact-1","items":[{"factIds":["fact-1"]}]}]
+                """));
+        response.set("uiActions", objectMapper.readTree("""
+                [{"actionId":"action-1","autoRun":true,"factIds":["fact-1"]}]
+                """));
+        response.set("fragments", objectMapper.readTree("""
+                [{"artifactIds":["artifact-1"],"actionIds":["action-1"]}]
+                """));
+        assertThat(validator.isValid(response)).isTrue();
+
+        response.withArray("uiArtifacts")
+                .get(0)
+                .withArray("items")
+                .get(0)
+                .withArray("factIds")
+                .set(0, "missing-fact");
+        assertThat(validator.isValid(response)).isFalse();
+
+        response = validResponse();
+        response.set("uiActions", objectMapper.readTree("""
+                [{"actionId":"action-1","autoRun":true,"factIds":["fact-1"]},
+                 {"actionId":"action-2","autoRun":true,"factIds":["fact-1"]}]
+                """));
+        assertThat(validator.isValid(response)).isFalse();
+
+        response = validResponse();
+        response.set("uiActions", objectMapper.readTree("""
+                [{"actionId":"action-1","autoRun":false,"factIds":["missing-fact"]}]
+                """));
+        assertThat(validator.isValid(response)).isFalse();
     }
 
     private ObjectNode validResponse() throws Exception {

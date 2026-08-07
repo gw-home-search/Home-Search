@@ -71,6 +71,31 @@ def test_assembler_keeps_text_fallback_for_unavailable_and_builds_reference_scop
     assert unavailable is None
     assert artifacts == []
 
+
+def test_trade_result_limit_is_not_reused_as_a_monthly_trend_row_limit() -> None:
+    assembler = PresentationAssembler()
+    trend, _ = assembler.present(
+        plan=QueryPlan(
+            "price_trend", "헬리오시티", limit=5,
+            start_date=date(2025, 8, 3), end_date=date(2026, 8, 3),
+            exclusive_area_square_meters=59.0,
+        ),
+        used_facts=[fact()],
+        readiness="supported",
+        artifacts=[],
+    )
+    trade, _ = assembler.present(
+        plan=QueryPlan("recent_trade_lookup", "헬리오시티", limit=3),
+        used_facts=[fact()],
+        readiness="supported",
+        artifacts=[],
+    )
+
+    assert trend is not None
+    assert "RESULT_LIMIT" not in {criterion.key for criterion in trend.criteria}
+    assert trade is not None
+    assert "RESULT_LIMIT" in {criterion.key for criterion in trade.criteria}
+
     summary, artifacts = assembler.present(
         plan=QueryPlan("academy_lookup", "잠실엘스", radius_meters=800),
         used_facts=[fact()],

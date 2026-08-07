@@ -93,6 +93,27 @@ class PostgresRailStationRepository:
     def close(self) -> None:
         self._pool.close()
 
+    def readiness_probe(self) -> None:
+        with self._pool.connection(timeout=1.5) as connection:
+            row = connection.execute(
+                """
+                SELECT 1
+                FROM reference_read.active_source_metadata metadata
+                JOIN reference_read.source_coverage coverage
+                  ON coverage.publication_id = metadata.publication_id
+                WHERE metadata.source_id = 'transport.rail-station'
+                  AND metadata.source_date IS NOT NULL
+                  AND metadata.source_date <= CURRENT_DATE
+                  AND metadata.source_date >=
+                      CURRENT_DATE - metadata.freshness_days
+                GROUP BY metadata.publication_id
+                HAVING sum(coverage.total_count) > 0
+                   AND sum(coverage.spatial_count) = sum(coverage.total_count)
+                """
+            ).fetchone()
+        if row is None:
+            raise RuntimeError("rail readiness data is unavailable")
+
     def nearby(
         self,
         *,

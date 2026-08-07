@@ -91,6 +91,28 @@ class PostgresAcademyLocationRepository:
     def close(self) -> None:
         self._pool.close()
 
+    def readiness_probe(self) -> None:
+        with self._pool.connection(timeout=1.5) as connection:
+            row = connection.execute(
+                """
+                SELECT 1
+                FROM reference_read.active_source_metadata metadata
+                JOIN reference_read.source_coverage coverage
+                  ON coverage.publication_id = metadata.publication_id
+                WHERE metadata.source_id = 'place.sbiz-academy'
+                  AND metadata.observed_at IS NOT NULL
+                  AND metadata.observed_at::date <= CURRENT_DATE
+                  AND metadata.observed_at >=
+                      CURRENT_TIMESTAMP - metadata.freshness_days * INTERVAL '1 day'
+                GROUP BY metadata.publication_id
+                HAVING sum(coverage.total_count) > 0
+                   AND sum(coverage.spatial_count)::numeric
+                       / sum(coverage.total_count) >= 0.95
+                """
+            ).fetchone()
+        if row is None:
+            raise RuntimeError("academy readiness data is unavailable")
+
     def nearby(
         self,
         *,

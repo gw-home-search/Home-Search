@@ -868,7 +868,7 @@ def test_configured_engine_fails_closed_when_total_query_budget_expires(
     with pytest.raises(ChatbotProviderUnavailable) as raised:
         asyncio.run(
             ConfiguredChatbotEngine().query(
-                request=ChatbotQueryRequest(question="가격 추이"),
+                request=ChatbotQueryRequest(question="잠실엘스가 궁금해"),
                 user=AuthenticatedUser(user_id=42),
                 request_id="request-timeout",
             )

@@ -2,7 +2,10 @@ package com.home.chatbff.web;
 
 import com.home.chatbff.ai.ChatbotAiStreamEvent;
 import com.home.chatbff.ai.ChatbotGateway;
+import com.home.chatbff.ai.ChatbotInvalidJsonException;
 import com.home.chatbff.ai.ChatbotProviderUnavailableException;
+import com.home.chatbff.ai.ChatbotTimeoutException;
+import com.home.chatbff.ai.ChatbotUpstreamHttpException;
 import com.home.chatbff.auth.VerifiedChatUser;
 import jakarta.validation.Valid;
 import java.util.ArrayList;
@@ -39,16 +42,19 @@ final class ChatbotController {
     private final ObjectMapper objectMapper;
     private final SafeFinalResponseFactory safeFinalResponseFactory;
     private final ChatbotResponseValidator responseValidator;
+    private final ChatbotTerminalRecorder terminalRecorder;
 
     ChatbotController(
             ChatbotGateway gateway,
             ObjectMapper objectMapper,
             SafeFinalResponseFactory safeFinalResponseFactory,
-            ChatbotResponseValidator responseValidator) {
+            ChatbotResponseValidator responseValidator,
+            ChatbotTerminalRecorder terminalRecorder) {
         this.gateway = gateway;
         this.objectMapper = objectMapper;
         this.safeFinalResponseFactory = safeFinalResponseFactory;
         this.responseValidator = responseValidator;
+        this.terminalRecorder = terminalRecorder;
     }
 
     @GetMapping("/health")
@@ -62,11 +68,23 @@ final class ChatbotController {
             @RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
             ServerWebExchange exchange) {
         String requestId = RequestIdWebFilter.required(exchange);
+        long startedAt = System.nanoTime();
         return gateway.query(request, authorization, requestId, authenticatedUser(exchange))
                 .map(response -> validated(response, requestId))
-                .onErrorResume(
-                        RuntimeException.class,
-                        ignored -> Mono.just(safeFinalResponseFactory.create(requestId, "json_runtime")));
+                .doOnNext(response -> terminalRecorder.record(
+                        requestId, successfulOutcome(response), false, elapsedMillis(startedAt), 200, response))
+                .onErrorResume(RuntimeException.class, exception -> {
+                    ChatbotTerminalOutcome outcome = failedOutcome(exception);
+                    JsonNode response = safeFinalResponseFactory.create(requestId, trigger(outcome));
+                    terminalRecorder.record(
+                            requestId,
+                            outcome,
+                            true,
+                            elapsedMillis(startedAt),
+                            upstreamStatus(exception, outcome),
+                            response);
+                    return Mono.just(response);
+                });
     }
 
     @PostMapping(value = "/api/v1/chatbot/query/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -76,25 +94,52 @@ final class ChatbotController {
             ServerWebExchange exchange) {
         String requestId = RequestIdWebFilter.required(exchange);
         AtomicBoolean finalSeen = new AtomicBoolean(false);
+        AtomicBoolean terminalRecorded = new AtomicBoolean(false);
+        long startedAt = System.nanoTime();
         return gateway.stream(request, authorization, requestId, authenticatedUser(exchange))
                 .takeUntil(upstream ->
                         upstream.event().equals("final") || upstream.event().equals("error"))
-                .concatMap(upstream -> publicEvents(requestId, upstream, finalSeen))
-                .concatWith(Flux.defer(() -> finalSeen.get()
-                        ? Flux.empty()
-                        : successEvents(requestId, safeFinalResponseFactory.create(requestId, "missing_final"))))
-                .onErrorResume(
-                        RuntimeException.class,
-                        ignored ->
-                                successEvents(requestId, safeFinalResponseFactory.create(requestId, "stream_runtime")));
+                .concatMap(upstream -> publicEvents(requestId, upstream, finalSeen, terminalRecorded, startedAt))
+                .concatWith(Flux.defer(() -> {
+                    if (finalSeen.get()) return Flux.empty();
+                    JsonNode response = safeFinalResponseFactory.create(requestId, "missing_final");
+                    recordOnce(
+                            terminalRecorded,
+                            requestId,
+                            ChatbotTerminalOutcome.MISSING_FINAL,
+                            true,
+                            startedAt,
+                            502,
+                            response);
+                    return successEvents(requestId, response);
+                }))
+                .onErrorResume(RuntimeException.class, exception -> {
+                    ChatbotTerminalOutcome outcome = failedOutcome(exception);
+                    JsonNode response = safeFinalResponseFactory.create(requestId, trigger(outcome));
+                    recordOnce(
+                            terminalRecorded,
+                            requestId,
+                            outcome,
+                            true,
+                            startedAt,
+                            upstreamStatus(exception, outcome),
+                            response);
+                    return successEvents(requestId, response);
+                })
+                .doOnCancel(() -> recordOnce(
+                        terminalRecorded, requestId, ChatbotTerminalOutcome.CLIENT_ABORT, false, startedAt, 499, null));
     }
 
     private Flux<ServerSentEvent<JsonNode>> publicEvents(
-            String requestId, ChatbotAiStreamEvent upstream, AtomicBoolean finalSeen) {
+            String requestId,
+            ChatbotAiStreamEvent upstream,
+            AtomicBoolean finalSeen,
+            AtomicBoolean terminalRecorded,
+            long startedAt) {
         if (upstream.event().equals("status")) {
             JsonNode code = upstream.data().get("code");
             if (code == null || !code.isTextual() || !STATUS_CODES.contains(code.asText())) {
-                return Flux.error(new ChatbotProviderUnavailableException());
+                return Flux.error(new ChatbotContractRejectedException());
             }
             ObjectNode data = objectMapper.createObjectNode();
             data.put("requestId", requestId);
@@ -105,6 +150,7 @@ final class ChatbotController {
         if (upstream.event().equals("final")) {
             JsonNode response = validated(upstream.data(), requestId);
             finalSeen.set(true);
+            recordOnce(terminalRecorded, requestId, successfulOutcome(response), false, startedAt, 200, response);
             return successEvents(requestId, response);
         }
         if (upstream.event().equals("error")) {
@@ -136,10 +182,11 @@ final class ChatbotController {
     }
 
     private JsonNode validated(JsonNode response, String requestId) {
-        if (!responseValidator.isValid(response)) {
-            throw new ChatbotProviderUnavailableException();
+        JsonNode publicResponse = withRequestId(response, requestId);
+        if (!responseValidator.isValid(publicResponse)) {
+            throw new ChatbotContractRejectedException();
         }
-        return withRequestId(response, requestId);
+        return publicResponse;
     }
 
     private ObjectNode finalData(String requestId, JsonNode response) {
@@ -172,5 +219,65 @@ final class ChatbotController {
 
     private ServerSentEvent<JsonNode> event(String name, JsonNode data) {
         return ServerSentEvent.<JsonNode>builder().event(name).data(data).build();
+    }
+
+    private ChatbotTerminalOutcome successfulOutcome(JsonNode response) {
+        JsonNode terminal = response.get("terminalOutcome");
+        String terminalStatus = terminal == null ? "" : terminal.path("status").asText();
+        if ("PARTIAL".equals(terminalStatus)
+                || "partial_success".equals(response.path("status").asText())) {
+            return ChatbotTerminalOutcome.PARTIAL;
+        }
+        if ("CLARIFICATION".equals(terminalStatus)) return ChatbotTerminalOutcome.CLARIFICATION;
+        return ChatbotTerminalOutcome.SUCCESS;
+    }
+
+    private ChatbotTerminalOutcome failedOutcome(RuntimeException exception) {
+        if (exception instanceof ChatbotTimeoutException) return ChatbotTerminalOutcome.UPSTREAM_TIMEOUT;
+        if (exception instanceof ChatbotInvalidJsonException) return ChatbotTerminalOutcome.INVALID_JSON;
+        if (exception instanceof ChatbotUpstreamHttpException upstream) {
+            return upstream.statusCode() >= 500
+                    ? ChatbotTerminalOutcome.UPSTREAM_5XX
+                    : ChatbotTerminalOutcome.UPSTREAM_4XX;
+        }
+        if (exception instanceof ChatbotContractRejectedException) return ChatbotTerminalOutcome.CONTRACT_REJECTED;
+        if (exception instanceof ChatbotProviderUnavailableException) return ChatbotTerminalOutcome.UPSTREAM_5XX;
+        return ChatbotTerminalOutcome.INTERNAL_ERROR;
+    }
+
+    private String trigger(ChatbotTerminalOutcome outcome) {
+        return outcome.name().toLowerCase();
+    }
+
+    private int upstreamStatus(ChatbotTerminalOutcome outcome) {
+        return switch (outcome) {
+            case UPSTREAM_TIMEOUT -> 504;
+            case CONTRACT_REJECTED, INVALID_JSON, MISSING_FINAL, UPSTREAM_5XX -> 502;
+            case UPSTREAM_4XX -> 400;
+            case CLIENT_ABORT -> 499;
+            default -> 500;
+        };
+    }
+
+    private int upstreamStatus(RuntimeException exception, ChatbotTerminalOutcome outcome) {
+        if (exception instanceof ChatbotUpstreamHttpException upstream) return upstream.statusCode();
+        return upstreamStatus(outcome);
+    }
+
+    private long elapsedMillis(long startedAt) {
+        return Math.max((System.nanoTime() - startedAt) / 1_000_000L, 0L);
+    }
+
+    private void recordOnce(
+            AtomicBoolean terminalRecorded,
+            String requestId,
+            ChatbotTerminalOutcome outcome,
+            boolean safeFinal,
+            long startedAt,
+            int upstreamStatus,
+            JsonNode response) {
+        if (terminalRecorded.compareAndSet(false, true)) {
+            terminalRecorder.record(requestId, outcome, safeFinal, elapsedMillis(startedAt), upstreamStatus, response);
+        }
     }
 }

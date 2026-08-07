@@ -5,7 +5,8 @@ from datetime import date, timedelta
 
 from ai_service.models import ChatbotQueryRequest
 
-from .models import QueryPlan, QueryPlanBundle
+from .models import CAPABILITY_EXECUTION_ORDER, QueryPlan, QueryPlanBundle
+from .question_normalizer import normalize_question
 
 
 class DeterministicQueryRouter:
@@ -15,29 +16,42 @@ class DeterministicQueryRouter:
         self._today = today
 
     def plan(self, request: ChatbotQueryRequest) -> QueryPlan | QueryPlanBundle | None:
-        question = " ".join(request.question.split())
-        complex_name = _complex_name(question)
+        normalized = normalize_question(request.question)
+        question = normalized.normalized_question
+        complex_name = normalized.entity_candidate
         if complex_name is None:
             return None
+        if re.search(r"(?:비교|차이|추천|후보)", question):
+            return None
 
-        if re.search(r"(?:전체적|전반적|이\s*단지\s*어때|살기\s*괜찮)", question):
-            return QueryPlanBundle((
+        if normalized.overview:
+            area = _exclusive_area(question)
+            plans = [
                 QueryPlan("complex_identity", complex_name),
                 QueryPlan(
                     "recent_trade_lookup",
                     complex_name,
+                    region_name=normalized.region_hint,
                     start_date=self._today - timedelta(days=365),
                     end_date=self._today,
+                    exclusive_area_square_meters=area,
                     limit=3,
                 ),
-                QueryPlan(
+            ]
+            if area is not None:
+                plans.append(QueryPlan(
                     "price_trend",
                     complex_name,
+                    region_name=normalized.region_hint,
                     start_date=self._today - timedelta(days=365),
                     end_date=self._today,
-                ),
-                QueryPlan("rail_station_lookup", complex_name),
-            ))
+                    exclusive_area_square_meters=area,
+                ))
+            if normalized.region_hint is not None:
+                plans[0] = QueryPlan(
+                    "complex_identity", complex_name, region_name=normalized.region_hint
+                )
+            return QueryPlanBundle(tuple(plans))
         plans: list[tuple[int, QueryPlan]] = []
         trend_match = re.search(r"(?:가격\s*(?:흐름|추이)|월별|거래량)", question)
         if trend_match is not None:
@@ -73,11 +87,26 @@ class DeterministicQueryRouter:
             plans.append((identity_position, QueryPlan("complex_identity", complex_name)))
         if not plans:
             return None
-        ordered = tuple(plan for _position, plan in sorted(plans, key=lambda item: item[0]))
+        capability_order = {
+            capability: index
+            for index, capability in enumerate(CAPABILITY_EXECUTION_ORDER)
+        }
+        ordered = tuple(
+            plan
+            for _position, plan in sorted(
+                plans,
+                key=lambda item: capability_order[item[1].capability],
+            )
+        )
         return ordered[0] if len(ordered) == 1 else QueryPlanBundle(ordered[:4])
 
-    def overview(self, complex_name: str, region_name: str | None) -> QueryPlanBundle:
-        return QueryPlanBundle((
+    def overview(
+        self,
+        complex_name: str,
+        region_name: str | None,
+        exclusive_area_square_meters: float | None = None,
+    ) -> QueryPlanBundle:
+        plans = [
             QueryPlan("complex_identity", complex_name, region_name=region_name),
             QueryPlan(
                 "recent_trade_lookup",
@@ -85,28 +114,20 @@ class DeterministicQueryRouter:
                 region_name=region_name,
                 start_date=self._today - timedelta(days=365),
                 end_date=self._today,
+                exclusive_area_square_meters=exclusive_area_square_meters,
                 limit=3,
             ),
-            QueryPlan(
+        ]
+        if exclusive_area_square_meters is not None:
+            plans.append(QueryPlan(
                 "price_trend",
                 complex_name,
                 region_name=region_name,
                 start_date=self._today - timedelta(days=365),
                 end_date=self._today,
-            ),
-            QueryPlan("rail_station_lookup", complex_name, region_name=region_name),
-        ))
-
-
-def _complex_name(question: str) -> str | None:
-    candidate = re.split(
-        r"\s+(?:전용|최근|가격|실거래|거래|위치|주소|어디|주변|가까운|전체적|전반적)",
-        question,
-        maxsplit=1,
-    )[0].strip(" ?!,.\"")
-    if candidate in {"이 단지", "여기", "이곳"}:
-        return None
-    return candidate if 1 <= len(candidate) <= 100 else None
+                exclusive_area_square_meters=exclusive_area_square_meters,
+            ))
+        return QueryPlanBundle(tuple(plans))
 
 
 def _exclusive_area(question: str) -> float | None:
@@ -120,7 +141,7 @@ def _result_limit(question: str) -> int:
 
 
 def _identity_position(question: str) -> int | None:
-    for match in re.finditer(r"(?:위치|주소|어디|단지\s*정보)", question):
+    for match in re.finditer(r"(?:위치|주소|기본\s*정보|어디|단지\s*정보)", question):
         prefix = question[max(0, match.start() - 8):match.start()]
         if match.group() == "위치" and re.search(
             r"(?:학원|학교|점포|마트|어린이집|유치원)\s*$", prefix

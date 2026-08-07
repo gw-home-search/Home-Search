@@ -200,6 +200,27 @@ def test_graph_executes_three_independent_goals_in_bounded_waves() -> None:
     assert metrics.events[0][1]["terminal_status"] == "ANSWERED"
 
 
+def test_graph_composes_goals_in_canonical_capability_order() -> None:
+    engine = SupervisorGraphEngine(
+        planner=Planner((
+            QueryPlan("school_location", "잠실엘스"),
+            QueryPlan("complex_identity", "잠실엘스"),
+        )),
+        executor=Executor(),  # type: ignore[arg-type]
+        timeout_seconds=10,
+    )
+
+    response = asyncio.run(engine.query(
+        request=ChatbotQueryRequest(question="잠실엘스 학교와 기본정보를 알려줘"),
+        request_id="request-1",
+    ))
+
+    assert [
+        goal["capability"]
+        for goal in response["conversationResolution"]["goals"]
+    ] == ["complex_identity", "school_location"]
+
+
 def test_graph_runs_explicit_recommendation_before_dependent_comparison() -> None:
     executor = Executor()
     engine = SupervisorGraphEngine(

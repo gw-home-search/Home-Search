@@ -51,14 +51,24 @@ export function ChatThreadMessage({
         />
       )}
       {!isUser && onRetry ? (
-        <button
-          className="chatbot-assistant-retry"
-          disabled={retrying}
-          onClick={onRetry}
-          type="button"
-        >
-          {retrying ? '다시 시도 중' : '다시 시도'}
-        </button>
+        <div className="chatbot-assistant-recovery-actions">
+          <button
+            className="chatbot-assistant-retry"
+            disabled={retrying}
+            onClick={onRetry}
+            type="button"
+          >
+            {retrying ? '다시 시도 중' : '다시 시도'}
+          </button>
+          {message.evidence?.requestId ? (
+            <button
+              onClick={() => { void navigator.clipboard?.writeText(message.evidence!.requestId); }}
+              type="button"
+            >
+              문제 코드 복사
+            </button>
+          ) : null}
+        </div>
       ) : null}
     </article>
   );

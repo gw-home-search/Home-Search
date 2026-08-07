@@ -13,6 +13,20 @@ from ai_service.property_chat.rail_stations import (
 from ai_service.property_chat.comparison import CandidatePoint
 
 
+def test_rail_readiness_requires_active_fresh_fully_spatial_source(
+    rail_station_postgres_dsn: str,
+) -> None:
+    repository = PostgresRailStationRepository(
+        rail_station_postgres_dsn,
+        expected_database="test",
+        expected_username="test",
+    )
+    try:
+        repository.readiness_probe()
+    finally:
+        repository.close()
+
+
 @pytest.fixture(scope="module")
 def rail_station_postgres_dsn():
     with PostgresContainer("postgis/postgis:16-3.4") as postgres:

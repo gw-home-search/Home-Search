@@ -817,7 +817,8 @@ def _trade_criteria(plan: QueryPlan, fact_ids: tuple[str, ...]) -> tuple[Applied
             "EXCLUSIVE_AREA", "전용면적",
             f"{plan.exclusive_area_square_meters:g}㎡ ±1.0㎡", fact_ids,
         ))
-    criteria.append(AppliedCriterion("RESULT_LIMIT", "결과 수", f"최대 {plan.limit}건", fact_ids))
+    if plan.capability == "recent_trade_lookup":
+        criteria.append(AppliedCriterion("RESULT_LIMIT", "결과 수", f"최대 {plan.limit}건", fact_ids))
     return tuple(criteria)
 
 

@@ -23,9 +23,16 @@ class Document:
 
 
 class Engine:
-    def __init__(self, document: Document | None = None, error: Exception | None = None) -> None:
+    def __init__(
+        self,
+        document: Document | None = None,
+        error: Exception | None = None,
+        *,
+        answer_first_enabled: bool = False,
+    ) -> None:
         self.document = document
         self.error = error
+        self.answer_first_enabled = answer_first_enabled
         self.calls: list[tuple[object, ...]] = []
 
     async def execute_goal(self, *args: object, **kwargs: object) -> Document:
@@ -62,11 +69,11 @@ def spec(goal_id: str, plan: QueryPlan) -> GoalSpec:
     ("readiness", "expected_status", "expected_retryable"),
     [
         ("supported", "SUCCESS", False),
-        ("partial", "PARTIAL", True),
-        ("unavailable", "UNAVAILABLE", True),
+        ("partial", "PARTIAL", False),
+        ("unavailable", "UNAVAILABLE", False),
     ],
 )
-def test_executor_preserves_document_and_maps_typed_status(
+def test_executor_preserves_document_without_marking_evidence_limits_retryable(
     readiness: str, expected_status: str, expected_retryable: bool,
 ) -> None:
     document = Document(readiness)
@@ -126,7 +133,28 @@ def test_executor_resolves_shared_entities_once_with_all_states() -> None:
         deadline=100.0,
     ))
     assert result.status == "CLARIFICATION"
-    assert tuple(record.complex_id for record in engine.calls[-1][-1]["resolved_complexes"]) == (3, 4)
+    assert engine.calls[-1][-1]["resolved_complexes"] is None
+
+    asyncio.run(executor.execute(
+        goals[0], ChatbotQueryRequest(question="정확 단지 정보"), "request-2",
+        deadline=100.0,
+    ))
+    assert tuple(
+        record.complex_id
+        for record in engine.calls[-1][-1]["resolved_complexes"]
+    ) == (1,)
+
+
+def test_answer_first_executor_never_selects_the_first_ambiguous_candidate() -> None:
+    engine = Engine(Document("supported"), answer_first_enabled=True)
+    executor = GroundedGoalExecutor(engine, Repository())  # type: ignore[arg-type]
+    goal = spec("g1", QueryPlan("complex_identity", "모호"))
+
+    resolved = asyncio.run(executor.resolve_entities((goal,)))
+
+    assert [(item.status, item.selected_id, item.candidate_ids) for item in resolved] == [
+        ("AMBIGUOUS", None, (3, 4)),
+    ]
 
 
 def test_executor_prioritizes_unavailable_readiness_over_ambiguous_entity() -> None:

@@ -234,7 +234,7 @@ fi
 ai_openai_api_key="$(required_value "$ai_vars_file" HOME_AI_OPENAI_API_KEY)"
 ai_openai_primary_model="$(required_value "$ai_vars_file" HOME_AI_OPENAI_PRIMARY_MODEL)"
 ai_openai_secondary_model="$(required_value "$ai_vars_file" HOME_AI_OPENAI_SECONDARY_MODEL)"
-ai_openai_timeout_seconds="$(optional_value "$ai_vars_file" HOME_AI_OPENAI_TIMEOUT_SECONDS 30)"
+ai_openai_timeout_seconds="$(optional_value "$ai_vars_file" HOME_AI_OPENAI_TIMEOUT_SECONDS 8)"
 ai_query_timeout_seconds="$(optional_value "$ai_vars_file" HOME_AI_QUERY_TIMEOUT_SECONDS 45)"
 ai_agentic_orchestration_enabled="$(optional_value "$ai_vars_file" HOME_AI_AGENTIC_ORCHESTRATION_ENABLED true)"
 ai_official_web_search_enabled="$(optional_value "$ai_vars_file" HOME_AI_OFFICIAL_WEB_SEARCH_ENABLED true)"

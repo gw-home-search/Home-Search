@@ -144,7 +144,19 @@ function StructuredAnswer({
 }) {
   const hasFragmentGroups = summary.fragmentSummaries.length > 0
     && (message.fragments?.length ?? 0) > 0;
-  const warnings = limitations.filter(isWarningLimitation);
+  const fragmentById = new Map(message.fragments?.map((fragment) => [fragment.fragmentId, fragment]));
+  const orderedFragmentSummaries = [...summary.fragmentSummaries].sort((left, right) => {
+    const leftFailed = fragmentById.get(left.fragmentId)?.status === 'failed' ? 1 : 0;
+    const rightFailed = fragmentById.get(right.fragmentId)?.status === 'failed' ? 1 : 0;
+    return leftFailed - rightFailed;
+  });
+  const failedFragmentLimitations = message.fragments
+    ?.filter(({ status }) => status === 'failed')
+    .flatMap(({ limitations: fragmentLimitations }) => fragmentLimitations) ?? [];
+  const warnings = [...new Set([
+    ...limitations.filter(isWarningLimitation),
+    ...failedFragmentLimitations,
+  ])];
   const dataNotes = limitations.filter((item) => isDataNote(item) && !isWarningLimitation(item));
   return (
     <div className="chatbot-structured-answer">
@@ -160,7 +172,7 @@ function StructuredAnswer({
       />
       {summary.fragmentSummaries.length > 0 ? (
         <div aria-label="요청별 확인 결과" className="chatbot-fragment-summaries">
-          {summary.fragmentSummaries.map((fragment) => (
+          {orderedFragmentSummaries.map((fragment) => (
             <section key={fragment.fragmentId}>
               <h4>{capabilityLabel(fragment.capability)}</h4>
               <p>{fragment.headline}</p>
@@ -178,9 +190,9 @@ function StructuredAnswer({
                     {fragmentArtifacts.length > 0
                       ? <ChatArtifacts actions={actions} artifacts={fragmentArtifacts} onAction={onAction} selectedComplexId={selectedComplexId} />
                       : null}
-                    {detail.limitations.map((limitation) => (
+                    {detail.status === 'success' ? detail.limitations.map((limitation) => (
                       <p className="chatbot-fragment-limitation" key={limitation}>{limitation}</p>
-                    ))}
+                    )) : null}
                   </>
                 );
               })()}
@@ -197,10 +209,10 @@ function StructuredAnswer({
         </section>
       ) : null}
       {summary.criteria.find(({ key }) => key === 'representativeSelection') ? (
-        <details className="chatbot-selection-basis">
-          <summary>단지 선택 기준</summary>
+        <section className="chatbot-selection-basis">
+          <h4>선택 근거</h4>
           <p>{summary.criteria.find(({ key }) => key === 'representativeSelection')?.value}</p>
-        </details>
+        </section>
       ) : null}
       {!hasFragmentGroups && message.artifacts
         ? <ChatArtifacts actions={actions} artifacts={message.artifacts} onAction={onAction} selectedComplexId={selectedComplexId} />

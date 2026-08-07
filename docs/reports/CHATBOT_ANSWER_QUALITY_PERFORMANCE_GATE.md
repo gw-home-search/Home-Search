@@ -71,8 +71,10 @@ release p95 근거로 승격하지 않는다. production snapshot에서 클래�
   `home-search/public-gateway:1.0.64` 충돌로 중단됐다.
 - 일부 SHA·SemVer 이미지가 먼저 게시됐으므로 기존 tag나 이미지를 삭제하지 않고,
   `v1.0.64`를 재실행하지 않는다.
-- 이 기록을 포함한 새 commit에서 `v1.0.65`를 생성해 release pipeline을 다시
-  실행한다.
+- 사전검사에서 `home-search/public-gateway:1.0.65`와 `:1.0.66`도 이미 존재함을
+  확인했다. 두 tag 역시 덮어쓰거나 삭제하지 않는다.
+- 20개 release repository에서 충돌이 없음을 확인한 `v1.0.67`을 새 commit에
+  생성해 release pipeline을 다시 실행한다.
 
 ## 보안 영향
 

@@ -23,7 +23,8 @@ describe('SEO renderer 렌더링', () => {
     expect(html).toContain('<title>&lt;표본&amp;아파트&gt; 실거래가·단지정보 | 홈서치</title>');
     expect(html).toContain('rel="canonical" href="https://homesearch.world/complexes/501"');
     expect(html).toContain('"@type":"ApartmentComplex"');
-    expect(html).toContain('<script id="home-seo-page" type="application/json">');
+    expect(html).toContain('<script id="home-seo-static" type="text/plain">static</script>');
+    expect(html).not.toContain('id="home-seo-page"');
     expect(html).not.toContain('window.__HOME_SEO_PAGE__');
     expect(html).not.toContain('root title');
     expect(html.match(/property="og:title"/gu)).toHaveLength(1);

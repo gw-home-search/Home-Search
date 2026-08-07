@@ -14,7 +14,7 @@ export function renderSeoDocument(page:SeoPage,template=DEFAULT_TEMPLATE):string
     .replace(/<link\s+rel="canonical"[^>]*>/giu,'')
     .replace(/<meta\s+property="og:[^"]+"[^>]*>/giu,'')
     .replace(/<meta\s+name="twitter:[^"]+"[^>]*>/giu,'');
-  return cleaned.replace('</head>',`${head}</head>`).replace('<div id="root"></div>',`<div id="root">${content}</div><script id="home-seo-page" type="application/json">${safeJson(page)}</script>`);
+  return cleaned.replace('</head>',`${head}</head>`).replace('<div id="root"></div>',`<div id="root">${content}</div><script id="home-seo-static" type="text/plain">static</script>`);
 }
 export function renderLegalDocument(kind:LegalPageKind,origin:string,template=DEFAULT_TEMPLATE):string {
   const metadata={

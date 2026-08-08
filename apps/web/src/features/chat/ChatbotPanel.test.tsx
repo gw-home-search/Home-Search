@@ -616,7 +616,7 @@ describe('챗봇 패널', () => {
 
     await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
     await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
-    const recentTradeQuestion = '마포래미안푸르지오 전용 84㎡의 최근 실거래 5건을 거래일과 층까지 알려줘';
+    const recentTradeQuestion = '잠실엘스 전용 84㎡의 최근 실거래 5건을 거래일과 층까지 알려줘';
     const priceTrendQuestion = '헬리오시티 전용 59㎡의 최근 1년 월별 가격 흐름과 거래량을 보여줘';
     const lifestyleQuestion = '잠실엘스 주변 학원 위치와 가까운 역·노선을 함께 알려줘';
     await waitFor(() => host?.querySelector<HTMLButtonElement>(`button[aria-label="${recentTradeQuestion}"]`) != null);

@@ -24,7 +24,10 @@ from ai_service.property_chat.models import (
     QueryPlan,
     QueryPlanBundle,
 )
-from ai_service.property_chat.presentation import _criteria_candidate_interpretation
+from ai_service.property_chat.presentation import (
+    PresentationAssembler,
+    _criteria_candidate_interpretation,
+)
 from ai_service.property_chat.question_normalizer import normalize_question
 
 
@@ -320,6 +323,49 @@ def test_deterministic_presenter_preserves_rail_lines_and_academy_context() -> N
         "확인된 주변 정보는 가나다 학원(서울 송파구 올림픽로 300) "
         "직선거리 800m · 기준일 2026-07-20입니다."
     )
+
+
+def test_academy_presentation_merges_registry_evidence_into_facility_item() -> None:
+    location = _fact(
+        "sbiz-academy-location-store-1",
+        {
+            "facilityId": "store-1",
+            "facilityName": "솔바이올린학원",
+            "distanceMeters": 287,
+        },
+        (FactClaim("솔바이올린학원", "TEXT"), FactClaim("287", "METERS")),
+    )
+    registry = _fact(
+        "academy-registry-exact-registry-1",
+        {
+            "facilityId": "store-1",
+            "academyName": "솔바이올린학원",
+            "matchType": "EXACT",
+        },
+        (FactClaim("솔바이올린학원", "TEXT"), FactClaim("EXACT", "MATCH_TYPE")),
+    )
+
+    _, artifacts = PresentationAssembler().present(
+        plan=QueryPlan("academy_lookup", "잠실엘스", radius_meters=800),
+        used_facts=[location, registry],
+        readiness="supported",
+        artifacts=[],
+    )
+
+    assert artifacts == [{
+        "type": "factList",
+        "version": 1,
+        "artifactId": "fact-list-academy_lookup-sbiz-academy-location-store-1",
+        "title": "확인된 시설 정보",
+        "items": [{
+            "label": "솔바이올린학원",
+            "value": "직선거리 287m",
+            "factIds": [
+                "sbiz-academy-location-store-1",
+                "academy-registry-exact-registry-1",
+            ],
+        }],
+    }]
 
 
 def test_answer_quality_gate_rejects_empty_and_request_only_drafts() -> None:

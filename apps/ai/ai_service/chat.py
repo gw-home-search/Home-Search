@@ -14,7 +14,11 @@ from typing import Protocol, cast
 from .auth import AuthenticatedUser
 from .models import ChatbotQueryRequest
 from .operational_metrics import SUPERVISOR_METRICS
-from .terminal_response import unavailable_response, with_terminal_outcome
+from .terminal_response import (
+    terminal_outcome,
+    unavailable_response,
+    with_terminal_outcome,
+)
 from .property_chat.models import PropertyCapability, QueryCapability, ReferenceCapability
 
 _LOGGER = logging.getLogger(__name__)
@@ -763,6 +767,15 @@ def _mark_minimal_agent_fallback(response: dict[str, object]) -> dict[str, objec
     evidence = result.get("evidenceSummary")
     if isinstance(evidence, dict):
         result["evidenceSummary"] = {**evidence, "status": "partial"}
+    resolution = result.get("conversationResolution")
+    if isinstance(resolution, dict):
+        result["conversationResolution"] = {
+            **resolution,
+            "answerMode": "PARTIAL",
+        }
+    result["terminalOutcome"] = terminal_outcome(
+        "PARTIAL", "PARTIAL_EVIDENCE", retryable=True
+    )
     result["agentExecution"] = {
         "policyVersion": "agentic-recommendation-v1",
         "route": "minimal_fallback", "toolRounds": 0, "toolCalls": 0,

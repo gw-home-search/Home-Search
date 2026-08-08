@@ -166,8 +166,8 @@ def test_slow_ai_read_uses_property_search_ids_then_revalidates_facts(
     )
     repository = object.__new__(PostgresPropertyFactRepository)
     repository._candidate_discovery = Discovery()  # type: ignore[attr-defined]
-    repository.find_complex_by_id = lambda complex_id: (  # type: ignore[method-assign]
-        verified if complex_id == 9001 else None
+    repository._find_complexes_by_ids = lambda complex_ids: (  # type: ignore[method-assign]
+        [verified] if complex_ids == (9001,) else []
     )
     repository._find_complexes_from_ai_read = lambda *_args: (  # type: ignore[method-assign]
         sleep(0.05) or []
@@ -181,6 +181,106 @@ def test_slow_ai_read_uses_property_search_ids_then_revalidates_facts(
 
     assert records == [verified]
     assert records[0].display_name != external_payload["complexName"]
+
+
+def test_property_search_ids_are_revalidated_in_one_bounded_batch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executed_queries: list[str] = []
+    rows = [
+        {
+            "complex_id": complex_id,
+            "parcel_id": complex_id + 10_000,
+            "display_name": f"검증단지{complex_id}",
+            "region_code": "11110101",
+            "region_name": "임의동",
+            "address": f"서울 임의구 임의동 {complex_id}",
+            "latitude": 37.5,
+            "longitude": 127.0,
+            "marker_safe": True,
+            "data_updated_at": "2026-08-01T00:00:00+00:00",
+            "unit_count": 100,
+            "use_date": date(2020, 1, 1),
+        }
+        for complex_id in (9003, 9001, 9002)
+    ]
+
+    class Discovery:
+        def find_complex_ids(self, _name: str) -> tuple[int, ...]:
+            return (9003, 9001, 9002)
+
+    class FakeResult:
+        def __init__(self, selected_rows):
+            self._rows = selected_rows
+
+        def fetchall(self):
+            return self._rows
+
+        def fetchone(self):
+            return self._rows[0] if self._rows else None
+
+    class FakeConnection:
+        def execute(self, query: str, parameters: object) -> FakeResult:
+            executed_queries.append(query)
+            if "complex_id = ANY" in query:
+                return FakeResult(rows)
+            complex_id = parameters[0]  # type: ignore[index]
+            return FakeResult([
+                row for row in rows if row["complex_id"] == complex_id
+            ])
+
+    class FakePool:
+        @contextmanager
+        def connection(self):
+            yield FakeConnection()
+
+    repository = object.__new__(PostgresPropertyFactRepository)
+    repository._pool = FakePool()  # type: ignore[attr-defined]
+    repository._candidate_discovery = Discovery()  # type: ignore[attr-defined]
+    repository._find_complexes_from_ai_read = lambda *_args: (  # type: ignore[method-assign]
+        sleep(0.05) or []
+    )
+    monkeypatch.setattr(
+        "ai_service.property_chat.postgres._PROPERTY_SEARCH_SOFT_LATENCY_SECONDS",
+        0.01,
+    )
+
+    records = repository.find_complexes("임의단지", None, 6)
+
+    assert [record.complex_id for record in records] == [9003, 9001, 9002]
+    assert len(executed_queries) == 1
+    assert "complex_id = ANY" in executed_queries[0]
+
+
+def test_property_search_fallback_respects_the_overall_hard_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Discovery:
+        def find_complex_ids(self, _name: str) -> tuple[int, ...]:
+            return (9001,)
+
+    repository = object.__new__(PostgresPropertyFactRepository)
+    repository._candidate_discovery = Discovery()  # type: ignore[attr-defined]
+    repository._find_complexes_from_ai_read = lambda *_args: (  # type: ignore[method-assign]
+        sleep(0.08) or []
+    )
+    repository._find_complexes_by_ids = lambda *_args: (  # type: ignore[method-assign]
+        sleep(0.08) or []
+    )
+    monkeypatch.setattr(
+        "ai_service.property_chat.postgres._PROPERTY_SEARCH_SOFT_LATENCY_SECONDS",
+        0.005,
+    )
+    monkeypatch.setattr(
+        "ai_service.property_chat.postgres._PROPERTY_SEARCH_HARD_TIMEOUT_SECONDS",
+        0.02,
+    )
+
+    started_at = perf_counter()
+    with pytest.raises(TimeoutError):
+        repository.find_complexes("임의단지", None, 6)
+
+    assert perf_counter() - started_at < 0.06
 
 
 def test_complex_lookup_escapes_like_wildcards_and_applies_region(

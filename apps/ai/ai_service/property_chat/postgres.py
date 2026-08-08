@@ -106,16 +106,33 @@ class PostgresPropertyFactRepository:
         if getattr(self, "_candidate_discovery", None) is None:
             return self._find_complexes_from_ai_read(name, region_name, limit)
         started_at = monotonic()
-        executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ai-complex-search")
+        executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ai-complex-search")
         database_future = executor.submit(
             self._find_complexes_from_ai_read, name, region_name, limit
         )
+
+        def fallback_before_deadline() -> list[ComplexRecord] | None:
+            remaining = _PROPERTY_SEARCH_HARD_TIMEOUT_SECONDS - (
+                monotonic() - started_at
+            )
+            if remaining <= 0:
+                raise TimeoutError("property complex search exceeded its hard timeout")
+            fallback_future = executor.submit(
+                self._fallback_complexes, name, region_name, limit
+            )
+            try:
+                return fallback_future.result(timeout=remaining)
+            except FutureTimeoutError as exception:
+                raise TimeoutError(
+                    "property complex search exceeded its hard timeout"
+                ) from exception
+
         try:
             records = database_future.result(
                 timeout=_PROPERTY_SEARCH_SOFT_LATENCY_SECONDS
             )
         except FutureTimeoutError:
-            records = self._fallback_complexes(name, region_name, limit)
+            records = fallback_before_deadline()
             if records:
                 return records
             remaining = _PROPERTY_SEARCH_HARD_TIMEOUT_SECONDS - (monotonic() - started_at)
@@ -123,7 +140,7 @@ class PostgresPropertyFactRepository:
                 raise TimeoutError("property complex search exceeded its hard timeout")
             return database_future.result(timeout=remaining)
         except Exception:
-            records = self._fallback_complexes(name, region_name, limit)
+            records = fallback_before_deadline()
             if records is None:
                 raise
             return records
@@ -131,7 +148,7 @@ class PostgresPropertyFactRepository:
             executor.shutdown(wait=False, cancel_futures=True)
         if records:
             return records
-        return self._fallback_complexes(name, region_name, limit) or []
+        return fallback_before_deadline() or []
 
     def _find_complexes_from_ai_read(
         self, name: str, region_name: str | None, limit: int
@@ -330,10 +347,14 @@ class PostgresPropertyFactRepository:
             return None
         try:
             candidate_ids = self._candidate_discovery.find_complex_ids(name)
+            verified_by_id = {
+                record.complex_id: record
+                for record in self._find_complexes_by_ids(candidate_ids)
+            }
             records = [
                 record
                 for complex_id in candidate_ids
-                if (record := self.find_complex_by_id(complex_id)) is not None
+                if (record := verified_by_id.get(complex_id)) is not None
                 and (
                     region_name is None
                     or region_name.casefold() in (record.region_name or "").casefold()
@@ -343,6 +364,24 @@ class PostgresPropertyFactRepository:
         except Exception:
             return None
         return records[:limit]
+
+    def _find_complexes_by_ids(
+        self, complex_ids: tuple[int, ...]
+    ) -> list[ComplexRecord]:
+        if not complex_ids:
+            return []
+        with self._pool.connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT complex_id, parcel_id, display_name, region_code, region_name, address,
+                       latitude, longitude, marker_safe, data_updated_at,
+                       unit_count, use_date
+                FROM ai_read.complex_fact
+                WHERE complex_id = ANY(%s::bigint[])
+                """,
+                (list(complex_ids),),
+            ).fetchall()
+        return [_complex_record(row) for row in rows]
 
     def complex_profile(self, complex_id: int) -> dict[str, object] | None:
         if isinstance(complex_id, bool) or not isinstance(complex_id, int) or complex_id <= 0:

@@ -138,7 +138,6 @@ async def query(
         _LOGGER.warning(
             "ai_safe_final",
             extra={"terminal_status": "UNAVAILABLE", "terminal_reason": "TEMPORARY_FAILURE"},
-            exc_info=True,
         )
         return safe_final_response(request.state.request_id)
 

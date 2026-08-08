@@ -89,7 +89,8 @@ def build_agentic_response(
          "observedAt": None, "factIds": [citation.fact_id]}
         for index, citation in enumerate(decision.web_citations, 1)
     ]
-    success = result.route != "minimal_fallback" and result.readiness == "supported"
+    complete = result.route != "minimal_fallback" and result.readiness == "supported"
+    success = True
     official_only = not decision.rows and bool(decision.research_claims)
     verified_scope = result.scope_label or scope_label
     lead = (
@@ -147,13 +148,13 @@ def build_agentic_response(
         "official-web-evidence-v1" if official_only else "agentic-recommendation-v1"
     )
     return {
-        "success": success, "status": "success" if success else "partial_success",
+        "success": success, "status": "success" if complete else "partial_success",
         "question": request.question, "fragments": [], "result": {}, "message": "",
         "executionSummary": {"total": 1, "succeeded": int(success), "failed": int(not success)},
         "answer": answer, "resolvedQuestion": request.question,
         "conversationResolution": {
-            "version": 1, "answerMode": "COMPLETE" if success else "PARTIAL",
-            "goals": [{"capability": capability, "status": "answered" if success else "degraded"}],
+            "version": 1, "answerMode": "COMPLETE" if complete else "PARTIAL",
+            "goals": [{"capability": capability, "status": "answered" if complete else "degraded"}],
         },
         "conversationMemoryPatch": ({
             "version": 2, "complexIds": selected_ids, "scopeKind": "RECOMMENDATION",

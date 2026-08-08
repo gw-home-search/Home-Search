@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from datetime import UTC, date, datetime
 
 import pytest
@@ -150,14 +151,18 @@ def test_context_bound_station_pool_has_distance_facts_and_no_scope_arguments() 
     assert result.payload["scope"]["type"] == "STATION_RADIUS"
     assert result.payload["scope"]["label"] == "망포역 직선거리 1500m"
     assert str(result.payload["scope"]["factId"]).startswith("recommendation-scope:")
-    assert result.payload["candidates"][0]["station"] == {
+    station_fact = result.payload["candidates"][0]["station"]
+    assert station_fact == {
         "name": "망포", "lines": ["수인분당선"], "distanceMeters": 0,
         "radiusMeters": 1500, "sourceDate": "2026-07-01",
-        "factId": "station-distance:1:망포",
+        "factId": station_fact["factId"],
     }
+    assert re.fullmatch(
+        r"[A-Za-z0-9][A-Za-z0-9._:-]{0,199}", station_fact["factId"]
+    )
     assert "latitude" not in result.payload["candidates"][0]
     assert "longitude" not in result.payload["candidates"][0]
-    assert "station-distance:1:망포" in result.fact_ids
+    assert station_fact["factId"] in result.fact_ids
 
     with pytest.raises(ValueError, match="candidate pool arguments"):
         _run(tools, "get_recommendation_candidate_pool", {

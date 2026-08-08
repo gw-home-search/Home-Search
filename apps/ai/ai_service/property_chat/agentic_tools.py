@@ -13,6 +13,7 @@ from .agentic import AgentDecision, AgentRecommendationRow, ToolEvidence
 from .comparison import CandidatePoint
 from .criteria_recommendation import CriteriaCandidateScope
 from .models import ComplexRecord, MonthlyTrendRecord, TradeRecord
+from .public_identifiers import public_identifier_token
 
 
 class AgenticPropertyRepository(Protocol):
@@ -388,7 +389,8 @@ class PropertyAgentTools:
                 assert context.radius_meters is not None
                 assert context.station_source_date is not None
                 distance_fact_id = (
-                    f"station-distance:{record.complex_id}:{context.station_name}"
+                    f"station-distance:{record.complex_id}:"
+                    f"{public_identifier_token(context.station_name)}"
                 )
                 payload["station"] = {
                     "name": context.station_name,

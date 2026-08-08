@@ -15,6 +15,7 @@ from ai_service.property_chat.agentic import (
 from ai_service.property_chat.agentic_response import build_agentic_response
 from ai_service.property_chat.models import ComplexRecord, QueryPlan
 from ai_service.property_chat.criteria_recommendation import CriteriaCandidateScope
+from ai_service.terminal_response import with_terminal_outcome
 
 
 def test_successful_agent_path_does_not_construct_legacy_presenters(
@@ -110,11 +111,11 @@ def test_agentic_station_response_emits_verified_scope_and_focus_action() -> Non
             rows=(AgentRecommendationRow(
                 complex_id=20, complex_name="나단지", role="TRANSIT",
                 summary="망포역 접근성과 단지 규모를 함께 확인한 후보입니다.",
-                strengths=(("망포역 직선거리 620m입니다.", ("station-distance:20:망포",)),),
+                strengths=(("망포역 직선거리 620m입니다.", ("station-distance:20:7f0f88f9e08ad156",)),),
                 tradeoffs=(("예산과 전용면적은 지정되지 않았습니다.", ("complex:20",)),),
-                metrics={}, fact_ids=("complex:20", "station-distance:20:망포"),
+                metrics={}, fact_ids=("complex:20", "station-distance:20:7f0f88f9e08ad156"),
             ),),
-            fact_ids=("complex:20", "station-distance:20:망포"),
+            fact_ids=("complex:20", "station-distance:20:7f0f88f9e08ad156"),
         ),
         route="primary", readiness="supported", tool_rounds=1, tool_calls=1,
         scope_label="망포역 직선거리 1500m",
@@ -180,8 +181,12 @@ def test_partial_evidence_keeps_grounded_rows_and_focus_action() -> None:
         criteria_order=("TRANSIT", "EDUCATION"), selected_complexes=selected,
     )
 
-    assert response["success"] is False
+    assert response["success"] is True
     assert response["status"] == "partial_success"
+    assert with_terminal_outcome(response)["terminalOutcome"] == {
+        "version": 1, "status": "PARTIAL", "reason": "PARTIAL_EVIDENCE",
+        "retryable": False,
+    }
     assert response["uiArtifacts"]
     assert response["uiActions"]
 

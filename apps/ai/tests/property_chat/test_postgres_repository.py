@@ -400,6 +400,9 @@ def test_comparison_lookup_and_trades_use_two_bounded_batch_queries(
         trades = repository.recent_trades_batch(
             (1, 2), date(2025, 7, 21), date(2026, 7, 20), 84.0, 3
         )
+        latest = repository.latest_trades_for_candidates(
+            (1, 2), date(2025, 7, 21), date(2026, 7, 20), None
+        )
     finally:
         repository.close()
 
@@ -409,6 +412,8 @@ def test_comparison_lookup_and_trades_use_two_bounded_batch_queries(
     assert [record.complex_id for record in district_complexes["잠실엘스"]] == [1]
     assert [record.trade_id for record in trades[1]] == [14, 12, 11]
     assert trades[2] == ()
+    assert latest[1] is not None and latest[1].trade_id == 14
+    assert latest[2] is None
 
 
 def test_recommendation_candidates_resolve_descendants_and_return_latest_three(

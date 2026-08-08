@@ -480,10 +480,16 @@ LLM이 artifact의 값, 점수, 순서 또는 `factIds`를 만들지 않는다. 
 ```
 
 - `role`은 `BALANCED|TRADE_ACTIVITY|SCALE|NEWER|TRANSIT|EDUCATION|LIFESTYLE`다.
+- `basis.scopeType`은 `ADMIN_REGION|STATION_RADIUS`다. `STATION_RADIUS`는 서버가
+  active 철도 snapshot에서 exact occurrence, freshness, coordinate coverage를 검증한 뒤
+  확정한 역 좌표와 반경을 사용한다. raw 좌표와 내부 occurrence id는 artifact에 넣지 않는다.
 - row는 unique `complexId` 1..5개이고 `order`는 1부터 연속된다.
 - `summary`, `strengths`, `tradeoffs`의 사실 문장은 실제 observation의 `factIds`를 가진다.
 - 서버가 만든 후보군 밖 ID, hard constraint 위반, 존재하지 않는 `factId`는 거부한다.
 - 조건 없는 추천은 `defaultPolicy=BALANCED_V1`이고 예산·면적 미지정을 답변에 표시한다.
+- 선택 row마다 marker-safe `complexId`, `parcelId`, WGS84 좌표를 `ai_read`에서 다시
+  확인한 경우에만 기존 `focusComplex/v1`을 만들며, action의 `factIds`는 해당 row 근거에
+  포함된다. JSON과 SSE final은 같은 artifact, action, terminal 의미를 사용한다.
 
 #### `recommendationCards/v1`
 

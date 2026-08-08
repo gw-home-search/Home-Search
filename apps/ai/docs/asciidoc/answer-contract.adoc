@@ -5,8 +5,8 @@
 지켜야 할 생성 경계만 설명한다.
 
 허용 artifact는 `factList/v1`, `tradeTable/v1`, `trendTable/v1`,
-`comparisonTable/v1`, `recommendationCards/v1`, `recommendationTable/v1`
-여섯 종류다. 허용 action은
+`comparisonTable/v1|v2`, `recommendationCards/v1`,
+`recommendationTable/v1|v2`다. 허용 action은
 `focusComplex/v1`과 `showNearbyCategory/v1`이다. 임의 Markdown/HTML, generic renderer payload,
 `mapPoints`, chart schema, dynamic plugin은 만들지 않는다.
 
@@ -27,3 +27,8 @@
 `SHOPPING`만 표시한다. `MIN_UNIT_COUNT`는 후보 관측 전에 적용하고 여러 metric은 사용자가
 명시한 우선순서로만 정렬한다. `CHILDCARE`는 타입과 source 구현을 보존하지만 active 추천
 catalog와 runtime allowlist에서는 제외한다.
+
+`recommendationTable/v2`는 서버가 검증한 `ADMIN_REGION|STATION_RADIUS` scope와 hard
+filter 후보군 안에서만 Agentic 선택을 허용한다. 역 scope의 exact occurrence, freshness,
+coverage, 반경은 tool argument가 아니라 서버 context가 소유한다. 최종 ID와 공식명,
+marker-safe 좌표, `parcelId`를 `ai_read`에서 다시 확인한 뒤에만 `focusComplex/v1`을 만든다.

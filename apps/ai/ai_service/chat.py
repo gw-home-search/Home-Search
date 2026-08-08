@@ -8,6 +8,7 @@ import math
 import os
 import re
 import time
+from datetime import date
 from functools import lru_cache
 from typing import Protocol, cast
 
@@ -397,6 +398,140 @@ def _agentic_request(question: str) -> bool:
     return re.search(r"(추천|어때|어떄|괜찮아|살기\s*어)", question) is not None
 
 
+def _recommendation_agentic_request(question: str) -> bool:
+    return re.search(r"(추천|골라|선정)", question) is not None and re.search(
+        r"(최신|현재|공고|고시|계획|예정|개통)", question
+    ) is None
+
+
+async def _verified_agentic_context(request, language_model):  # noqa: ANN001
+    from .property_chat.agentic_tools import VerifiedRecommendationContext
+    from .property_chat.engine import (
+        _apply_normalized_question,
+        _verify_plan,
+    )
+    from .property_chat.models import QueryPlan, QueryPlanBundle
+    from .property_chat.question_normalizer import normalize_question
+
+    planned = await language_model.plan_query(request)
+    plans = planned.fragments if isinstance(planned, QueryPlanBundle) else (planned,)
+    recommendation_plans = tuple(
+        plan for plan in plans
+        if isinstance(plan, QueryPlan) and plan.capability == "recommendation"
+    )
+    if len(recommendation_plans) != 1:
+        return None
+    plan = _verify_plan(
+        _apply_normalized_question(
+            recommendation_plans[0], normalize_question(request.question)
+        ),
+        request.question,
+        semantic_goal_planner_enabled=get_semantic_goal_planner_enabled(),
+    )
+    if plan.clarification_code is not None:
+        return None
+    criteria_order = _agentic_criteria_order(plan.criteria_order, request.question)
+    if plan.station_name is not None:
+        criteria_order = ("TRANSIT", *(item for item in criteria_order if item != "TRANSIT"))
+    if plan.station_name is None:
+        if plan.region_name is None:
+            return None
+        return VerifiedRecommendationContext(
+            question=request.question, scope_type="ADMIN_REGION",
+            scope_label=plan.region_name, region_name=plan.region_name,
+            station_name=None, station_lines=(), station_latitude=None,
+            station_longitude=None, station_source_date=None, radius_meters=None,
+            minimum_unit_count=plan.minimum_unit_count,
+            maximum_budget_ten_thousand_krw=plan.maximum_budget_ten_thousand_krw,
+            exclusive_area_square_meters=plan.exclusive_area_square_meters,
+            criteria_order=criteria_order, requested_count=plan.limit,
+            explicit_criteria=tuple(plan.recommendation_criteria),
+            school_levels=tuple(plan.school_levels),
+            area_conversion_note=plan.area_conversion_note,
+        )
+    rail_repository = await asyncio.to_thread(get_rail_station_repository)
+    resolution = await asyncio.to_thread(
+        rail_repository.resolve_station, plan.station_name
+    )
+    if (
+        resolution is None or len(resolution.matches) != 1
+        or resolution.coordinate_coverage < 0.95
+        or not 0 <= (date.today() - resolution.source_date).days
+        <= resolution.freshness_days
+    ):
+        return None
+    match = resolution.matches[0]
+    if plan.radius_meters is None:
+        return None
+    return VerifiedRecommendationContext(
+        question=request.question, scope_type="STATION_RADIUS",
+        scope_label=f"{match.station_name}역 직선거리 {plan.radius_meters}m",
+        region_name=plan.region_name, station_name=match.station_name,
+        station_lines=tuple(match.lines), station_latitude=match.latitude,
+        station_longitude=match.longitude, station_source_date=resolution.source_date,
+        radius_meters=plan.radius_meters,
+        minimum_unit_count=plan.minimum_unit_count,
+        maximum_budget_ten_thousand_krw=plan.maximum_budget_ten_thousand_krw,
+        exclusive_area_square_meters=plan.exclusive_area_square_meters,
+        criteria_order=criteria_order, requested_count=plan.limit,
+        explicit_criteria=tuple(plan.recommendation_criteria),
+        school_levels=tuple(plan.school_levels),
+        area_conversion_note=plan.area_conversion_note,
+    )
+
+
+def _agentic_criteria_order(criteria_order, question: str) -> tuple[str, ...]:  # noqa: ANN001
+    mapped = []
+    for criterion in criteria_order:
+        mapped.append({
+            "ACADEMY": "EDUCATION", "SCHOOL": "EDUCATION",
+            "SHOPPING": "LIFESTYLE",
+        }.get(criterion, criterion))
+    for pattern, criterion in (
+        (r"(?:거래\s*활동|최근\s*거래|거래량)", "TRADE_ACTIVITY"),
+        (r"(?:규모|대단지|세대수)", "SCALE"),
+        (r"(?:연식|신축|사용승인)", "NEWER"),
+    ):
+        if re.search(pattern, question):
+            mapped.append(criterion)
+    return tuple(dict.fromkeys(mapped))
+
+
+async def _revalidate_agentic_selection(repository, rows):  # noqa: ANN001
+    selected = []
+    for row in rows:
+        record = await asyncio.to_thread(repository.find_complex_by_id, row.complex_id)
+        if (
+            record is None or record.display_name != row.complex_name
+            or not record.marker_safe or record.parcel_id is None
+            or record.latitude is None or record.longitude is None
+            or not 33 <= record.latitude <= 39
+            or not 124 <= record.longitude <= 132
+        ):
+            raise ValueError("agentic selection failed final read-model validation")
+        selected.append(record)
+    return tuple(selected)
+
+
+def _agentic_basis_notes(context) -> tuple[str, ...]:  # noqa: ANN001
+    notes = []
+    if context.minimum_unit_count is not None:
+        notes.append(f"최소 {context.minimum_unit_count:,}세대")
+    if context.exclusive_area_square_meters is not None:
+        notes.append(f"전용 {context.exclusive_area_square_meters:g}㎡ ±1.0㎡")
+    if context.maximum_budget_ten_thousand_krw is not None:
+        notes.append(f"최근 거래금액 {context.maximum_budget_ten_thousand_krw:,}만원 이하")
+    if context.maximum_budget_ten_thousand_krw is None:
+        notes.append("예산 미지정")
+    if context.exclusive_area_square_meters is None:
+        notes.append("전용면적 미지정 · 거래금액 후보 간 비교 제외")
+    if context.criteria_order:
+        notes.append(f"우선 확인 기준: {', '.join(context.criteria_order)}")
+    if context.area_conversion_note:
+        notes.append(context.area_conversion_note)
+    return tuple(notes)
+
+
 def _out_of_scope_request(question: str) -> bool:
     return re.search(
         r"(?:법률\s*(?:판단|상담)|소송|세금\s*(?:상담|신고)|가격\s*예측|"
@@ -566,6 +701,7 @@ class ConfiguredChatbotEngine:
                     supervisor_mode, supervisor_percent, user.user_id
                 )
                 minimal_fallback = False
+                language_model = None
                 if (
                     not graph_selected
                     and get_agentic_orchestration_enabled()
@@ -578,20 +714,84 @@ class ConfiguredChatbotEngine:
                     try:
                         primary, secondary = _agent_models(request.question)
                         requested_count = _requested_candidate_count(request.question)
+                        recommendation_context = None
+                        if _recommendation_agentic_request(request.question):
+                            language_model = await asyncio.to_thread(
+                                get_grounded_language_model
+                            )
+                            recommendation_context = await _verified_agentic_context(
+                                request, language_model
+                            )
+                            if recommendation_context is None:
+                                raise ValueError("verified recommendation context unavailable")
+                            requested_count = recommendation_context.requested_count
+                        agent_school_repository = None
+                        agent_academy_repository = None
+                        agent_retail_repository = None
+                        if recommendation_context is not None:
+                            for criterion, factory, target in (
+                                ("SCHOOL", get_school_fact_repository, "school"),
+                                ("ACADEMY", get_academy_location_repository, "academy"),
+                                ("SHOPPING", get_point_facility_repository, "retail"),
+                            ):
+                                if criterion not in recommendation_context.explicit_criteria:
+                                    continue
+                                try:
+                                    value = await asyncio.to_thread(factory)
+                                except ChatbotProviderUnavailable:
+                                    value = None
+                                if target == "school":
+                                    agent_school_repository = value
+                                elif target == "academy":
+                                    agent_academy_repository = value
+                                else:
+                                    agent_retail_repository = value
+                        agent_tools = PropertyAgentTools(  # type: ignore[arg-type]
+                            repository, context=recommendation_context,
+                            school_repository=agent_school_repository,
+                            academy_repository=agent_academy_repository,
+                            retail_repository=agent_retail_repository,
+                        )
+                        if recommendation_context is not None:
+                            await agent_tools.preload_recommendation_evidence()
                         async with asyncio.timeout(max(timeout_seconds - 8, 1)):
                             agent_result = await BoundedAgentOrchestrator(
                                 primary=primary,  # type: ignore[arg-type]
                                 secondary=secondary,  # type: ignore[arg-type]
-                                tools=PropertyAgentTools(repository),  # type: ignore[arg-type]
+                                tools=agent_tools,
                             ).run(
                                 question=request.question,
                                 requested_count=requested_count,
                             )
-                        if agent_result.route != "minimal_fallback":
+                        if (
+                            agent_result.route != "minimal_fallback"
+                            or agent_result.decision.rows
+                        ):
+                            selected_complexes = await _revalidate_agentic_selection(
+                                repository, agent_result.decision.rows
+                            ) if agent_result.decision.rows else ()
                             response = build_agentic_response(
                                 request=request, request_id=request_id,
                                 result=agent_result, requested_count=requested_count,
-                                scope_label=_scope_label(request.question),
+                                scope_label=(
+                                    recommendation_context.scope_label
+                                    if recommendation_context is not None
+                                    else _scope_label(request.question)
+                                ),
+                                scope_type=(
+                                    recommendation_context.scope_type
+                                    if recommendation_context is not None
+                                    else "ADMIN_REGION"
+                                ),
+                                criteria_order=(
+                                    recommendation_context.criteria_order
+                                    if recommendation_context is not None else ()
+                                ),
+                                basis_notes=(
+                                    _agentic_basis_notes(recommendation_context)
+                                    if recommendation_context is not None else ()
+                                ),
+                                selected_complexes=selected_complexes,
                             )
                             _LOGGER.info(
                                 "chatbot_agent_completed",
@@ -604,11 +804,14 @@ class ConfiguredChatbotEngine:
                                     ),
                                 ),
                             )
-                            return _apply_presentation_rollbacks(response)
+                            return with_terminal_outcome(
+                                _apply_presentation_rollbacks(response)
+                            )
                         minimal_fallback = True
-                    except (ChatbotProviderUnavailable, TimeoutError):
+                    except (ChatbotProviderUnavailable, TimeoutError, ValueError):
                         minimal_fallback = True
-                language_model = await asyncio.to_thread(get_grounded_language_model)
+                if language_model is None:
+                    language_model = await asyncio.to_thread(get_grounded_language_model)
                 enabled_reference_capabilities = get_enabled_reference_capabilities()
                 school_repository = None
                 academy_registry_repository = None

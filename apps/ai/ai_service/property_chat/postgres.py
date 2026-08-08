@@ -554,6 +554,53 @@ class PostgresPropertyFactRepository:
             result[int(row["complex_id"])].append(_trade_record(row))
         return {complex_id: tuple(trades) for complex_id, trades in result.items()}
 
+    def latest_trades_for_candidates(
+        self,
+        complex_ids: tuple[int, ...],
+        start_date: date,
+        end_date: date,
+        exclusive_area_square_meters: float | None,
+    ) -> dict[int, TradeRecord | None]:
+        if (
+            not 1 <= len(complex_ids) <= 40
+            or len(complex_ids) != len(set(complex_ids))
+            or any(complex_id <= 0 for complex_id in complex_ids)
+            or start_date > end_date
+        ):
+            raise ValueError("agentic trade batch query is outside the supported range")
+        area = _optional_decimal(exclusive_area_square_meters)
+        area_sql = ""
+        parameters: list[object] = [list(complex_ids), start_date, end_date]
+        if area is not None:
+            area_sql = (
+                "AND exclusive_area_square_meters BETWEEN %s - %s AND %s + %s"
+            )
+            parameters.extend((
+                area, _AREA_TOLERANCE_SQUARE_METERS,
+                area, _AREA_TOLERANCE_SQUARE_METERS,
+            ))
+        with self._pool.connection() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT DISTINCT ON (complex_id)
+                       trade_id, complex_id, deal_date,
+                       deal_amount_ten_thousand_krw,
+                       exclusive_area_square_meters, floor
+                FROM ai_read.trade_fact
+                WHERE complex_id = ANY(%s::bigint[])
+                  AND deal_date >= %s AND deal_date <= %s
+                  {area_sql}
+                ORDER BY complex_id, deal_date DESC, trade_id DESC
+                """,
+                tuple(parameters),
+            ).fetchall()
+        result: dict[int, TradeRecord | None] = {
+            complex_id: None for complex_id in complex_ids
+        }
+        for row in rows:
+            result[int(row["complex_id"])] = _trade_record(row)
+        return result
+
     def candidate_observation_summaries(
         self,
         complex_ids: tuple[int, ...],

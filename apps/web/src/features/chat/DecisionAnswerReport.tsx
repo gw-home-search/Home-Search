@@ -38,6 +38,9 @@ export function DecisionAnswerReport({
     const artifact = artifactById.get(artifactId);
     return artifact == null ? [] : [artifact];
   });
+  const primaryHasRecommendation = primary.some(
+    (artifact) => artifact.type === 'recommendationTable',
+  );
   const warnings = limitations.filter(isWarningLimitation);
   const dataNotes = limitations.filter((item) => isDataNote(item) && !isWarningLimitation(item));
   return (
@@ -51,13 +54,13 @@ export function DecisionAnswerReport({
         detailState={detailState}
         focusActionStatuses={focusActionStatuses}
       />
-      {primary.length > 0 ? <ChatArtifacts actions={actions} artifacts={primary} onAction={onAction} selectedComplexId={selectedComplexId} /> : null}
       {report.basis.length > 0 ? (
         <section className="chatbot-report-basis">
-          <h4>조회 조건</h4>
+          <h4>{report.kind === 'RECOMMENDATION' ? '선정 기준' : '조회 조건'}</h4>
           <ul>{report.basis.map((item) => <li key={item.text}>{item.text}</li>)}</ul>
         </section>
       ) : null}
+      {primary.length > 0 ? <ChatArtifacts actions={actions} artifacts={primary} onAction={onAction} selectedComplexId={selectedComplexId} /> : null}
       {(message.summary?.interpretations.length ?? 0) > 0 ? (
         <section className="chatbot-summary-interpretations">
           <h4>핵심값</h4>
@@ -86,7 +89,7 @@ export function DecisionAnswerReport({
       {details.length > 0 ? (
         <section className="chatbot-report-details">
           <h4>{detailHeading(report.kind)}</h4>
-          <ChatArtifacts actions={actions} artifacts={details} onAction={onAction} selectedComplexId={selectedComplexId} />
+          <ChatArtifacts actions={actions} artifacts={details} hideCandidateProfileActions={primaryHasRecommendation} onAction={onAction} selectedComplexId={selectedComplexId} />
         </section>
       ) : null}
       {dataNotes.length > 0 ? (

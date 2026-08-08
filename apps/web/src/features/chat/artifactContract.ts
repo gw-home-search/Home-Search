@@ -150,7 +150,7 @@ export type RecommendationTableArtifactV2 = {
   policyVersion: 'agentic-recommendation-v1';
   basis: {
     selectionMode: 'AGENTIC';
-    scopeType: 'ADMIN_REGION';
+    scopeType: 'ADMIN_REGION' | 'STATION_RADIUS';
     scopeLabel: string;
     requestedCount: number;
     criteriaOrder: Array<'TRADE_ACTIVITY' | 'SCALE' | 'NEWER' | 'TRANSIT' | 'EDUCATION' | 'LIFESTYLE'>;
@@ -404,7 +404,8 @@ function readRecommendationTableArtifactV2(
       'criteriaOrder', 'defaultPolicy',
     ])
     || value.basis.selectionMode !== 'AGENTIC'
-    || value.basis.scopeType !== 'ADMIN_REGION'
+    || (value.basis.scopeType !== 'ADMIN_REGION'
+      && value.basis.scopeType !== 'STATION_RADIUS')
     || !isDisplayText(value.basis.scopeLabel, 100)
     || !isIntegerInRange(value.basis.requestedCount, 1, 5)
     || !Array.isArray(value.basis.criteriaOrder)
@@ -453,7 +454,7 @@ function readRecommendationTableArtifactV2(
     type: 'recommendationTable', version: 2, artifactId: value.artifactId,
     title: value.title.trim(), policyVersion: 'agentic-recommendation-v1',
     basis: {
-      selectionMode: 'AGENTIC', scopeType: 'ADMIN_REGION',
+      selectionMode: 'AGENTIC', scopeType: value.basis.scopeType,
       scopeLabel: value.basis.scopeLabel.trim(), requestedCount: value.basis.requestedCount,
       criteriaOrder: value.basis.criteriaOrder as RecommendationTableArtifactV2['basis']['criteriaOrder'],
       defaultPolicy: 'BALANCED_V1',

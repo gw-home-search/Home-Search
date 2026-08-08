@@ -13,11 +13,13 @@ export function ChatArtifacts({
   artifacts,
   onAction,
   selectedComplexId,
+  hideCandidateProfileActions = false,
 }: {
   actions?: ChatAction[];
   artifacts: ChatArtifact[];
   onAction?: (action: ChatAction) => void;
   selectedComplexId?: number;
+  hideCandidateProfileActions?: boolean;
 }) {
   if (artifacts.length === 0) return null;
   return (
@@ -34,7 +36,7 @@ export function ChatArtifacts({
             : artifact.type === 'trendTable'
               ? <TrendTableArtifactView artifact={artifact} key={artifact.artifactId} />
               : artifact.type === 'candidateProfile'
-                ? <CandidateProfileArtifactView actions={actions} artifact={artifact} key={artifact.artifactId} onAction={onAction} selectedComplexId={selectedComplexId} />
+                ? <CandidateProfileArtifactView actions={actions} artifact={artifact} hideFocusAction={hideCandidateProfileActions} key={artifact.artifactId} onAction={onAction} selectedComplexId={selectedComplexId} />
             : <FactListArtifactView
               actions={actions}
               artifact={artifact}

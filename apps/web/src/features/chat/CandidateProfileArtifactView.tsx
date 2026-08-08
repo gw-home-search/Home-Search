@@ -7,11 +7,13 @@ export function CandidateProfileArtifactView({
   actions = [],
   onAction,
   selectedComplexId,
+  hideFocusAction = false,
 }: {
   artifact: CandidateProfileArtifact;
   actions?: ChatAction[];
   onAction?: (action: ChatAction) => void;
   selectedComplexId?: number;
+  hideFocusAction?: boolean;
 }) {
   return (
     <details
@@ -27,7 +29,7 @@ export function CandidateProfileArtifactView({
         </span>
       </summary>
       <div className="chatbot-candidate-profile-body">
-        <ArtifactFocusButton actions={actions} factIds={artifact.factIds} onAction={onAction} selectedComplexId={selectedComplexId} />
+        {hideFocusAction ? null : <ArtifactFocusButton actions={actions} factIds={artifact.factIds} onAction={onAction} selectedComplexId={selectedComplexId} />}
         {artifact.address || artifact.unitCount != null || artifact.useDate ? (
           <p className="chatbot-candidate-meta">
             {[artifact.address,

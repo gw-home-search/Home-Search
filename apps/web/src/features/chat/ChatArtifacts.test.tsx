@@ -237,12 +237,23 @@ describe('조건 추천표 artifact UI', () => {
       }],
     };
 
-    const html = renderToStaticMarkup(<ChatArtifacts artifacts={[artifact]} />);
+    const html = renderToStaticMarkup(<ChatArtifacts
+      actions={[{
+        type: 'focusComplex', version: 1, actionId: 'focus-503',
+        label: '후보 503 지도에서 보기', parcelId: 503, complexId: 503,
+        center: { lat: 37.5, lng: 127.1 }, level: 4, openDetail: true,
+        autoRun: false, factIds: ['complex-503'],
+      }]}
+      artifacts={[artifact]}
+    />);
 
     expect(html).toContain('1. 후보 503');
     expect(html).toContain('1,200세대');
     expect(html).toContain('10곳 · 최근접 100m');
     expect(html).toContain('영등포구 · 최소 500세대');
+    expect(html).toMatch(/1\. 후보 503<\/th><td>1,200세대<\/td>/);
+    expect(html).toContain('<th class="chatbot-recommendation-map-column" scope="col">지도</th>');
+    expect(html).toContain('aria-label="후보 503 지도에서 보기"');
     expect(html).not.toContain('점수');
   });
 
@@ -304,6 +315,46 @@ describe('조건 추천표 artifact UI', () => {
     expect(html).toContain('조회 조건 · 송파구 · 균형 비교(BALANCED_V1)');
     expect(html).not.toContain('조건 기반 후보');
     expect(html).not.toContain('먼저 볼 후보');
+  });
+
+  it('v2 STATION_RADIUS를 수용하고 후보 제목 우측에 지도 action을 표시한다', () => {
+    const wire = {
+      type: 'recommendationTable', version: 2, artifactId: 'agentic-station-v2',
+      title: 'AI 근거 비교 후보', policyVersion: 'agentic-recommendation-v1',
+      basis: {
+        selectionMode: 'AGENTIC', scopeType: 'STATION_RADIUS',
+        scopeLabel: '망포역 직선거리 1500m', requestedCount: 1,
+        criteriaOrder: ['TRANSIT'], defaultPolicy: 'BALANCED_V1',
+      },
+      rows: [{
+        order: 1, complexId: 20, complexName: '아주 긴 나단지 이름', role: 'TRANSIT',
+        summary: '망포역 접근성과 규모를 함께 확인했습니다.',
+        strengths: [{ text: '망포역 직선거리 620m', factIds: ['station-20'] }],
+        tradeoffs: [{ text: '예산은 지정되지 않았습니다.', factIds: ['complex-20'] }],
+        metrics: {}, factIds: ['complex-20', 'station-20'],
+      }],
+    };
+    const actions = [{
+      type: 'focusComplex' as const, version: 1 as const, actionId: 'focus-20',
+      label: '아주 긴 나단지 이름 지도에서 보기', parcelId: 7753, complexId: 20,
+      center: { lat: 37.245, lng: 127.056 }, level: 4 as const,
+      openDetail: true as const, autoRun: false, factIds: ['complex-20'],
+    }];
+
+    const parsed = readChatArtifacts(
+      [wire], new Set(['complex-20', 'station-20']),
+    );
+    const html = renderToStaticMarkup(
+      <ChatArtifacts actions={actions} artifacts={parsed} selectedComplexId={20} />,
+    );
+
+    expect(parsed).toHaveLength(1);
+    expect(html).toContain('chatbot-agent-recommendation-heading');
+    expect(html).toMatch(/<strong>1\. 아주 긴 나단지 이름<\/strong><button/);
+    expect(html).toContain('aria-label="아주 긴 나단지 이름 지도에서 보기"');
+    expect(html).toContain('aria-pressed="true"');
+    expect(html).toContain('>선택됨</button>');
+    expect(html).toContain('확인할 점');
   });
 
   it('v2에 unknown field나 알 수 없는 factId가 있으면 text answer용으로 무시한다', () => {

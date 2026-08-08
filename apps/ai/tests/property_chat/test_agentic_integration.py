@@ -153,18 +153,20 @@ def test_agentic_station_response_emits_verified_scope_and_focus_action() -> Non
 
 
 def test_partial_evidence_keeps_grounded_rows_and_focus_action() -> None:
+    lead = "망포역 직선거리 1500m에서 검증 후보 중 1곳을 확인했습니다."
     result = AgentRunResult(
         decision=AgentDecision(
-            answer="역 거리 근거로 후보를 골랐습니다.",
+            answer=f"{lead} AI provider 대신 고정 규칙으로 정리했습니다.",
             rows=(AgentRecommendationRow(
                 complex_id=20, complex_name="나단지", role="TRANSIT",
                 summary="역과 가까운 후보입니다.",
                 strengths=(("역 거리 확인", ("complex:20",)),),
                 tradeoffs=(("학교 source 미확인", ("complex:20",)),),
                 metrics={}, fact_ids=("complex:20",),
-            ),), fact_ids=("complex:20",), limitations=("학교 source 미확인",),
+            ),), fact_ids=("complex:20",),
+            limitations=("AI provider 결과 대신 검증 근거 fallback을 사용했습니다.",),
         ),
-        route="primary", readiness="partial", tool_rounds=2, tool_calls=2,
+        route="minimal_fallback", readiness="partial", tool_rounds=0, tool_calls=0,
         scope_label="망포역 직선거리 1500m", scope_fact_id="scope:station",
     )
     selected = (ComplexRecord(
@@ -183,6 +185,9 @@ def test_partial_evidence_keeps_grounded_rows_and_focus_action() -> None:
 
     assert response["success"] is True
     assert response["status"] == "partial_success"
+    assert response["answer"].count(lead) == 1
+    assert response["uiSummary"]["interpretations"][0]["label"] == "교통"
+    assert "명시한 공식 source 일부를 확인하지 못했습니다." not in response["limitations"]
     assert with_terminal_outcome(response)["terminalOutcome"] == {
         "version": 1, "status": "PARTIAL", "reason": "PARTIAL_EVIDENCE",
         "retryable": False,

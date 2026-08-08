@@ -98,8 +98,8 @@ def build_agentic_response(
         if decision.rows else decision.research_claims[0]
         if official_only else decision.answer
     )
-    answer_parts = [lead]
-    if decision.answer != lead:
+    answer_parts = [decision.answer if decision.answer.startswith(lead) else lead]
+    if decision.answer != lead and not decision.answer.startswith(lead):
         answer_parts.append(decision.answer)
     answer_parts.extend(
         claim for claim in decision.research_claims if claim != lead
@@ -111,7 +111,7 @@ def build_agentic_response(
         *((citation.fact_id for citation in decision.web_citations) if official_only else ()),
     )))
     interpretations = [
-        {"key": f"AGENT_HIGHLIGHT_{index}", "label": row.role,
+        {"key": f"AGENT_HIGHLIGHT_{index}", "label": _role_title_ko(row.role),
          "text": row.summary, "factIds": list(row.fact_ids)}
         for index, row in enumerate(decision.rows[:2], 1)
     ]
@@ -165,7 +165,8 @@ def build_agentic_response(
         "limitations": list(dict.fromkeys((
             *decision.limitations,
             *(("명시한 공식 source 일부를 확인하지 못했습니다.",)
-              if result.readiness == "partial" else ()),
+              if result.readiness == "partial"
+              and result.route != "minimal_fallback" else ()),
         ))),
         "evidenceSummary": {
             "status": result.readiness, "capabilities": [capability],
@@ -205,3 +206,11 @@ def _citation_source(fact_id: str) -> dict[str, object]:
         "sourceId": "property.ai_read", "sourceName": "Home Search 검증 read model",
         "sourceUrl": None,
     }
+
+
+def _role_title_ko(role: str) -> str:
+    return {
+        "BALANCED": "균형", "TRADE_ACTIVITY": "거래 활동", "SCALE": "규모",
+        "NEWER": "연식", "TRANSIT": "교통", "EDUCATION": "교육",
+        "LIFESTYLE": "생활 인프라",
+    }.get(role, role)

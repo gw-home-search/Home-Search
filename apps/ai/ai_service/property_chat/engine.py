@@ -1509,7 +1509,10 @@ def _academy_exact_match_fact(
     location: AcademyLocation, match: RegistryExactMatch
 ) -> EvidenceFact:
     return EvidenceFact(
-        fact_id=f"academy-registry-exact-{match.registry_fact_id}",
+        fact_id=(
+            "academy-registry-exact-"
+            f"{public_identifier_token(match.registry_fact_id)}"
+        ),
         claims=(
             FactClaim(match.registry_fact_id, "REGISTRY_FACT_ID"),
             FactClaim(match.academy_name, "TEXT"),

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from datetime import UTC, date, datetime
 
 import pytest
@@ -134,7 +135,12 @@ class LanguageModel:
         return DraftAnswer(sentences)
 
 
-def _query(repository: AcademyLocationRepository, model: LanguageModel | None = None):
+def _query(
+    repository: AcademyLocationRepository,
+    model: LanguageModel | None = None,
+    *,
+    question: str = "잠실엘스 주변 학원 알려줘",
+):
     engine = GroundedChatbotEngine(
         repository=PropertyRepository(),
         academy_location_repository=repository,
@@ -145,7 +151,7 @@ def _query(repository: AcademyLocationRepository, model: LanguageModel | None = 
     )
     return asyncio.run(
         engine.query(
-            request=ChatbotQueryRequest(question="잠실엘스 주변 학원 알려줘"),
+            request=ChatbotQueryRequest(question=question),
             user=AuthenticatedUser(user_id=1),
             request_id="request-academy-lookup",
         )
@@ -166,7 +172,10 @@ def test_unmatched_location_uses_800_meter_default_and_sbiz_B_grade_only() -> No
 
 
 def test_exact_match_adds_NEIS_A_grade_citation() -> None:
-    response = _query(AcademyLocationRepository(exact=True))
+    response = _query(
+        AcademyLocationRepository(exact=True),
+        question="잠실동 잠실엘스 주변 학원 위치와 가까운 역·노선을 알려줘",
+    )
 
     assert {
         (item["sourceId"], item["evidenceGrade"])
@@ -175,6 +184,12 @@ def test_exact_match_adds_NEIS_A_grade_citation() -> None:
         ("place.sbiz-academy", "B"),
         ("edu.academy-registry", "A"),
     }
+    public_identifier = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$")
+    assert all(
+        public_identifier.fullmatch(fact_id)
+        for citation in response["citations"]
+        for fact_id in citation["factIds"]
+    )
 
 
 @pytest.mark.parametrize("radius", [99, 2001])

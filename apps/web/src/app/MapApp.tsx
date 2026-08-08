@@ -230,15 +230,11 @@ export function MapApp({
     else if (!isOpen && window.innerWidth > 720) setIsExplorationOpen(true);
   }, []);
 
-  const handleChatUiAction = useCallback((action: ChatAction, source?: 'auto') => {
+  const handleChatUiAction = useCallback((action: ChatAction) => {
     if (action.type === 'focusComplex') {
       executeFocusComplexAction(
         action, focusMap, detail.selectComplex, SEARCH_FOCUS_DELTA,
       );
-      if (source !== 'auto' && window.innerWidth < 1280) {
-        setIsChatOpen(false);
-        setIsExplorationOpen(true);
-      }
       return true;
     }
     if (consumedMapActionIds.current.has(action.actionId)) return false;

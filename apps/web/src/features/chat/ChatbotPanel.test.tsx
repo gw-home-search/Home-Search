@@ -421,7 +421,7 @@ describe('챗봇 패널', () => {
   });
 
   it('새 focusComplex 답변은 저장 후 한 번 자동 실행하고 버튼은 반복 실행한다', async () => {
-    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1440 });
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 });
     const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-focus-action');
     const onUiAction = vi.fn((_action: ChatAction) => true);
     const action = {
@@ -458,6 +458,8 @@ describe('챗봇 패널', () => {
     await click(actionButton);
     await click(actionButton);
     expect(onUiAction).toHaveBeenCalledTimes(3);
+    expect(host?.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(host?.querySelector('.chatbot-launcher')?.getAttribute('aria-expanded')).toBe('true');
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 });
   });
 

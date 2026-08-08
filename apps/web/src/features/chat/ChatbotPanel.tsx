@@ -385,7 +385,6 @@ export function ChatbotPanel({ detailState, onOpenChange, onUiAction, store, uiC
       }
       return;
     }
-    if (action.type === 'focusComplex' && window.innerWidth < 1280) closePanel();
     if (action.type === 'showNearbyCategory') {
       setExecutedActionIds((current) => new Set(current).add(action.actionId));
     }

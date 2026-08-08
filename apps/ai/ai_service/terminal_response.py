@@ -83,29 +83,40 @@ def with_terminal_outcome(response: dict[str, object]) -> dict[str, object]:
     enriched = deepcopy(response)
     evidence = response.get("evidenceSummary")
     evidence_status = evidence.get("status") if isinstance(evidence, dict) else None
-    if response.get("status") == "success" and evidence_status != "partial":
+    resolution = response.get("conversationResolution")
+    assumptions = (
+        resolution.get("assumptions") if isinstance(resolution, dict) else None
+    )
+    clarification = isinstance(assumptions, list) and any(
+        isinstance(item, dict)
+        and item.get("code") in {
+            "AMBIGUOUS_COMPLEX_CANDIDATES",
+            "EXCLUSIVE_AREA_CONFIRMATION_REQUIRED",
+        }
+        for item in assumptions
+    )
+    if clarification:
+        reason: TerminalReason = (
+            "AMBIGUOUS_ENTITY"
+            if any(
+                isinstance(item, dict)
+                and item.get("code") == "AMBIGUOUS_COMPLEX_CANDIDATES"
+                for item in assumptions
+            )
+            else "INSUFFICIENT_EVIDENCE"
+        )
+        outcome = terminal_outcome("CLARIFICATION", reason)
+        enriched["success"] = False
+        enriched["status"] = "failed"
+        enriched_resolution = enriched.get("conversationResolution")
+        if isinstance(enriched_resolution, dict):
+            enriched["conversationResolution"] = {
+                **enriched_resolution, "answerMode": "NO_RESULT"
+            }
+    elif response.get("status") == "success" and evidence_status != "partial":
         outcome = terminal_outcome("ANSWERED", "COMPLETED")
     elif response.get("status") == "partial_success" or evidence_status == "partial":
-        resolution = response.get("conversationResolution")
-        assumptions = (
-            resolution.get("assumptions") if isinstance(resolution, dict) else None
-        )
-        ambiguous_entity = isinstance(assumptions, list) and any(
-            isinstance(item, dict)
-            and item.get("code") == "AMBIGUOUS_COMPLEX_CANDIDATES"
-            for item in assumptions
-        )
-        if ambiguous_entity:
-            outcome = terminal_outcome("CLARIFICATION", "AMBIGUOUS_ENTITY")
-            enriched["success"] = False
-            enriched["status"] = "failed"
-            enriched_resolution = enriched.get("conversationResolution")
-            if isinstance(enriched_resolution, dict):
-                enriched["conversationResolution"] = {
-                    **enriched_resolution, "answerMode": "NO_RESULT"
-                }
-        else:
-            outcome = terminal_outcome("PARTIAL", "PARTIAL_EVIDENCE")
+        outcome = terminal_outcome("PARTIAL", "PARTIAL_EVIDENCE")
     else:
         outcome = terminal_outcome("UNAVAILABLE", "INSUFFICIENT_EVIDENCE")
     enriched["terminalOutcome"] = outcome

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from datetime import date
+from datetime import UTC, date, datetime
 from types import SimpleNamespace
 from time import perf_counter
+from time import sleep
 
 import pytest
 
@@ -11,6 +12,7 @@ from ai_service.property_chat.postgres import (
     PostgresPropertyFactRepository,
     _complex_search_tokens,
 )
+from ai_service.property_chat.models import ComplexRecord
 
 
 @pytest.mark.parametrize(
@@ -58,7 +60,7 @@ def test_property_pool_checks_connection_health_before_checkout(
     assert captured["check"] is FakePool.check_connection
 
 
-def test_complex_lookup_uses_literal_fact_path_before_alias_projection() -> None:
+def test_complex_lookup_uses_direct_exact_fact_path_before_contains_projection() -> None:
     executed_queries: list[str] = []
     executed_parameters: list[object] = []
     row = {
@@ -98,9 +100,87 @@ def test_complex_lookup_uses_literal_fact_path_before_alias_projection() -> None
     assert [record.complex_id for record in records] == [7774]
     assert len(executed_queries) == 1
     assert "FROM ai_read.complex_fact" in executed_queries[0]
-    assert "regexp_replace(display_name" in executed_queries[0]
+    assert "lower(display_name) = lower(%s)" in executed_queries[0]
+    assert "ILIKE" not in executed_queries[0]
+    assert "regexp_replace(display_name" not in executed_queries[0]
     assert "complex_search_fact" not in executed_queries[0]
-    assert "%마포래미안푸르지오1단지%" in executed_parameters[0]
+    assert "%마포래미안푸르지오1단지%" not in executed_parameters[0]
+
+
+def test_complex_lookup_uses_exact_alias_after_direct_exact_miss() -> None:
+    executed_queries: list[str] = []
+    row = {
+        "complex_id": 9001, "parcel_id": 91, "display_name": "임의동 푸른마을",
+        "region_code": "11110101", "region_name": "임의동",
+        "address": "서울 임의구 임의동", "latitude": 37.5, "longitude": 127.0,
+        "marker_safe": True, "data_updated_at": "2026-08-01T00:00:00+00:00",
+        "unit_count": 100, "use_date": date(2020, 1, 1), "match_tier": 2,
+    }
+
+    class FakeResult:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def fetchall(self):
+            return self._rows
+
+    class FakeConnection:
+        def execute(self, query: str, _parameters: object) -> FakeResult:
+            executed_queries.append(query)
+            return FakeResult([row] if "complex_search_fact" in query else [])
+
+    class FakePool:
+        @contextmanager
+        def connection(self):
+            yield FakeConnection()
+
+    repository = object.__new__(PostgresPropertyFactRepository)
+    repository._pool = FakePool()  # type: ignore[attr-defined]
+    repository._candidate_discovery = None  # type: ignore[attr-defined]
+
+    records = repository.find_complexes("푸른별칭", None, 6)
+
+    assert [record.complex_id for record in records] == [9001]
+    assert len(executed_queries) == 2
+    assert "complex_search_fact" not in executed_queries[0]
+    assert "complex_search_fact" in executed_queries[1]
+    assert "ILIKE" not in executed_queries[1]
+
+
+def test_slow_ai_read_uses_property_search_ids_then_revalidates_facts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    external_payload = {"complexName": "신뢰하면 안 되는 외부 이름"}
+
+    class Discovery:
+        def find_complex_ids(self, name: str) -> tuple[int, ...]:
+            assert name == "임의단지"
+            assert external_payload["complexName"] == "신뢰하면 안 되는 외부 이름"
+            return (9001,)
+
+    verified = ComplexRecord(
+        complex_id=9001, parcel_id=19001, display_name="검증된 임의단지",
+        region_code="11110101", region_name="임의동", address="서울 임의구 임의동",
+        latitude=37.5, longitude=127.0, marker_safe=True,
+        data_updated_at=datetime(2026, 8, 1, tzinfo=UTC),
+    )
+    repository = object.__new__(PostgresPropertyFactRepository)
+    repository._candidate_discovery = Discovery()  # type: ignore[attr-defined]
+    repository.find_complex_by_id = lambda complex_id: (  # type: ignore[method-assign]
+        verified if complex_id == 9001 else None
+    )
+    repository._find_complexes_from_ai_read = lambda *_args: (  # type: ignore[method-assign]
+        sleep(0.05) or []
+    )
+    monkeypatch.setattr(
+        "ai_service.property_chat.postgres._PROPERTY_SEARCH_SOFT_LATENCY_SECONDS",
+        0.01,
+    )
+
+    records = repository.find_complexes("임의단지", None, 6)
+
+    assert records == [verified]
+    assert records[0].display_name != external_payload["complexName"]
 
 
 def test_complex_lookup_escapes_like_wildcards_and_applies_region(

@@ -19,23 +19,29 @@ class DeterministicQueryRouter:
         normalized = normalize_question(request.question)
         question = normalized.normalized_question
         complex_name = normalized.entity_candidate
+        area = (
+            normalized.area_criterion.exclusive_area_square_meters
+            if normalized.area_criterion is not None else None
+        )
+        area_options = _area_options(normalized)
+        period_start = self._today - timedelta(days=normalized.period_days or 365)
         if complex_name is None:
             return None
         if re.search(r"(?:비교|차이|추천|후보)", question):
             return None
 
         if normalized.overview:
-            area = _exclusive_area(question)
             plans = [
-                QueryPlan("complex_identity", complex_name),
+                QueryPlan("complex_identity", complex_name, **area_options),
                 QueryPlan(
                     "recent_trade_lookup",
                     complex_name,
                     region_name=normalized.region_hint,
-                    start_date=self._today - timedelta(days=365),
+                    start_date=period_start,
                     end_date=self._today,
                     exclusive_area_square_meters=area,
                     limit=3,
+                    **area_options,
                 ),
             ]
             if area is not None:
@@ -43,9 +49,10 @@ class DeterministicQueryRouter:
                     "price_trend",
                     complex_name,
                     region_name=normalized.region_hint,
-                    start_date=self._today - timedelta(days=365),
+                    start_date=period_start,
                     end_date=self._today,
                     exclusive_area_square_meters=area,
+                    **area_options,
                 ))
             if normalized.region_hint is not None:
                 plans[0] = QueryPlan(
@@ -58,19 +65,23 @@ class DeterministicQueryRouter:
             plans.append((trend_match.start(), QueryPlan(
                 "price_trend",
                 complex_name,
-                start_date=self._today - timedelta(days=365),
+                region_name=normalized.region_hint,
+                start_date=period_start,
                 end_date=self._today,
                 exclusive_area_square_meters=_exclusive_area(question),
+                **area_options,
             )))
         trade_match = re.search(r"(?:실거래|최근\s*거래|거래\s*내역)", question)
         if trade_match is not None:
             plans.append((trade_match.start(), QueryPlan(
                 "recent_trade_lookup",
                 complex_name,
-                start_date=self._today - timedelta(days=365),
+                region_name=normalized.region_hint,
+                start_date=period_start,
                 end_date=self._today,
                 exclusive_area_square_meters=_exclusive_area(question),
-                limit=_result_limit(question),
+                limit=normalized.requested_count or _result_limit(question),
+                **area_options,
             )))
         for capability, pattern in (
             ("rail_station_lookup", r"(?:철도|지하철|가까운\s*역|역[·\s-]*노선|역세권)"),
@@ -81,10 +92,14 @@ class DeterministicQueryRouter:
         ):
             match = re.search(pattern, question)
             if match is not None:
-                plans.append((match.start(), QueryPlan(capability, complex_name)))
+                plans.append((match.start(), QueryPlan(
+                    capability, complex_name, region_name=normalized.region_hint
+                )))
         identity_position = _identity_position(question)
         if identity_position is not None:
-            plans.append((identity_position, QueryPlan("complex_identity", complex_name)))
+            plans.append((identity_position, QueryPlan(
+                "complex_identity", complex_name, region_name=normalized.region_hint
+            )))
         if not plans:
             return None
         capability_order = {
@@ -131,8 +146,20 @@ class DeterministicQueryRouter:
 
 
 def _exclusive_area(question: str) -> float | None:
-    match = re.search(r"(?:전용\s*)?([0-9]+(?:\.[0-9]+)?)\s*(?:㎡|m2|제곱미터)", question)
-    return float(match.group(1)) if match else None
+    normalized = normalize_question(question)
+    criterion = normalized.area_criterion
+    return criterion.exclusive_area_square_meters if criterion is not None else None
+
+
+def _area_options(normalized) -> dict[str, object]:
+    criterion = normalized.area_criterion
+    if criterion is None:
+        return {}
+    return {
+        "area_input_text": criterion.input_text,
+        "area_conversion_note": criterion.conversion_note,
+        "area_confirmation_required": criterion.requires_exclusive_confirmation,
+    }
 
 
 def _result_limit(question: str) -> int:

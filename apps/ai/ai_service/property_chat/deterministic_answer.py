@@ -53,8 +53,11 @@ class DeterministicAnswerPresenter:
 
 
 def _grounded_copy(plan: QueryPlan, facts: list[EvidenceFact]) -> str:
+    complex_facts = [
+        fact for fact in facts if fact.fact_id.startswith("property-complex-")
+    ]
     complex_fact = next(
-        (fact for fact in facts if fact.fact_id.startswith("property-complex-")),
+        iter(complex_facts),
         None,
     )
     if plan.capability == "complex_identity" or (
@@ -67,6 +70,21 @@ def _grounded_copy(plan: QueryPlan, facts: list[EvidenceFact]) -> str:
             return f"{name}의 주소는 {address}로 확인했습니다."
         if isinstance(name, str):
             return f"{name}의 확인된 단지 기본정보를 정리했습니다."
+    if plan.capability != "comparison" and len(complex_facts) > 1:
+        candidates = []
+        for fact in complex_facts[:6]:
+            name = fact.payload.get("displayName")
+            address = fact.payload.get("address")
+            if isinstance(name, str):
+                candidates.append(
+                    f"{name}({address})" if isinstance(address, str) and address else name
+                )
+        if candidates:
+            return (
+                "동명 또는 유사 단지 후보로 확인했습니다: "
+                + "; ".join(candidates)
+                + ". 조회할 주소나 지역을 선택해 주세요."
+            )
 
     if plan.capability in {"recent_trade_lookup", "price_trend"}:
         details = [_property_observation(fact) for fact in facts]
@@ -95,9 +113,15 @@ def _property_observation(fact: EvidenceFact) -> str | None:
 
     month = payload.get("month")
     average = _claim_value(fact.claims, "KOREAN_KRW_AVERAGE_DISPLAY")
+    minimum = _claim_value(fact.claims, "KOREAN_KRW_MIN_DISPLAY")
+    maximum = _claim_value(fact.claims, "KOREAN_KRW_MAX_DISPLAY")
     trade_count = payload.get("tradeCount")
     if isinstance(month, str) and average and isinstance(trade_count, int):
-        return f"{month} 평균 {average}, 거래 {trade_count}건"
+        range_text = (
+            f", 최솟값 {minimum}, 최댓값 {maximum}"
+            if minimum is not None and maximum is not None else ""
+        )
+        return f"{month} 평균 {average}, 거래 {trade_count}건{range_text}"
     return None
 
 

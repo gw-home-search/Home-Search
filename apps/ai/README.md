@@ -26,7 +26,10 @@ Runtime variables:
 - `HOME_AI_OPENAI_PRIMARY_MODEL`
 - `HOME_AI_OPENAI_SECONDARY_MODEL`
 - `HOME_AI_OPENAI_TIMEOUT_SECONDS` (optional, default `8`, allowed `1..30`)
-- `HOME_AI_QUERY_TIMEOUT_SECONDS` (optional, default `45`, allowed `1..60`)
+- `HOME_AI_QUERY_TIMEOUT_SECONDS` (optional, default `55`, allowed `1..60`)
+- `HOME_AI_PROPERTY_SEARCH_FALLBACK_ENABLED` (optional, default `false`)
+- `HOME_AI_PROPERTY_SEARCH_BASE_URL` (required when the property search fallback is
+  enabled; internal HTTP origin only)
 - `HOME_AI_DEPLOYMENT_TIER` (`local|offline|staging|production`; supervisor graph
   mode가 `off`가 아닐 때 필수)
 - `HOME_AI_SUPERVISOR_GRAPH_MODE` (`off|shadow|canary|active`, default `off`)

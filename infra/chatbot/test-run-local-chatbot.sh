@@ -91,7 +91,7 @@ grep -Fq -- '- CMD' <<<"$bff_compose_section"
 grep -Fq -- '- bash' <<<"$bff_compose_section"
 grep -Fq -- '- -ec' <<<"$bff_compose_section"
 grep -Fq 'HOME_CHAT_BFF_AI_TIMEOUT: ${HOME_CHAT_BFF_AI_TIMEOUT:-70s}' <<<"$bff_compose_section"
-grep -Fq 'HOME_AI_QUERY_TIMEOUT_SECONDS: ${HOME_AI_QUERY_TIMEOUT_SECONDS:-45}' "$chatbot_compose"
+grep -Fq 'HOME_AI_QUERY_TIMEOUT_SECONDS: ${HOME_AI_QUERY_TIMEOUT_SECONDS:-55}' "$chatbot_compose"
 grep -Fq 'HOME_AI_AGENTIC_ORCHESTRATION_ENABLED: ${HOME_AI_AGENTIC_ORCHESTRATION_ENABLED:-true}' "$chatbot_compose"
 grep -Fq 'HOME_AI_OFFICIAL_WEB_SEARCH_ENABLED: ${HOME_AI_OFFICIAL_WEB_SEARCH_ENABLED:-true}' "$chatbot_compose"
 grep -Fq 'HOME_AI_REFERENCE_DSN: ${HOME_AI_REFERENCE_DSN:?Set HOME_AI_REFERENCE_DSN}' "$chatbot_compose"
@@ -360,7 +360,7 @@ PATH="$tmp_dir/bin:$PATH" \
     CHATBOT_USER_PUBLIC_KEY_PATH="$tmp_dir/keys/public" \
     CHATBOT_USER_PRIVATE_KEY_PATH="$tmp_dir/keys/private" \
     "$runner" "$property_env" "$user_env" "$bff_env" "$ai_env" >/dev/null
-grep -Fq 'openai-key-set=yes|primary=gpt-5-primary-test|secondary=gpt-5-secondary-test|timeout=30|query-timeout=45' "$docker_log"
+grep -Fq 'openai-key-set=yes|primary=gpt-5-primary-test|secondary=gpt-5-secondary-test|timeout=8|query-timeout=55' "$docker_log"
 
 printf '%s\n' \
     'HOME_CHAT_BFF_JWT_PUBLIC_KEY_PATHS=wrong-kid=/run/keys/user-signing-public' >"$bff_env"

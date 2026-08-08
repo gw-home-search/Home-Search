@@ -263,9 +263,12 @@ Capability로 분해된 질문은 정적 catalog 순서로 최대 4개의 검증
   `factIds`에 존재해야 한다.
 - `artifactIds`와 `actionIds`는 같은 response의 `uiArtifacts[].artifactId`와
   `uiActions[].actionId`에 실제로 존재하는 값만 포함한다.
-- fragment별 observation은 3초로 제한하고, 전체 요청은 기존 query timeout을 유지한다.
-  provider/internal/grounding validation 장애는 부분 성공으로 위장하지 않고 기존
-  ProblemDetail 또는 SSE `error`로 처리한다.
+- property/reference fragment hard timeout은 20초, recommendation hard timeout은
+  45초로 제한한다. 3초(property/reference)와 8초(recommendation)는 취소 기준이
+  아니라 느림 관측 기준이다. 전체 AI hard deadline은 55초이며 마지막 5초는
+  deterministic 조립과 grounding validation에 예약한다. optional fragment 장애는
+  성공 fragment를 보존한 `partial_success`로 처리하고, 모든 core source가 불능일
+  때만 기존 ProblemDetail 또는 SSE `error`로 처리한다.
 
 ### 근거 필드 규칙
 

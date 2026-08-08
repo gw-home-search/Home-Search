@@ -118,7 +118,7 @@
       "title": "복합 질문 partial success",
       "question": "두 단지를 비교하고 병원도 지도에서 보여줘",
       "plan": {"fragments": ["comparison", "kakao_place_search"]},
-      "serverValidation": {"maximumFragments": 4, "fragmentTimeoutSeconds": 3},
+      "serverValidation": {"maximumFragments": 4, "fragmentTimeoutSeconds": 20},
       "observation": {"succeeded": 1, "failed": 1},
       "evidenceFacts": [{"factId": "comparison-basis-501", "sourceId": "property.ai_read"}],
       "presentationBasis": {"fragmentSummaries": 2},

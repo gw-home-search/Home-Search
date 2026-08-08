@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 import math
 import re
 from threading import Lock
@@ -19,10 +20,13 @@ from .models import (
     QueryCapability,
 )
 from .candidate_selection import CandidateObservationSummary
+from .property_search_fallback import PropertySearchCandidateDiscovery
 
 _AREA_TOLERANCE_SQUARE_METERS = Decimal("1.0")
 _FRESHNESS_CACHE_SECONDS = 300
 _EARLIEST_SUPPORTED_TRADE_YEAR = 2006
+_PROPERTY_SEARCH_SOFT_LATENCY_SECONDS = 3.0
+_PROPERTY_SEARCH_HARD_TIMEOUT_SECONDS = 20.0
 
 
 class PostgresPropertyFactRepository:
@@ -34,6 +38,7 @@ class PostgresPropertyFactRepository:
         expected_username: str = "home_search_ai_reader",
         min_pool_size: int = 1,
         max_pool_size: int = 5,
+        candidate_discovery: PropertySearchCandidateDiscovery | None = None,
     ) -> None:
         if not dsn.strip():
             raise ValueError("property DSN is required")
@@ -50,11 +55,12 @@ class PostgresPropertyFactRepository:
             check=ConnectionPool.check_connection,
             kwargs={
                 "row_factory": dict_row,
-                "options": "-c default_transaction_read_only=on -c statement_timeout=5000",
+                "options": "-c default_transaction_read_only=on -c statement_timeout=20000",
             },
             open=True,
         )
         self._freshness_lock = Lock()
+        self._candidate_discovery = candidate_discovery
         self._latest_trade_date_cache: date | None = None
         self._latest_trade_date_checked_at: float | None = None
         try:
@@ -97,6 +103,39 @@ class PostgresPropertyFactRepository:
     def find_complexes(
         self, name: str, region_name: str | None, limit: int
     ) -> list[ComplexRecord]:
+        if getattr(self, "_candidate_discovery", None) is None:
+            return self._find_complexes_from_ai_read(name, region_name, limit)
+        started_at = monotonic()
+        executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ai-complex-search")
+        database_future = executor.submit(
+            self._find_complexes_from_ai_read, name, region_name, limit
+        )
+        try:
+            records = database_future.result(
+                timeout=_PROPERTY_SEARCH_SOFT_LATENCY_SECONDS
+            )
+        except FutureTimeoutError:
+            records = self._fallback_complexes(name, region_name, limit)
+            if records:
+                return records
+            remaining = _PROPERTY_SEARCH_HARD_TIMEOUT_SECONDS - (monotonic() - started_at)
+            if remaining <= 0:
+                raise TimeoutError("property complex search exceeded its hard timeout")
+            return database_future.result(timeout=remaining)
+        except Exception:
+            records = self._fallback_complexes(name, region_name, limit)
+            if records is None:
+                raise
+            return records
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
+        if records:
+            return records
+        return self._fallback_complexes(name, region_name, limit) or []
+
+    def _find_complexes_from_ai_read(
+        self, name: str, region_name: str | None, limit: int
+    ) -> list[ComplexRecord]:
         normalized_name = name.strip()
         if not normalized_name or len(normalized_name) > 100:
             raise ValueError("complex name is outside the supported range")
@@ -109,15 +148,77 @@ class PostgresPropertyFactRepository:
             f"%{_escape_like(region_name.strip())}%" if region_name is not None else None
         )
         with self._pool.connection() as connection:
+            exact_rows = connection.execute(
+                """
+                SELECT complex_id, parcel_id, display_name, region_code, region_name, address,
+                       latitude, longitude, marker_safe, data_updated_at,
+                       unit_count, use_date, 0 AS match_tier
+                FROM ai_read.complex_fact
+                WHERE (
+                    lower(display_name) = lower(%s)
+                    OR lower(name) = lower(%s)
+                    OR lower(trade_name) = lower(%s)
+                )
+                  AND (%s::text IS NULL OR lower(region_name) = lower(%s))
+                ORDER BY display_name, complex_id
+                LIMIT %s
+                """,
+                (
+                    normalized_name,
+                    normalized_name,
+                    normalized_name,
+                    region_name.strip() if region_name is not None else None,
+                    region_name.strip() if region_name is not None else None,
+                    limit,
+                ),
+            ).fetchall()
+        if exact_rows:
+            return [_complex_record(row) for row in exact_rows]
+
+        search_name = re.sub(r"\s+", "", normalized_name).lower()
+        with self._pool.connection() as connection:
+            alias_rows = connection.execute(
+                """
+                SELECT search.complex_id, base.parcel_id, search.display_name,
+                       search.region_code, search.region_name, search.address,
+                       base.latitude, base.longitude, search.marker_safe,
+                       search.data_updated_at, search.unit_count, search.use_date,
+                       CASE
+                           WHEN lower(search.canonical_name) = lower(%s)
+                             OR lower(search.trade_name) = lower(%s) THEN 1
+                           ELSE 2
+                       END AS match_tier
+                FROM ai_read.complex_search_fact search
+                JOIN ai_read.complex_fact base ON base.complex_id = search.complex_id
+                WHERE (
+                    lower(search.canonical_name) = lower(%s)
+                    OR lower(search.trade_name) = lower(%s)
+                    OR search.canonical_search_name = %s
+                    OR %s = ANY(search.alias_search_names)
+                )
+                  AND (%s::text IS NULL OR lower(search.region_name) = lower(%s))
+                ORDER BY match_tier, search.display_name, search.complex_id
+                LIMIT %s
+                """,
+                (
+                    normalized_name, normalized_name,
+                    normalized_name, normalized_name,
+                    search_name, search_name,
+                    region_name.strip() if region_name is not None else None,
+                    region_name.strip() if region_name is not None else None,
+                    limit,
+                ),
+            ).fetchall()
+        if alias_rows:
+            return [_complex_record(row) for row in alias_rows]
+
+        with self._pool.connection() as connection:
             literal_rows = connection.execute(
                 """
                 SELECT complex_id, parcel_id, display_name, region_code, region_name, address,
                        latitude, longitude, marker_safe, data_updated_at,
                        unit_count, use_date,
                        CASE
-                           WHEN lower(display_name) = lower(%s)
-                             OR lower(name) = lower(%s)
-                             OR lower(trade_name) = lower(%s) THEN 0
                            WHEN regexp_replace(lower(display_name), '[[:space:]]+', '', 'g') = lower(%s)
                              OR regexp_replace(lower(name), '[[:space:]]+', '', 'g') = lower(%s)
                              OR regexp_replace(lower(trade_name), '[[:space:]]+', '', 'g') = lower(%s)
@@ -138,37 +239,14 @@ class PostgresPropertyFactRepository:
                 )
                   AND (%s::text IS NULL OR region_name ILIKE %s ESCAPE '\\'
                        OR address ILIKE %s ESCAPE '\\')
-                ORDER BY
-                    CASE
-                        WHEN lower(display_name) = lower(%s)
-                          OR lower(name) = lower(%s)
-                          OR lower(trade_name) = lower(%s) THEN 0
-                        ELSE 1
-                    END,
-                    display_name,
-                    complex_id
+                ORDER BY match_tier, display_name, complex_id
                 LIMIT %s
                 """,
                 (
-                    normalized_name,
-                    normalized_name,
-                    normalized_name,
-                    compact_name,
-                    compact_name,
-                    compact_name,
-                    literal_name_pattern,
-                    literal_name_pattern,
-                    literal_name_pattern,
-                    compact_name_pattern,
-                    compact_name_pattern,
-                    compact_name_pattern,
-                    region_pattern,
-                    region_pattern,
-                    region_pattern,
-                    normalized_name,
-                    normalized_name,
-                    normalized_name,
-                    limit,
+                    compact_name, compact_name, compact_name,
+                    literal_name_pattern, literal_name_pattern, literal_name_pattern,
+                    compact_name_pattern, compact_name_pattern, compact_name_pattern,
+                    region_pattern, region_pattern, region_pattern, limit,
                 ),
             ).fetchall()
         if literal_rows:
@@ -244,6 +322,27 @@ class PostgresPropertyFactRepository:
                 ),
             ).fetchall()
         return [_complex_record(row) for row in rows]
+
+    def _fallback_complexes(
+        self, name: str, region_name: str | None, limit: int
+    ) -> list[ComplexRecord] | None:
+        if self._candidate_discovery is None:
+            return None
+        try:
+            candidate_ids = self._candidate_discovery.find_complex_ids(name)
+            records = [
+                record
+                for complex_id in candidate_ids
+                if (record := self.find_complex_by_id(complex_id)) is not None
+                and (
+                    region_name is None
+                    or region_name.casefold() in (record.region_name or "").casefold()
+                    or region_name.casefold() in (record.address or "").casefold()
+                )
+            ]
+        except Exception:
+            return None
+        return records[:limit]
 
     def complex_profile(self, complex_id: int) -> dict[str, object] | None:
         if isinstance(complex_id, bool) or not isinstance(complex_id, int) or complex_id <= 0:

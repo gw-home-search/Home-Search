@@ -201,6 +201,70 @@ def test_broad_question_revalidates_selected_complex_and_returns_overview_fragme
     assert model.plan_calls == 0
 
 
+def test_verified_selected_complex_precedes_ambiguous_name_candidates() -> None:
+    repository = FakeRepository()
+    repository.complexes = [
+        replace(complex_record(501, "가락동 헬리오시티"), parcel_id=1501),
+        replace(complex_record(502, "작동 헬리오시티"), parcel_id=1502),
+    ]
+    repository.trades = [
+        TradeRecord(7002, 502, date(2026, 7, 10), 120_000, 59.0, 8)
+    ]
+    engine = GroundedChatbotEngine(
+        repository=repository,
+        language_model=DraftFailingLanguageModel(
+            QueryPlan("recent_trade_lookup", "unused"), DraftAnswer([])
+        ),
+        enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+        answer_first_enabled=True,
+    )
+
+    response = asyncio.run(engine.query(
+        request=ChatbotQueryRequest.model_validate({
+            "question": "헬리오시티 전용 59㎡ 최근 실거래 5건",
+            "uiContext": {
+                "selectedComplex": {"complexId": 502, "parcelId": 1502}
+            },
+        }),
+        user=AuthenticatedUser(user_id=1),
+        request_id="request-selected-precedence",
+    ))
+
+    assert response["status"] == "success"
+    assert repository.trade_query is not None
+    assert repository.trade_query[0] == 502
+
+
+def test_selected_complex_with_mismatched_parcel_is_not_trusted() -> None:
+    repository = FakeRepository()
+    repository.complexes = [
+        replace(complex_record(501, "가락동 헬리오시티"), parcel_id=1501),
+        replace(complex_record(502, "작동 헬리오시티"), parcel_id=1502),
+    ]
+    engine = GroundedChatbotEngine(
+        repository=repository,
+        language_model=DraftFailingLanguageModel(
+            QueryPlan("recent_trade_lookup", "unused"), DraftAnswer([])
+        ),
+        enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+        answer_first_enabled=True,
+    )
+
+    response = asyncio.run(engine.query(
+        request=ChatbotQueryRequest.model_validate({
+            "question": "헬리오시티 전용 59㎡ 최근 실거래 5건",
+            "uiContext": {
+                "selectedComplex": {"complexId": 502, "parcelId": 9999}
+            },
+        }),
+        user=AuthenticatedUser(user_id=1),
+        request_id="request-selected-mismatch",
+    ))
+
+    assert response["status"] == "partial_success"
+    assert repository.trade_query is None
+
+
 def test_compound_trade_and_area_less_trend_keeps_trade_without_mixed_area_query() -> None:
     repository = AreaGuardRepository()
     repository.complexes = [complex_record()]
@@ -852,6 +916,34 @@ def test_property_core_failure_propagates_to_temporary_failure_boundary() -> Non
 
     with pytest.raises(ChatbotProviderUnavailable):
         run_query(engine, "반포자이 위치 알려줘", "request-property-core-failure")
+
+
+def test_bare_pyeong_returns_clarification_without_querying_trades() -> None:
+    repository = FakeRepository()
+    repository.complexes = [complex_record()]
+    engine = GroundedChatbotEngine(
+        repository=repository,
+        language_model=DraftFailingLanguageModel(
+            QueryPlan("recent_trade_lookup", "unused"), DraftAnswer([])
+        ),
+        enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+        answer_first_enabled=True,
+    )
+
+    response = with_terminal_outcome(run_query(
+        engine,
+        "잠실엘스 24평형 최근 실거래를 알려줘",
+        "request-area-clarification",
+    ))
+
+    assert response["terminalOutcome"] == {
+        "version": 1,
+        "status": "CLARIFICATION",
+        "reason": "INSUFFICIENT_EVIDENCE",
+        "retryable": False,
+    }
+    assert "전용면적인지 확인" in response["answer"]
+    assert repository.trade_query is None
 
 
 def test_answer_first_overview_clarifies_multiple_long_partial_names() -> None:

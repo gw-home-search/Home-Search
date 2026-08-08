@@ -135,9 +135,19 @@ def get_property_fact_repository() -> object:
     if not dsn:
         raise ChatbotProviderUnavailable()
     from .property_chat.postgres import PostgresPropertyFactRepository
+    from .property_chat.property_search_fallback import PropertySearchCandidateDiscovery
 
     try:
-        return PostgresPropertyFactRepository(dsn, **_repository_pool_sizes())
+        discovery = None
+        if _boolean_flag("HOME_AI_PROPERTY_SEARCH_FALLBACK_ENABLED", False):
+            base_url = os.getenv("HOME_AI_PROPERTY_SEARCH_BASE_URL", "").strip()
+            if not base_url:
+                raise ValueError("property search fallback base URL is required")
+            discovery = PropertySearchCandidateDiscovery(base_url)
+        options: dict[str, object] = _repository_pool_sizes()
+        if discovery is not None:
+            options["candidate_discovery"] = discovery
+        return PostgresPropertyFactRepository(dsn, **options)
     except Exception as exception:
         raise ChatbotProviderUnavailable() from exception
 
@@ -287,7 +297,7 @@ def get_enabled_reference_capabilities() -> frozenset[ReferenceCapability]:
 @lru_cache
 def get_query_timeout_seconds() -> float | None:
     try:
-        timeout_seconds = float(os.getenv("HOME_AI_QUERY_TIMEOUT_SECONDS", "45"))
+        timeout_seconds = float(os.getenv("HOME_AI_QUERY_TIMEOUT_SECONDS", "55"))
     except (TypeError, ValueError):
         return None
     if not math.isfinite(timeout_seconds) or not 1 <= timeout_seconds <= 60:

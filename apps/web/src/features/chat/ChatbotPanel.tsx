@@ -190,7 +190,11 @@ export function ChatbotPanel({ detailState, onOpenChange, onUiAction, store, uiC
   }
 
   async function submit() {
-    const content = question.trim();
+    await submitQuestion(question);
+  }
+
+  async function submitQuestion(rawQuestion: string) {
+    const content = rawQuestion.trim();
     if (selected == null || content.length === 0 || content.length > 2_000 || status === 'sending') return;
     const now = new Date().toISOString();
     const userMessage: ChatMessage = {
@@ -366,6 +370,10 @@ export function ChatbotPanel({ detailState, onOpenChange, onUiAction, store, uiC
     questionRef.current?.focus();
   }
 
+  function submitFollowUpQuestion(followUpQuestion: string) {
+    void submitQuestion(followUpQuestion);
+  }
+
   function executeUiAction(action: ChatAction) {
     if (action.type === 'showNearbyCategory'
       && executedActionIds.has(action.actionId)) return;
@@ -485,7 +493,7 @@ export function ChatbotPanel({ detailState, onOpenChange, onUiAction, store, uiC
                   message={message}
                   messageRef={message.id === latestMessage?.id ? latestTurnRef : undefined}
                   onUiAction={executeUiAction}
-                  onFollowUp={selectExampleQuestion}
+                  onFollowUp={submitFollowUpQuestion}
                   onRetry={message.role === 'assistant' && message.terminalOutcome?.retryable
                     ? () => void retryQuestion(message.id)
                     : undefined}

@@ -767,7 +767,8 @@ class RecommendationHandler:
                 _CRITERIA_CANDIDATE_LIMIT,
             )
             scope = CriteriaCandidateScope(
-                f"{match.station_name}역 직선거리 {plan.radius_meters}m",
+                f"{match.station_name.removesuffix('역')}역 직선거리 "
+                f"{plan.radius_meters}m",
                 station_candidates,
             )
             station_scope_fact = _station_scope_fact(plan, resolution, match)

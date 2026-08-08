@@ -562,7 +562,7 @@ class PostgresPropertyFactRepository:
         exclusive_area_square_meters: float | None,
     ) -> dict[int, TradeRecord | None]:
         if (
-            not 1 <= len(complex_ids) <= 40
+            not 1 <= len(complex_ids) <= 5_000
             or len(complex_ids) != len(set(complex_ids))
             or any(complex_id <= 0 for complex_id in complex_ids)
             or start_date > end_date

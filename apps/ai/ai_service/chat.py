@@ -463,10 +463,11 @@ async def _verified_agentic_context(request, language_model):  # noqa: ANN001
     match = resolution.matches[0]
     if plan.radius_meters is None:
         return None
+    station_name = match.station_name.removesuffix("역").strip()
     return VerifiedRecommendationContext(
         question=request.question, scope_type="STATION_RADIUS",
-        scope_label=f"{match.station_name}역 직선거리 {plan.radius_meters}m",
-        region_name=plan.region_name, station_name=match.station_name,
+        scope_label=f"{station_name}역 직선거리 {plan.radius_meters}m",
+        region_name=plan.region_name, station_name=station_name,
         station_lines=tuple(match.lines), station_latitude=match.latitude,
         station_longitude=match.longitude, station_source_date=resolution.source_date,
         radius_meters=plan.radius_meters,

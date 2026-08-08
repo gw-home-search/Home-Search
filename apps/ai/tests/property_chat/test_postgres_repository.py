@@ -416,6 +416,22 @@ def test_comparison_lookup_and_trades_use_two_bounded_batch_queries(
     assert latest[2] is None
 
 
+def test_agentic_latest_trade_batch_accepts_the_bounded_eligible_pool(
+    property_postgres_dsn: str,
+) -> None:
+    repository = PostgresPropertyFactRepository(
+        property_postgres_dsn, expected_database="test", expected_username="test"
+    )
+    try:
+        result = repository.latest_trades_for_candidates(
+            tuple(range(1, 42)), date(2025, 8, 1), date(2026, 7, 31), None,
+        )
+    finally:
+        repository.close()
+
+    assert len(result) == 41
+
+
 def test_recommendation_candidates_resolve_descendants_and_return_latest_three(
     property_postgres_dsn: str,
 ) -> None:

@@ -45,6 +45,7 @@ from .comparison_handler import ComparisonHandler
 from .deterministic_answer import DeterministicAnswerPresenter
 from .deterministic_router import DeterministicQueryRouter
 from .question_normalizer import normalize_question
+from .public_identifiers import public_identifier_token
 from .recommendation_handler import RecommendationHandler
 from .recommendation_errors import RecommendationExecutionError
 from .recommendation_presentation import RecommendationTextPresenter
@@ -1656,7 +1657,7 @@ def _rail_station_fact(
 ) -> EvidenceFact:
     lines = ",".join(station.lines)
     return EvidenceFact(
-        fact_id=f"rail-station-{station.occurrence_ids[0]}",
+        fact_id=f"rail-station-{public_identifier_token(station.occurrence_ids[0])}",
         claims=(
             FactClaim(station.station_name, "TEXT"),
             FactClaim(lines, "RAIL_LINES"),

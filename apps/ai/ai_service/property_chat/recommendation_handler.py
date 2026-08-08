@@ -36,6 +36,7 @@ from .models import (
     SchoolSnapshot,
     TradeRecord,
 )
+from .public_identifiers import public_identifier_token
 from .rail_stations import (
     RailStationSearchResult,
     StationScopeMatch,
@@ -1294,7 +1295,7 @@ def _station_scope_fact(
     assert plan.radius_meters is not None
     return EvidenceFact(
         fact_id=(
-            f"criteria-station-scope-{match.occurrence_ids[0]}-"
+            f"criteria-station-scope-{public_identifier_token(match.occurrence_ids[0])}-"
             f"{plan.radius_meters}"
         ),
         claims=(

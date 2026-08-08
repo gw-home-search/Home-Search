@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from dataclasses import replace
 from datetime import UTC, date, datetime
 from time import sleep
@@ -1059,7 +1060,10 @@ def test_criteria_recommendation_supports_an_exact_station_radius_scope() -> Non
                     latitude=37.521,
                     longitude=126.924,
                     lines=("5호선", "9호선"),
-                    occurrence_ids=("rail-5-yeouido", "rail-9-yeouido"),
+                    occurrence_ids=(
+                        "operator|5|yeouido",
+                        "operator|9|yeouido",
+                    ),
                 ),),
                 dataset_version="rail-v1",
                 source_date=date(2026, 6, 30),
@@ -1103,6 +1107,15 @@ def test_criteria_recommendation_supports_an_exact_station_radius_scope() -> Non
     assert any(
         citation["sourceId"] == "transport.rail-station"
         for citation in response["citations"]
+    )
+    public_fact_ids = {
+        fact_id
+        for citation in response["citations"]
+        for fact_id in citation["factIds"]
+    }
+    assert all(
+        re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,199}", fact_id)
+        for fact_id in public_fact_ids
     )
 
 

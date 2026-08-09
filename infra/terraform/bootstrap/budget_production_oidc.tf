@@ -34,7 +34,7 @@ locals {
     "iam:Get*", "iam:List*", "logs:Describe*", "logs:List*", "route53:Get*", "route53:List*",
     "s3:GetBucket*", "s3:GetEncryptionConfiguration", "s3:GetLifecycleConfiguration", "s3:ListBucket",
     "scheduler:GetSchedule", "scheduler:GetScheduleGroup", "scheduler:ListTagsForResource",
-    "sns:Get*", "sns:List*", "ssm:Describe*", "ssm:GetDocument", "ssm:List*", "states:DescribeStateMachine", "states:ListTagsForResource", "tag:GetResources",
+    "sns:Get*", "sns:List*", "ssm:Describe*", "ssm:GetDocument", "ssm:List*", "tag:GetResources",
   ]
   budget_apply_actions = [
     "acm:AddTagsToCertificate", "acm:DeleteCertificate", "acm:RemoveTagsFromCertificate", "acm:RequestCertificate",
@@ -51,11 +51,11 @@ locals {
     "logs:CreateLogGroup", "logs:DeleteLogGroup", "logs:DeleteMetricFilter", "logs:PutMetricFilter", "logs:PutRetentionPolicy", "logs:TagResource", "logs:UntagResource",
     "sns:CreateTopic", "sns:DeleteTopic", "sns:SetTopicAttributes", "sns:Subscribe", "sns:TagResource", "sns:Unsubscribe", "sns:UntagResource",
     "ssm:AddTagsToResource", "ssm:CreateAssociation", "ssm:CreateDocument", "ssm:DeleteAssociation", "ssm:DeleteDocument", "ssm:DeleteParameter", "ssm:PutParameter", "ssm:RemoveTagsFromResource", "ssm:UpdateAssociation",
-    "states:CreateStateMachine", "states:DeleteStateMachine", "states:TagResource", "states:UntagResource", "states:UpdateStateMachine",
   ]
   budget_apply_explicit_deny_actions = [
     "ec2:DeleteVolume", "ec2:DetachVolume", "s3:DeleteBucket", "ssm:DeleteParameter",
   ]
+  budget_rtms_state_machine_arn = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:home-search-budget-production-rtms-refresh"
   budget_protected_bucket_arns = [
     "arn:aws:s3:::home-search-budget-production-backup-${data.aws_caller_identity.current.account_id}",
     "arn:aws:s3:::home-search-budget-production-reference-raw-${data.aws_caller_identity.current.account_id}",
@@ -362,6 +362,42 @@ resource "aws_iam_policy" "github_budget_apply_ssm_documents" {
   }
 }
 
+resource "aws_iam_policy" "github_budget_step_functions_read" {
+  name = "home-search-budget-production-step-functions-read"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid      = "ReadExactRtmsStateMachine"
+      Effect   = "Allow"
+      Action   = ["states:DescribeStateMachine", "states:ListTagsForResource"]
+      Resource = [local.budget_rtms_state_machine_arn]
+    }]
+  })
+  tags = {
+    Project     = "home-search"
+    Environment = "budget-production"
+    ManagedBy   = "terraform"
+  }
+}
+
+resource "aws_iam_policy" "github_budget_apply_step_functions" {
+  name = "home-search-budget-production-step-functions-apply"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid      = "ManageExactRtmsStateMachine"
+      Effect   = "Allow"
+      Action   = ["states:CreateStateMachine", "states:DeleteStateMachine", "states:TagResource", "states:UntagResource", "states:UpdateStateMachine"]
+      Resource = [local.budget_rtms_state_machine_arn]
+    }]
+  })
+  tags = {
+    Project     = "home-search"
+    Environment = "budget-production"
+    ManagedBy   = "terraform"
+  }
+}
+
 resource "aws_iam_role_policy_attachment" "github_budget_apply_regional" {
   role       = aws_iam_role.github_budget_production_apply.name
   policy_arn = aws_iam_policy.github_budget_apply_regional.arn
@@ -382,6 +418,21 @@ resource "aws_iam_role_policy_attachment" "github_budget_apply_ssm_documents" {
   policy_arn = aws_iam_policy.github_budget_apply_ssm_documents.arn
 }
 
+resource "aws_iam_role_policy_attachment" "github_budget_plan_step_functions_read" {
+  role       = aws_iam_role.github_budget_production_plan.name
+  policy_arn = aws_iam_policy.github_budget_step_functions_read.arn
+}
+
+resource "aws_iam_role_policy_attachment" "github_budget_apply_step_functions_read" {
+  role       = aws_iam_role.github_budget_production_apply.name
+  policy_arn = aws_iam_policy.github_budget_step_functions_read.arn
+}
+
+resource "aws_iam_role_policy_attachment" "github_budget_apply_step_functions" {
+  role       = aws_iam_role.github_budget_production_apply.name
+  policy_arn = aws_iam_policy.github_budget_apply_step_functions.arn
+}
+
 resource "aws_iam_role_policy" "github_budget_apply" {
   name = "budget-production-reviewed-apply"
   role = aws_iam_role.github_budget_production_apply.id
@@ -389,6 +440,8 @@ resource "aws_iam_role_policy" "github_budget_apply" {
     aws_iam_role_policy_attachment.github_budget_apply_regional,
     aws_iam_role_policy_attachment.github_budget_apply_service_linked_roles,
     aws_iam_role_policy_attachment.github_budget_apply_ssm_documents,
+    aws_iam_role_policy_attachment.github_budget_apply_step_functions_read,
+    aws_iam_role_policy_attachment.github_budget_apply_step_functions,
   ]
   policy = jsonencode({
     Version = "2012-10-17"
@@ -501,7 +554,7 @@ resource "aws_iam_role_policy" "github_budget_apply" {
       {
         Sid    = "DenyCrossEnvironmentControlPlaneMutation"
         Effect = "Deny"
-        Action = ["cloudwatch:DeleteAlarms", "cloudwatch:PutMetricAlarm", "logs:CreateLogGroup", "logs:DeleteLogGroup", "logs:DeleteMetricFilter", "logs:PutMetricFilter", "logs:PutRetentionPolicy", "logs:TagResource", "logs:UntagResource", "events:DeleteRule", "events:PutRule", "events:PutTargets", "events:RemoveTargets", "events:TagResource", "events:UntagResource", "sns:CreateTopic", "sns:DeleteTopic", "sns:SetTopicAttributes", "sns:Subscribe", "sns:TagResource", "sns:Unsubscribe", "sns:UntagResource", "ssm:AddTagsToResource", "ssm:CreateAssociation", "ssm:CreateDocument", "ssm:DeleteAssociation", "ssm:DeleteDocument", "ssm:DeleteParameter", "ssm:PutParameter", "ssm:RemoveTagsFromResource", "ssm:UpdateAssociation", "states:CreateStateMachine", "states:DeleteStateMachine", "states:TagResource", "states:UntagResource", "states:UpdateStateMachine"]
+        Action = ["cloudwatch:DeleteAlarms", "cloudwatch:PutMetricAlarm", "logs:CreateLogGroup", "logs:DeleteLogGroup", "logs:DeleteMetricFilter", "logs:PutMetricFilter", "logs:PutRetentionPolicy", "logs:TagResource", "logs:UntagResource", "events:DeleteRule", "events:PutRule", "events:PutTargets", "events:RemoveTargets", "events:TagResource", "events:UntagResource", "sns:CreateTopic", "sns:DeleteTopic", "sns:SetTopicAttributes", "sns:Subscribe", "sns:TagResource", "sns:Unsubscribe", "sns:UntagResource", "ssm:AddTagsToResource", "ssm:CreateAssociation", "ssm:CreateDocument", "ssm:DeleteAssociation", "ssm:DeleteDocument", "ssm:DeleteParameter", "ssm:PutParameter", "ssm:RemoveTagsFromResource", "ssm:UpdateAssociation"]
         NotResource = [
           "arn:aws:cloudwatch:${var.aws_region}:${data.aws_caller_identity.current.account_id}:alarm:home-search-budget-production-*",
           "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*",
@@ -511,7 +564,6 @@ resource "aws_iam_role_policy" "github_budget_apply" {
           "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:association/*",
           "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:document/home-search-budget-production-*",
           "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/home-search/budget-production/*",
-          "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:home-search-budget-production-rtms-refresh",
         ]
       },
       {

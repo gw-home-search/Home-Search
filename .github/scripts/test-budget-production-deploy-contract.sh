@@ -138,6 +138,14 @@ for forbidden_actions in \
     exit 1
   fi
 done
+budget_apply_actions_block="$(sed -n '/budget_apply_actions = \[/,/^  ]/p' "${bootstrap_policy}")"
+if grep -Fq 'states:' <<<"${budget_apply_actions_block}"; then
+  echo '상태: Fail - aggregate apply action에 Step Functions mutation을 포함했습니다.' >&2
+  exit 1
+fi
+grep -Fq 'budget_rtms_state_machine_arn = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:home-search-budget-production-rtms-refresh"' "${bootstrap_policy}"
+grep -Fq 'Sid      = "ReadExactRtmsStateMachine"' "${bootstrap_policy}"
+grep -Fq 'Sid      = "ManageExactRtmsStateMachine"' "${bootstrap_policy}"
 [[ -f "${rollout_workflow}" ]]
 for required in \
   'name: Rollout budget production' \

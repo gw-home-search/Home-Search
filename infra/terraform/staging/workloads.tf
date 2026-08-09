@@ -177,7 +177,9 @@ locals {
       environment = [
         { name = "HOME_AI_JWT_PUBLIC_KEY_PATHS", value = "{\"staging-1\":\"/run/keys/public.pem\"}" },
         { name = "HOME_AI_OPENAI_TIMEOUT_SECONDS", value = "8" },
-        { name = "HOME_AI_QUERY_TIMEOUT_SECONDS", value = "45" },
+        { name = "HOME_AI_QUERY_TIMEOUT_SECONDS", value = "55" },
+        { name = "HOME_AI_PROPERTY_SEARCH_FALLBACK_ENABLED", value = "true" },
+        { name = "HOME_AI_PROPERTY_SEARCH_BASE_URL", value = "http://property-api.${local.namespace_name}:8080" },
         { name = "HOME_AI_DEPLOYMENT_TIER", value = "staging" },
         { name = "HOME_AI_SUPERVISOR_GRAPH_MODE", value = "active" },
         { name = "HOME_AI_SUPERVISOR_GRAPH_CANARY_PERCENT", value = "100" },

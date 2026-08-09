@@ -74,7 +74,7 @@ class PostgresAcademyLocationRepository:
             max_size=max_pool_size,
             kwargs={
                 "row_factory": dict_row,
-                "options": "-c default_transaction_read_only=on -c statement_timeout=3000",
+                "options": "-c default_transaction_read_only=on -c statement_timeout=20000",
             },
             open=True,
         )

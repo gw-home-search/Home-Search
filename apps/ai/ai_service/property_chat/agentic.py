@@ -61,19 +61,12 @@ TOOL_CATALOG: tuple[dict[str, object], ...] = (
             }},
     },
     {
-        "type": "function", "name": "get_region_candidate_pool", "strict": True,
-        "description": "Build an unranked, marker-safe regional candidate pool after hard filters.",
+        "type": "function", "name": "get_recommendation_candidate_pool", "strict": True,
+        "description": "Read the server-verified recommendation scope and marker-safe candidate pool after hard filters.",
         "parameters": {"type": "object", "additionalProperties": False,
-            "required": ["regionName", "limit", "minimumUnitCount",
-                         "maximumBudgetTenThousandKrw", "exclusiveAreaSquareMeters"],
+            "required": ["limit"],
             "properties": {
-                "regionName": {"type": "string", "minLength": 1, "maxLength": 100},
                 "limit": {"type": "integer", "minimum": 1, "maximum": MAX_CANDIDATES},
-                "minimumUnitCount": {"type": ["integer", "null"], "minimum": 1, "maximum": 100000},
-                "maximumBudgetTenThousandKrw": {"type": ["integer", "null"], "minimum": 1,
-                                                  "maximum": 100000000},
-                "exclusiveAreaSquareMeters": {"type": ["number", "null"],
-                                                "exclusiveMinimum": 0, "maximum": 1000},
             }},
     },
     {
@@ -152,6 +145,7 @@ class ToolEvidence:
     candidate_names: Mapping[int, str] = field(default_factory=dict)
     fact_ids: frozenset[str] = frozenset()
     scope_label: str | None = None
+    scope_fact_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -163,6 +157,7 @@ class AgentRunResult:
     tool_calls: int
     web_used: bool = False
     scope_label: str | None = None
+    scope_fact_id: str | None = None
 
 
 class AgentModel(Protocol):
@@ -201,8 +196,10 @@ class BoundedAgentOrchestrator:
         )
         if secondary_result is not None:
             return secondary_result
+        fallback_builder = getattr(self._tools, "deterministic_fallback", None)
+        fallback_decision = fallback_builder() if fallback_builder is not None else None
         return AgentRunResult(
-            decision=AgentDecision(
+            decision=fallback_decision or AgentDecision(
                 answer="AI 비교 분석을 완료하지 못해 확인 가능한 후보만 표시합니다.",
                 rows=(), fact_ids=(),
                 limitations=("생성 경로가 모두 실패해 최소 fallback을 사용했습니다.",),
@@ -216,10 +213,13 @@ class BoundedAgentOrchestrator:
     ) -> AgentRunResult | None:
         transcript: list[Mapping[str, object]] = []
         candidate_ids: set[int] = set()
+        verified_recommendation_ids: set[int] = set()
         candidate_names: dict[int, str] = {}
         fact_ids: set[str] = set()
         allowed_numbers = set(_number_tokens(question))
         scope_label: str | None = None
+        scope_fact_id: str | None = None
+        partial_evidence = False
         total_bytes = 0
         call_count = 0
         for round_number in range(1, MAX_TOOL_ROUNDS + 1):
@@ -233,7 +233,9 @@ class BoundedAgentOrchestrator:
             if turn.decision is not None:
                 try:
                     _validate_decision(
-                        turn.decision, candidate_ids=candidate_ids,
+                        turn.decision, candidate_ids=(
+                            verified_recommendation_ids or candidate_ids
+                        ),
                         candidate_names=candidate_names, fact_ids=fact_ids,
                         allowed_numbers=allowed_numbers,
                         requested_count=requested_count,
@@ -249,7 +251,9 @@ class BoundedAgentOrchestrator:
                         if repaired.decision is None:
                             return None
                         _validate_decision(
-                            repaired.decision, candidate_ids=candidate_ids,
+                            repaired.decision, candidate_ids=(
+                                verified_recommendation_ids or candidate_ids
+                            ),
                             candidate_names=candidate_names, fact_ids=fact_ids,
                             allowed_numbers=allowed_numbers,
                             requested_count=requested_count,
@@ -257,19 +261,27 @@ class BoundedAgentOrchestrator:
                     except Exception:
                         return None
                     return AgentRunResult(
-                        repaired.decision, "repair", "supported", round_number - 1,
+                        repaired.decision, "repair",
+                        "partial" if partial_evidence else "supported",
+                        round_number - 1,
                         call_count, bool(repaired.decision.web_citations), scope_label,
+                        scope_fact_id,
                     )
                 return AgentRunResult(
-                    turn.decision, success_route, "supported", round_number - 1,
+                    turn.decision, success_route,
+                    "partial" if partial_evidence else "supported",
+                    round_number - 1,
                     call_count, bool(turn.decision.web_citations), scope_label,
+                    scope_fact_id,
                 )
             calls = turn.tool_calls
             if call_count + len(calls) > MAX_TOOL_CALLS:
                 return None
             try:
                 for call in calls:
-                    _validate_tool_call(call, candidate_ids)
+                    _validate_tool_call(
+                        call, verified_recommendation_ids or candidate_ids
+                    )
                 results = await asyncio.gather(*(
                     self._tools.execute(call.name, call.arguments) for call in calls
                 ))
@@ -277,6 +289,9 @@ class BoundedAgentOrchestrator:
                 return None
             outputs: list[dict[str, object]] = []
             for call, evidence in zip(calls, results, strict=True):
+                partial_evidence = partial_evidence or _has_evidence_limitation(
+                    evidence.payload
+                )
                 encoded = json.dumps(
                     evidence.payload, ensure_ascii=False, separators=(",", ":")
                 ).encode()
@@ -286,6 +301,8 @@ class BoundedAgentOrchestrator:
                 if total_bytes > MAX_TOTAL_TOOL_OUTPUT_BYTES:
                     return None
                 candidate_ids.update(evidence.candidate_ids)
+                if call.name == "get_recommendation_candidate_pool":
+                    verified_recommendation_ids.update(evidence.candidate_ids)
                 for complex_id, name in evidence.candidate_names.items():
                     existing_name = candidate_names.get(complex_id)
                     if existing_name is not None and existing_name != name:
@@ -295,6 +312,8 @@ class BoundedAgentOrchestrator:
                 allowed_numbers.update(_number_tokens(encoded.decode()))
                 if evidence.scope_label is not None:
                     scope_label = evidence.scope_label
+                if evidence.scope_fact_id is not None:
+                    scope_fact_id = evidence.scope_fact_id
                 outputs.append({
                     "type": "function_call_output", "call_id": call.call_id,
                     "output": encoded.decode(),
@@ -302,6 +321,15 @@ class BoundedAgentOrchestrator:
             call_count += len(calls)
             transcript.extend(outputs)
         return None
+
+
+def _has_evidence_limitation(payload: Mapping[str, object]) -> bool:
+    limitation = payload.get("limitation")
+    limitations = payload.get("limitations")
+    return (
+        isinstance(limitation, str) and bool(limitation.strip())
+        or isinstance(limitations, list) and bool(limitations)
+    )
 
 
 def _validate_tool_call(call: AgentToolCall, candidate_ids: set[int]) -> None:
@@ -328,27 +356,11 @@ def _validate_tool_call(call: AgentToolCall, candidate_ids: set[int]) -> None:
         if set(arguments) != {"query", "limit"} or not _bounded_text(arguments["query"], 100) \
                 or not _bounded_int(arguments["limit"], 1, MAX_CANDIDATES):
             raise ValueError("invalid search arguments")
-    elif call.name == "get_region_candidate_pool":
-        if not {"regionName", "limit"}.issubset(arguments) or not set(arguments).issubset(
-            {"regionName", "limit", "minimumUnitCount", "maximumBudgetTenThousandKrw",
-             "exclusiveAreaSquareMeters"}
-        ) or not _bounded_text(arguments["regionName"], 100) \
-                or not _bounded_int(arguments["limit"], 1, MAX_CANDIDATES):
-            raise ValueError("invalid candidate pool arguments")
-        minimum = arguments.get("minimumUnitCount")
-        if minimum is not None and not _bounded_int(minimum, 1, 100_000):
-            raise ValueError("invalid hard filter")
-        budget = arguments.get("maximumBudgetTenThousandKrw")
-        if budget is not None and not _bounded_int(budget, 1, 100_000_000):
-            raise ValueError("invalid budget hard filter")
-        area = arguments.get("exclusiveAreaSquareMeters")
-        if area is not None and (
-            isinstance(area, bool) or not isinstance(area, (int, float))
-            or not 0 < float(area) <= 1000
+    elif call.name == "get_recommendation_candidate_pool":
+        if set(arguments) != {"limit"} or not _bounded_int(
+            arguments["limit"], 1, MAX_CANDIDATES
         ):
-            raise ValueError("invalid area hard filter")
-        if (budget is None) != (area is None):
-            raise ValueError("budget and area hard filters must be supplied together")
+            raise ValueError("invalid candidate pool arguments")
 
 
 def _validate_decision(
@@ -356,7 +368,7 @@ def _validate_decision(
     candidate_names: Mapping[int, str], fact_ids: set[str],
     allowed_numbers: set[str], requested_count: int,
 ) -> None:
-    if not _bounded_text(decision.answer, 20_000):
+    if not _bounded_text(decision.answer, 500):
         raise AgentGroundingError("answer is invalid")
     official_only = (
         not decision.rows
@@ -381,8 +393,10 @@ def _validate_decision(
         if candidate_names.get(row.complex_id) != row.complex_name:
             raise AgentGroundingError("candidate name does not match verified identity")
         factual_texts.append(row.summary)
+        if not 1 <= len(row.strengths) <= 3 or not row.tradeoffs:
+            raise AgentGroundingError("recommendation evidence counts are invalid")
         row_facts = set(row.fact_ids)
-        if not row_facts:
+        if f"complex:{row.complex_id}" not in row_facts:
             raise AgentGroundingError("recommendation row lacks facts")
         referenced.update(row_facts)
         for text, claim_fact_ids in (*row.strengths, *row.tradeoffs):

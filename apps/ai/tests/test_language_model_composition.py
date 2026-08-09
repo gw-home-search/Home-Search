@@ -44,6 +44,9 @@ from ai_service.property_chat.models import (
     DraftSentence,
     QueryPlan,
 )
+from ai_service.property_chat.property_search_fallback import (
+    PropertySearchCandidateDiscovery,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -92,6 +95,36 @@ def test_property_repository_pool_size_comes_from_runtime_environment(
         "min_pool_size": 1,
         "max_pool_size": 2,
     }
+
+
+def test_property_search_fallback_is_wired_only_with_valid_internal_origin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+    repository = object()
+    monkeypatch.setenv("HOME_AI_PROPERTY_DSN", "postgresql://runtime/property")
+    monkeypatch.setenv("HOME_AI_PROPERTY_SEARCH_FALLBACK_ENABLED", "true")
+    monkeypatch.setenv(
+        "HOME_AI_PROPERTY_SEARCH_BASE_URL", "http://property-api.production.internal:8080"
+    )
+    monkeypatch.setattr(
+        "ai_service.property_chat.postgres.PostgresPropertyFactRepository",
+        lambda dsn, **kwargs: captured.update(dsn=dsn, **kwargs) or repository,
+    )
+
+    assert get_property_fact_repository() is repository
+    assert isinstance(captured["candidate_discovery"], PropertySearchCandidateDiscovery)
+
+
+def test_property_search_fallback_rejects_public_origin_at_startup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HOME_AI_PROPERTY_DSN", "postgresql://runtime/property")
+    monkeypatch.setenv("HOME_AI_PROPERTY_SEARCH_FALLBACK_ENABLED", "true")
+    monkeypatch.setenv("HOME_AI_PROPERTY_SEARCH_BASE_URL", "http://example.com")
+
+    with pytest.raises(ChatbotProviderUnavailable):
+        get_property_fact_repository()
 
 
 @pytest.mark.parametrize(
@@ -178,7 +211,7 @@ def test_total_query_timeout_defaults_inside_bff_budget(
 ) -> None:
     monkeypatch.delenv("HOME_AI_QUERY_TIMEOUT_SECONDS", raising=False)
 
-    assert get_query_timeout_seconds() == 45
+    assert get_query_timeout_seconds() == 55
 
 
 def test_total_query_timeout_accepts_sixty_seconds(

@@ -349,6 +349,10 @@ class RecentTradeHandler:
         latest_trade_date = await asyncio.to_thread(self._repository.latest_trade_date)
         data_as_of = latest_trade_date or max(record.deal_date for record in trades)
         limitations = ["신고 취소 또는 지연 신고가 이후 반영될 수 있습니다."]
+        if len(trades) < plan.limit:
+            limitations.append(
+                f"요청한 {plan.limit}건 중 실제 확인된 거래는 {len(trades)}건입니다."
+            )
         if plan.exclusive_area_square_meters is not None:
             limitations.append("전용면적은 요청값 기준 ±1.0㎡ 범위로 조회했습니다.")
         return CapabilityResult(
@@ -414,7 +418,10 @@ class PriceTrendHandler:
         data_as_of = latest_trade_date or min(
             plan.end_date, max(_month_end(record.month) for record in trends)
         )
-        limitations = ["월별 수치는 실제 거래 관찰값이며 미래 가격을 의미하지 않습니다."]
+        limitations = [
+            "월별 수치는 실제 거래 관찰값이며 미래 가격을 의미하지 않습니다.",
+            "거래가 없는 월은 0건으로 만들지 않고 표에서 생략했습니다.",
+        ]
         if plan.exclusive_area_square_meters is not None:
             limitations.append("전용면적은 요청값 기준 ±1.0㎡ 범위로 집계했습니다.")
         return CapabilityResult(

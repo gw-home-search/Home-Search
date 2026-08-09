@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 import asyncio
+import re
+from dataclasses import replace
 from datetime import UTC, date, datetime
+from types import SimpleNamespace
 
 import pytest
 
-from ai_service.property_chat.agentic_tools import PropertyAgentTools
+from ai_service.property_chat.agentic_tools import (
+    PropertyAgentTools,
+    VerifiedRecommendationContext,
+)
 from ai_service.property_chat.criteria_recommendation import CriteriaCandidateScope
 from ai_service.property_chat.models import ComplexRecord, MonthlyTrendRecord, TradeRecord
 
@@ -44,6 +50,9 @@ class Repository:
     def criteria_candidates(self, _region: str, _limit: int):
         return self.scope
 
+    def criteria_candidates_near_point(self, _lat, _lng, _radius, _limit):
+        return tuple(self.records.values())
+
     def recommendation_candidates(self, _region, _start, _end, _area, _limit):
         if not self.budget_available:
             return None
@@ -55,6 +64,12 @@ class Repository:
 
     def recent_trades(self, complex_id, _start, _end, _area, _limit):
         return [self._trade(complex_id * 10, complex_id, 100_000 + complex_id)]
+
+    def latest_trades_for_candidates(self, complex_ids, _start, _end, _area):
+        return {
+            complex_id: self._trade(complex_id * 10, complex_id, 100_000 + complex_id)
+            for complex_id in complex_ids
+        }
 
     def monthly_trends(self, complex_id, _start, _end, _area):
         return [MonthlyTrendRecord(complex_id, date(2026, 6, 1), 100_000, 2, 90_000, 110_000)]
@@ -69,6 +84,22 @@ class Repository:
 
 def _run(tools: PropertyAgentTools, name: str, arguments: dict[str, object]):
     return asyncio.run(tools.execute(name, arguments))
+
+
+def _admin_context(**overrides: object) -> VerifiedRecommendationContext:
+    values: dict[str, object] = {
+        "question": "송파구 아파트 추천", "scope_type": "ADMIN_REGION",
+        "scope_label": "송파구", "region_name": "송파구",
+        "station_name": None, "station_lines": (), "station_latitude": None,
+        "station_longitude": None, "station_source_date": None,
+        "radius_meters": None, "minimum_unit_count": None,
+        "maximum_budget_ten_thousand_krw": None,
+        "exclusive_area_square_meters": None, "criteria_order": (),
+        "explicit_criteria": (), "school_levels": ("ELEMENTARY",),
+        "requested_count": 3, "area_conversion_note": None,
+    }
+    values.update(overrides)
+    return VerifiedRecommendationContext(**values)  # type: ignore[arg-type]
 
 
 def test_all_read_only_tool_dispatches_publish_bounded_evidence() -> None:
@@ -109,6 +140,357 @@ def test_candidate_pool_is_facet_union_with_server_hard_filters() -> None:
     assert result.candidate_ids == frozenset({1, 2})
     assert result.payload["selection"] == "FACET_UNION_NOT_FINAL_RANK"
     assert budget.candidate_ids == frozenset({2})
+
+
+def test_context_bound_station_pool_has_distance_facts_and_no_scope_arguments() -> None:
+    context = VerifiedRecommendationContext(
+        question="망포역 아파트 2개 추천해줘",
+        scope_type="STATION_RADIUS",
+        scope_label="망포역 직선거리 1500m",
+        region_name=None,
+        station_name="망포",
+        station_lines=("수인분당선",),
+        station_latitude=37.5,
+        station_longitude=127.1,
+        station_source_date=date(2026, 7, 1),
+        radius_meters=1500,
+        minimum_unit_count=None,
+        maximum_budget_ten_thousand_krw=None,
+        exclusive_area_square_meters=None,
+        criteria_order=("TRANSIT",),
+        explicit_criteria=("TRANSIT",), school_levels=("ELEMENTARY",),
+        requested_count=2,
+        area_conversion_note=None,
+    )
+    tools = PropertyAgentTools(Repository(), context=context)
+
+    result = _run(tools, "get_recommendation_candidate_pool", {"limit": 2})
+    cached_result = _run(tools, "get_recommendation_candidate_pool", {"limit": 2})
+    transit_reference = _run(
+        tools, "get_reference_evidence", {"complexIds": [1]},
+    )
+
+    assert result.payload["scope"]["type"] == "STATION_RADIUS"
+    assert cached_result is result
+    assert transit_reference.payload["candidates"][0]["observations"] == []
+    assert result.payload["scope"]["label"] == "망포역 직선거리 1500m"
+    assert str(result.payload["scope"]["factId"]).startswith("recommendation-scope:")
+    station_fact = result.payload["candidates"][0]["station"]
+    assert station_fact == {
+        "name": "망포", "lines": ["수인분당선"], "distanceMeters": 0,
+        "radiusMeters": 1500, "sourceDate": "2026-07-01",
+        "factId": station_fact["factId"],
+    }
+    assert re.fullmatch(
+        r"[A-Za-z0-9][A-Za-z0-9._:-]{0,199}", station_fact["factId"]
+    )
+    assert "latitude" not in result.payload["candidates"][0]
+    assert "longitude" not in result.payload["candidates"][0]
+    assert station_fact["factId"] in result.fact_ids
+
+    with pytest.raises(ValueError, match="candidate pool arguments"):
+        _run(tools, "get_recommendation_candidate_pool", {
+            "limit": 2, "regionName": "강남구",
+        })
+
+
+def test_preload_queries_only_explicit_reference_source_and_keeps_limitation() -> None:
+    context = VerifiedRecommendationContext(
+        question="송파구에서 초등학교가 가까운 아파트 추천",
+        scope_type="ADMIN_REGION", scope_label="송파구", region_name="송파구",
+        station_name=None, station_lines=(), station_latitude=None,
+        station_longitude=None, station_source_date=None, radius_meters=None,
+        minimum_unit_count=None, maximum_budget_ten_thousand_krw=None,
+        exclusive_area_square_meters=None, criteria_order=("EDUCATION",),
+        explicit_criteria=("SCHOOL",), school_levels=("ELEMENTARY",),
+        requested_count=3, area_conversion_note=None,
+    )
+    tools = PropertyAgentTools(Repository(), context=context)
+
+    result = asyncio.run(tools.preload_recommendation_evidence())
+
+    assert result.payload["referenceEvidence"]
+    assert result.payload["limitations"] == [
+        "SCHOOL 공식 source를 현재 확인하지 못했습니다."
+    ]
+    assert all("latitude" not in item for item in result.payload["candidates"])
+
+
+def test_explicit_reference_sources_publish_batched_evidence_and_cache_subsets() -> None:
+    repository = Repository()
+    context = VerifiedRecommendationContext(
+        question="송파구에서 학교·학원·대형마트가 가까운 아파트 추천",
+        scope_type="ADMIN_REGION", scope_label="송파구", region_name="송파구",
+        station_name=None, station_lines=(), station_latitude=None,
+        station_longitude=None, station_source_date=None, radius_meters=None,
+        minimum_unit_count=None, maximum_budget_ten_thousand_krw=None,
+        exclusive_area_square_meters=None,
+        criteria_order=("EDUCATION", "LIFESTYLE"),
+        explicit_criteria=("SCHOOL", "ACADEMY", "SHOPPING"),
+        school_levels=("ELEMENTARY",), requested_count=3,
+        area_conversion_note=None,
+    )
+    today = date.today()
+
+    class SchoolRepository:
+        def nearest_by_level_batch(self, *, points, school_levels, radius_meters):
+            assert school_levels == ("ELEMENTARY",)
+            assert radius_meters == 1500
+            return SimpleNamespace(source_date=today), {
+                point.complex_id: SimpleNamespace(
+                    matched_count=1,
+                    schools=(() if point.complex_id == 3 else (SimpleNamespace(
+                        school_name=f"{point.complex_id}초등학교",
+                        school_level="ELEMENTARY", operating_status="OPEN",
+                        distance_meters=300 + point.complex_id,
+                    ),)),
+                )
+                for point in points
+            }
+
+    class AcademyRepository:
+        def nearby_counts_batch(self, *, points, radius_meters):
+            assert radius_meters == 800
+            return {
+                point.complex_id: SimpleNamespace(
+                    coordinate_coverage=1.0,
+                    observed_at=datetime.now(UTC), freshness_days=30,
+                    matched_count=5,
+                    locations=(
+                        () if point.complex_id == 3
+                        else (SimpleNamespace(distance_meters=200),)
+                    ),
+                )
+                for point in points
+            }
+
+    class RetailRepository:
+        def nearest_batch(self, *, source_id, category, points, radius_meters):
+            assert (source_id, category, radius_meters) == (
+                "retail.large-store", "LARGE_STORE", 1000,
+            )
+            return {
+                point.complex_id: SimpleNamespace(
+                    facilities=(
+                        () if point.complex_id == 3 else (SimpleNamespace(
+                            name=f"{point.complex_id}마트", subcategory="대형마트",
+                            distance_meters=400,
+                        ),)
+                    ),
+                    matched_count=1, dataset_version="retail-v1", data_as_of=today,
+                )
+                for point in points
+            }
+
+    tools = PropertyAgentTools(
+        repository, context=context,
+        school_repository=SchoolRepository(),
+        academy_repository=AcademyRepository(),
+        retail_repository=RetailRepository(),
+    )
+    pool = _run(tools, "get_recommendation_candidate_pool", {"limit": 3})
+    references = _run(
+        tools, "get_reference_evidence",
+        {"complexIds": sorted(pool.candidate_ids)},
+    )
+
+    assert references.payload["limitations"] == []
+    assert len(references.fact_ids) == 9
+    assert all(
+        {observation["criterion"] for observation in candidate["observations"]}
+        == {"SCHOOL", "ACADEMY", "SHOPPING"}
+        for candidate in references.payload["candidates"]
+    )
+    by_id = {
+        candidate["complexId"]: candidate
+        for candidate in references.payload["candidates"]
+    }
+    assert all(
+        observation.get("nearest") is None
+        for observation in by_id[3]["observations"]
+    )
+
+    cached = _run(tools, "get_reference_evidence", {"complexIds": [1]})
+    assert cached.candidate_names == {1: "1단지"}
+    assert len(cached.fact_ids) == 3
+    with pytest.raises(ValueError, match="no longer exists"):
+        _run(tools, "get_reference_evidence", {"complexIds": [99]})
+
+
+def test_verified_context_and_candidate_pool_arguments_fail_closed() -> None:
+    with pytest.raises(ValueError, match="context is invalid"):
+        _admin_context(scope_label="", requested_count=0)
+    with pytest.raises(ValueError, match="admin scope is invalid"):
+        _admin_context(station_name="잠실")
+    with pytest.raises(ValueError, match="station scope is invalid"):
+        _admin_context(
+            scope_type="STATION_RADIUS", region_name=None,
+            station_name="잠실", station_latitude=None,
+        )
+
+    for invalid_limit in (True, 0, 41):
+        with pytest.raises(ValueError, match="candidate pool arguments"):
+            _run(
+                PropertyAgentTools(Repository(), context=_admin_context()),
+                "get_recommendation_candidate_pool", {"limit": invalid_limit},
+            )
+    with pytest.raises(ValueError, match="context is required"):
+        _run(
+            PropertyAgentTools(Repository()),
+            "get_recommendation_candidate_pool", {"limit": 1},
+        )
+
+
+def test_deterministic_fallback_handles_zero_trade_and_partial_complex_metadata() -> None:
+    class ZeroTradeRepository(Repository):
+        def __init__(self) -> None:
+            super().__init__()
+            self.records[1] = replace(self.records[1], use_date=None)
+            self.records[2] = replace(self.records[2], unit_count=None)
+            self.scope = CriteriaCandidateScope("송파구", tuple(self.records.values()))
+
+        def latest_trades_for_candidates(self, complex_ids, _start, _end, _area):
+            return dict.fromkeys(complex_ids)
+
+    tools = PropertyAgentTools(
+        ZeroTradeRepository(),
+        context=_admin_context(criteria_order=("SCALE", "NEWER", "TRADE_ACTIVITY")),
+    )
+    assert tools.deterministic_fallback() is None
+    _run(tools, "get_recommendation_candidate_pool", {"limit": 3})
+
+    decision = tools.deterministic_fallback()
+
+    assert decision is not None
+    assert len(decision.rows) == 3
+    assert all("최근 1년 거래는 확인되지 않아" in row.tradeoffs[0][0]
+               for row in decision.rows)
+    assert any("세대 규모" in text for row in decision.rows for text, _ in row.strengths)
+    assert any("사용승인일" in text for row in decision.rows for text, _ in row.strengths)
+    assert any("기본정보" in text for row in decision.rows for text, _ in row.strengths)
+
+
+def test_deterministic_fallback_uses_trade_role_and_preserves_source_limitation() -> None:
+    context = _admin_context(
+        maximum_budget_ten_thousand_krw=200_000,
+        exclusive_area_square_meters=84.0,
+        explicit_criteria=("SCHOOL",), requested_count=1,
+    )
+    tools = PropertyAgentTools(Repository(), context=context)
+    asyncio.run(tools.preload_recommendation_evidence())
+
+    decision = tools.deterministic_fallback()
+
+    assert decision is not None
+    assert decision.rows[0].role == "TRADE_ACTIVITY"
+    assert decision.rows[0].tradeoffs[0][0].startswith("공식 단지·거래 자료 밖")
+    assert "SCHOOL 공식 source를 현재 확인하지 못했습니다." in decision.limitations
+
+
+def test_reference_and_context_pool_unavailable_inputs_fail_closed() -> None:
+    missing_coordinate = Repository()
+    missing_coordinate.records[1] = replace(
+        missing_coordinate.records[1], latitude=None,
+    )
+    with pytest.raises(ValueError, match="no longer exists"):
+        _run(
+            PropertyAgentTools(missing_coordinate, context=_admin_context()),
+            "get_reference_evidence", {"complexIds": [1]},
+        )
+
+    missing_scope = Repository()
+    missing_scope.scope = None
+    result = _run(
+        PropertyAgentTools(missing_scope, context=_admin_context()),
+        "get_recommendation_candidate_pool", {"limit": 3},
+    )
+    assert result.payload == {"scope": None, "candidates": []}
+
+    no_eligible = _run(
+        PropertyAgentTools(
+            Repository(), context=_admin_context(minimum_unit_count=10_000),
+        ),
+        "get_recommendation_candidate_pool", {"limit": 3},
+    )
+    assert no_eligible.candidate_ids == frozenset()
+
+    class UnavailableSchool:
+        def nearest_by_level_batch(self, **_kwargs):
+            return None
+
+    class UnavailableAcademy:
+        def nearby_counts_batch(self, **_kwargs):
+            return None
+
+    class UnavailableRetail:
+        def nearest_batch(self, **_kwargs):
+            return None
+
+    unavailable = PropertyAgentTools(
+        Repository(),
+        context=_admin_context(explicit_criteria=("SCHOOL", "ACADEMY", "SHOPPING")),
+        school_repository=UnavailableSchool(),
+        academy_repository=UnavailableAcademy(),
+        retail_repository=UnavailableRetail(),
+    )
+    limitations = _run(
+        unavailable, "get_reference_evidence", {"complexIds": [1]},
+    ).payload["limitations"]
+    assert limitations == [
+        "SCHOOL 공식 source를 현재 확인하지 못했습니다.",
+        "ACADEMY 공식 source를 현재 확인하지 못했습니다.",
+        "SHOPPING 공식 source를 현재 확인하지 못했습니다.",
+    ]
+
+
+def test_station_fallback_keeps_distance_scale_date_and_recent_trade() -> None:
+    context = VerifiedRecommendationContext(
+        question="망포역 아파트 추천", scope_type="STATION_RADIUS",
+        scope_label="망포역 직선거리 1500m", region_name=None,
+        station_name="망포", station_lines=("수인분당선",),
+        station_latitude=37.5, station_longitude=127.1,
+        station_source_date=date(2026, 7, 1), radius_meters=1500,
+        minimum_unit_count=None, maximum_budget_ten_thousand_krw=None,
+        exclusive_area_square_meters=None, criteria_order=("TRANSIT",),
+        explicit_criteria=("TRANSIT",), school_levels=("ELEMENTARY",),
+        requested_count=1, area_conversion_note=None,
+    )
+    tools = PropertyAgentTools(Repository(), context=context)
+    asyncio.run(tools.preload_recommendation_evidence())
+
+    decision = tools.deterministic_fallback()
+
+    assert decision is not None
+    strengths = [text for text, _ in decision.rows[0].strengths]
+    assert any("망포역 직선거리" in text for text in strengths)
+    assert any("세대이며 사용승인일" in text for text in strengths)
+    assert any("최근 거래" in text and "전용" in text for text in strengths)
+
+
+def test_context_bound_pool_applies_budget_only_with_same_area_trade() -> None:
+    context = VerifiedRecommendationContext(
+        question="송파구 전용 84㎡ 10억 이하 아파트 추천",
+        scope_type="ADMIN_REGION", scope_label="송파구", region_name="송파구",
+        station_name=None, station_lines=(), station_latitude=None,
+        station_longitude=None, station_source_date=None, radius_meters=None,
+        minimum_unit_count=None, maximum_budget_ten_thousand_krw=100_001,
+        exclusive_area_square_meters=84.0, criteria_order=(),
+        explicit_criteria=(), school_levels=("ELEMENTARY",), requested_count=3,
+        area_conversion_note=None,
+    )
+
+    result = _run(
+        PropertyAgentTools(Repository(), context=context),
+        "get_recommendation_candidate_pool", {"limit": 40},
+    )
+
+    assert result.candidate_ids == frozenset({1})
+    assert result.payload["candidates"][0]["recentTrade"] == {
+        "availability": "available", "dealDate": "2026-06-01",
+        "amountTenThousandKrw": 100_001,
+        "exclusiveAreaSquareMeters": 84.0, "floor": 10,
+        "factId": "trade:10",
+    }
 
 
 def test_candidate_pool_returns_empty_when_scope_or_budget_observation_is_unavailable() -> None:

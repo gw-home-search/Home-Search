@@ -39,7 +39,7 @@ class RecordingTools:
         self, name: str, arguments: Mapping[str, object]
     ) -> ToolEvidence:
         self.calls.append(name)
-        if name == "get_region_candidate_pool":
+        if name == "get_recommendation_candidate_pool":
             return ToolEvidence(
                 payload={"candidates": [
                     {"complexId": 10, "complexName": "가단지"},
@@ -59,6 +59,9 @@ class RecordingTools:
 
 
 def _decision(*ids: int, fact_id: str = "complex:10") -> AgentDecision:
+    decision_fact_ids = tuple(dict.fromkeys((
+        fact_id, *(f"complex:{complex_id}" for complex_id in ids),
+    )))
     return AgentDecision(
         answer="검증된 근거를 비교한 결과입니다.",
         rows=tuple(
@@ -70,19 +73,19 @@ def _decision(*ids: int, fact_id: str = "complex:10") -> AgentDecision:
                 strengths=(("확인된 특성", (fact_id,)),),
                 tradeoffs=(("추가 확인 필요", (fact_id,)),),
                 metrics={},
-                fact_ids=(fact_id,),
+                fact_ids=tuple(dict.fromkeys((f"complex:{complex_id}", fact_id))),
             )
             for complex_id in ids
         ),
-        fact_ids=(fact_id,),
+        fact_ids=decision_fact_ids,
     )
 
 
 def test_agent_can_call_tools_in_multiple_rounds_and_own_final_order() -> None:
     primary = ScriptedModel([
         AgentTurn(tool_calls=(AgentToolCall(
-            call_id="pool", name="get_region_candidate_pool",
-            arguments={"regionName": "송파구", "limit": 40},
+            call_id="pool", name="get_recommendation_candidate_pool",
+            arguments={"limit": 40},
         ),)),
         AgentTurn(tool_calls=(
             AgentToolCall(call_id="trade-20", name="get_recent_trades", arguments={"complexId": 20}),
@@ -101,8 +104,40 @@ def test_agent_can_call_tools_in_multiple_rounds_and_own_final_order() -> None:
     assert [row.complex_id for row in result.decision.rows] == [20, 10]
     assert result.route == "primary"
     assert tools.calls == [
-        "get_region_candidate_pool", "get_recent_trades", "get_recent_trades"
+        "get_recommendation_candidate_pool", "get_recent_trades", "get_recent_trades"
     ]
+
+
+def test_search_results_cannot_expand_verified_recommendation_pool() -> None:
+    class SearchExpandingTools(RecordingTools):
+        async def execute(self, name, arguments):  # noqa: ANN001
+            if name == "search_complexes":
+                return ToolEvidence(
+                    payload={"matches": [{"complexId": 99, "complexName": "99단지"}]},
+                    candidate_ids=frozenset({99}), candidate_names={99: "99단지"},
+                    fact_ids=frozenset({"complex:99"}),
+                )
+            return await super().execute(name, arguments)
+
+    primary = ScriptedModel([
+        AgentTurn(tool_calls=(AgentToolCall(
+            call_id="pool", name="get_recommendation_candidate_pool",
+            arguments={"limit": 40},
+        ),)),
+        AgentTurn(tool_calls=(AgentToolCall(
+            call_id="search", name="search_complexes",
+            arguments={"query": "99단지", "limit": 1},
+        ),)),
+        AgentTurn(decision=_decision(99)),
+        AgentTurn(decision=_decision(10)),
+    ])
+
+    result = asyncio.run(BoundedAgentOrchestrator(
+        primary=primary, secondary=ScriptedModel([]), tools=SearchExpandingTools(),
+    ).run(question="송파 아파트 추천", requested_count=1))
+
+    assert result.route == "repair"
+    assert result.decision.rows[0].complex_id == 10
 
 
 @pytest.mark.parametrize("decision", [
@@ -113,8 +148,8 @@ def test_agent_can_call_tools_in_multiple_rounds_and_own_final_order() -> None:
 def test_invalid_primary_is_repaired_with_same_evidence(decision: AgentDecision) -> None:
     primary = ScriptedModel([
         AgentTurn(tool_calls=(AgentToolCall(
-            call_id="pool", name="get_region_candidate_pool",
-            arguments={"regionName": "송파구", "limit": 40},
+            call_id="pool", name="get_recommendation_candidate_pool",
+            arguments={"limit": 40},
         ),)),
         AgentTurn(decision=decision),
         AgentTurn(decision=_decision(10)),
@@ -134,8 +169,8 @@ def test_provider_failure_uses_secondary_and_all_failure_is_transparent_fallback
     tools = RecordingTools()
     secondary = ScriptedModel([
         AgentTurn(tool_calls=(AgentToolCall(
-            call_id="pool", name="get_region_candidate_pool",
-            arguments={"regionName": "송파구", "limit": 40},
+            call_id="pool", name="get_recommendation_candidate_pool",
+            arguments={"limit": 40},
         ),)),
         AgentTurn(decision=_decision(10)),
     ])
@@ -156,6 +191,36 @@ def test_provider_failure_uses_secondary_and_all_failure_is_transparent_fallback
     assert "AI 비교 분석을 완료하지 못해" in fallback_result.decision.answer
 
 
+def test_optional_reference_limitation_preserves_decision_as_partial() -> None:
+    class LimitedReferenceTools(RecordingTools):
+        async def execute(self, name, arguments):  # noqa: ANN001
+            if name == "get_reference_evidence":
+                return ToolEvidence(
+                    payload={"candidates": [], "limitations": ["학교 source unavailable"]},
+                    candidate_ids=frozenset({10}), candidate_names={10: "10단지"},
+                )
+            return await super().execute(name, arguments)
+
+    primary = ScriptedModel([
+        AgentTurn(tool_calls=(AgentToolCall(
+            call_id="pool", name="get_recommendation_candidate_pool",
+            arguments={"limit": 40},
+        ),)),
+        AgentTurn(tool_calls=(AgentToolCall(
+            call_id="school", name="get_reference_evidence",
+            arguments={"complexIds": [10]},
+        ),)),
+        AgentTurn(decision=_decision(10)),
+    ])
+
+    result = asyncio.run(BoundedAgentOrchestrator(
+        primary=primary, secondary=ScriptedModel([]), tools=LimitedReferenceTools(),
+    ).run(question="역과 초등학교가 가까운 아파트 추천", requested_count=1))
+
+    assert result.route == "primary"
+    assert result.readiness == "partial"
+
+
 @pytest.mark.parametrize("answer", [
     "이 단지가 무조건 최고입니다.",
     "투자 추천 단지이며 통근시간은 짧습니다.",
@@ -167,8 +232,8 @@ def test_forbidden_or_unobserved_claims_are_repaired(answer: str) -> None:
     )
     primary = ScriptedModel([
         AgentTurn(tool_calls=(AgentToolCall(
-            call_id="pool", name="get_region_candidate_pool",
-            arguments={"regionName": "송파구", "limit": 40},
+            call_id="pool", name="get_recommendation_candidate_pool",
+            arguments={"limit": 40},
         ),)),
         AgentTurn(decision=invalid),
         AgentTurn(decision=_decision(10)),
@@ -194,8 +259,8 @@ def test_candidate_name_must_match_the_verified_identity() -> None:
     )
     primary = ScriptedModel([
         AgentTurn(tool_calls=(AgentToolCall(
-            call_id="pool", name="get_region_candidate_pool",
-            arguments={"regionName": "송파구", "limit": 40},
+            call_id="pool", name="get_recommendation_candidate_pool",
+            arguments={"limit": 40},
         ),)),
         AgentTurn(decision=wrong_name),
         AgentTurn(decision=_decision(10)),
@@ -233,18 +298,12 @@ def test_requested_count_is_bounded(count: int) -> None:
     (AgentToolCall("id", "get_candidate_evidence", {"bad": [1]}), {1}),
     (AgentToolCall("id", "get_reference_evidence", {"complexIds": [1, 1]}), {1}),
     (AgentToolCall("id", "search_complexes", {"query": "", "limit": 0}), set()),
-    (AgentToolCall("id", "get_region_candidate_pool", {"regionName": "", "limit": 3}), set()),
-    (AgentToolCall("id", "get_region_candidate_pool", {
-        "regionName": "송파구", "limit": 3, "minimumUnitCount": 0,
-    }), set()),
-    (AgentToolCall("id", "get_region_candidate_pool", {
-        "regionName": "송파구", "limit": 3, "maximumBudgetTenThousandKrw": 0,
-    }), set()),
-    (AgentToolCall("id", "get_region_candidate_pool", {
-        "regionName": "송파구", "limit": 3, "exclusiveAreaSquareMeters": True,
-    }), set()),
-    (AgentToolCall("id", "get_region_candidate_pool", {
-        "regionName": "송파구", "limit": 3, "maximumBudgetTenThousandKrw": 100_000,
+    (AgentToolCall("id", "get_recommendation_candidate_pool", {}), set()),
+    (AgentToolCall("id", "get_recommendation_candidate_pool", {"limit": 0}), set()),
+    (AgentToolCall("id", "get_recommendation_candidate_pool", {"limit": 41}), set()),
+    (AgentToolCall("id", "get_recommendation_candidate_pool", {"limit": True}), set()),
+    (AgentToolCall("id", "get_recommendation_candidate_pool", {
+        "limit": 3, "regionName": "송파구",
     }), set()),
 ])
 def test_tool_arguments_fail_closed(call: AgentToolCall, candidates: set[int]) -> None:
@@ -254,10 +313,7 @@ def test_tool_arguments_fail_closed(call: AgentToolCall, candidates: set[int]) -
 
 def test_valid_tool_argument_variants_are_accepted() -> None:
     _validate_tool_call(AgentToolCall(
-        "pool", "get_region_candidate_pool", {
-            "regionName": "송파구", "limit": 3, "minimumUnitCount": 500,
-            "maximumBudgetTenThousandKrw": 150_000, "exclusiveAreaSquareMeters": 84.0,
-        },
+        "pool", "get_recommendation_candidate_pool", {"limit": 3},
     ), set())
     _validate_tool_call(AgentToolCall(
         "batch", "get_candidate_evidence", {"complexIds": [1, 2]},

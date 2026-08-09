@@ -431,7 +431,9 @@ def test_invalid_request_id_is_not_reflected() -> None:
     assert response.headers["X-Request-Id"] != "not-a-uuid"
 
 
-def test_unexpected_generation_error_is_non_disclosing_for_json_and_sse() -> None:
+def test_unexpected_generation_error_is_non_disclosing_for_json_sse_and_logs(
+    caplog,
+) -> None:
     app.dependency_overrides[get_authenticator] = AcceptingAuthenticator
     app.dependency_overrides[get_chatbot_engine] = CrashingEngine
     client = TestClient(app, raise_server_exceptions=False)
@@ -458,6 +460,7 @@ def test_unexpected_generation_error_is_non_disclosing_for_json_and_sse() -> Non
     assert "event: error" not in stream_response.text
     assert stream_response.text.count("event: final") == 1
     assert "internal provider detail" not in stream_response.text
+    assert "internal provider detail" not in caplog.text
 
 
 def test_stream_emits_safe_final_after_admitted_provider_failure() -> None:

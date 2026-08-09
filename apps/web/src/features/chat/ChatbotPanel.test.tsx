@@ -43,6 +43,48 @@ describe('챗봇 패널', () => {
     expect(client.authenticatedRequest).toHaveBeenCalledTimes(1);
   });
 
+  it('답변의 이어서 물어보기는 선택 즉시 새 질문으로 전송한다', async () => {
+    const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-follow-up-submit');
+    const client = authenticatedClient();
+    const response = await (await client.authenticatedRequest(
+      '/api/v1/chatbot/query', {}, 'public',
+    )).json();
+    response.uiSummary = {
+      version: 1, scopeNotice: null,
+      headline: { text: '최근 거래를 확인했습니다.', factIds: ['property-trade-1'] },
+      criteria: [], interpretations: [], fragmentSummaries: [],
+      followUp: [
+        '잠실동 잠실엘스 전용 84㎡ 최근 1년 가격 흐름과 거래량을 보여줘',
+        '잠실동 잠실엘스 위치와 세대수·사용승인일을 알려줘',
+      ].join(' · '),
+    };
+    client.authenticatedRequest = vi.fn().mockImplementation(async () => (
+      new Response(JSON.stringify(response))
+    ));
+    const authenticatedRequest = vi.mocked(client.authenticatedRequest);
+    ({ root, host } = await renderPanel(client, store));
+
+    await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
+    await change(host.querySelector<HTMLTextAreaElement>('#chatbot-question'), '잠실엘스 최근 거래');
+    await keyDown(host.querySelector<HTMLTextAreaElement>('#chatbot-question'), { key: 'Enter' });
+    const followUp = '잠실동 잠실엘스 전용 84㎡ 최근 1년 가격 흐름과 거래량을 보여줘';
+    await waitFor(() => buttonByText(host!, followUp) != null);
+    await click(buttonByText(host!, followUp));
+
+    await waitFor(() => authenticatedRequest.mock.calls.length === 2);
+    const requestBody = JSON.parse(String(authenticatedRequest.mock.calls[1]?.[1]?.body));
+    expect(requestBody.question).toBe(followUp);
+    await waitFor(async () => (await store.list())[0]?.messages.length === 4);
+    expect((await store.list())[0]?.messages.map(({ role, content }) => ({ role, content })))
+      .toEqual([
+        { role: 'user', content: '잠실엘스 최근 거래' },
+        { role: 'assistant', content: '근거가 확인된 답변입니다.' },
+        { role: 'user', content: followUp },
+        { role: 'assistant', content: '근거가 확인된 답변입니다.' },
+      ]);
+  });
+
   it('질문 전송 직후 새 질문이 보이도록 대화 화면을 질문 위치로 내린다', async () => {
     const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-submit-scroll');
     const client = authenticatedClient();
@@ -421,7 +463,7 @@ describe('챗봇 패널', () => {
   });
 
   it('새 focusComplex 답변은 저장 후 한 번 자동 실행하고 버튼은 반복 실행한다', async () => {
-    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1440 });
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 });
     const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-focus-action');
     const onUiAction = vi.fn((_action: ChatAction) => true);
     const action = {
@@ -458,6 +500,8 @@ describe('챗봇 패널', () => {
     await click(actionButton);
     await click(actionButton);
     expect(onUiAction).toHaveBeenCalledTimes(3);
+    expect(host?.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(host?.querySelector('.chatbot-launcher')?.getAttribute('aria-expanded')).toBe('true');
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 });
   });
 
@@ -614,7 +658,7 @@ describe('챗봇 패널', () => {
 
     await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
     await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
-    const recentTradeQuestion = '마포래미안푸르지오 전용 84㎡의 최근 실거래 5건을 거래일과 층까지 알려줘';
+    const recentTradeQuestion = '잠실엘스 전용 84㎡의 최근 실거래 5건을 거래일과 층까지 알려줘';
     const priceTrendQuestion = '헬리오시티 전용 59㎡의 최근 1년 월별 가격 흐름과 거래량을 보여줘';
     const lifestyleQuestion = '잠실엘스 주변 학원 위치와 가까운 역·노선을 함께 알려줘';
     await waitFor(() => host?.querySelector<HTMLButtonElement>(`button[aria-label="${recentTradeQuestion}"]`) != null);

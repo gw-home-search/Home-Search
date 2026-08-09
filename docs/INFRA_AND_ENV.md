@@ -377,7 +377,7 @@ existing volumes without `down -v`, volume deletion, or container recreation.
 The targeted user/AI/BFF/gateway containers use `--force-recreate` so a rebuilt
 mounted BFF artifact is loaded without touching Postgres or Redis. The local BFF
 timeout is a finite `70s`. The AI total query budget accepts `1..60s` and defaults
-to `45s`, so the validated local `60s` maximum still ends before the BFF timeout.
+to `55s`, so the validated local `60s` maximum still ends before the BFF timeout.
 An operator must keep the BFF timeout greater than the AI query budget.
 
 The AI adapter additionally requires `HOME_AI_OPENAI_API_KEY`, explicit
@@ -387,6 +387,10 @@ optional `HOME_AI_OPENAI_TIMEOUT_SECONDS` in the range `1..30` with default `30`
 flow to `1..60s`; invalid values fail closed. Answer-first execution reserves
 the final five seconds of this budget for deterministic response assembly and
 grounding validation.
+`HOME_AI_PROPERTY_SEARCH_FALLBACK_ENABLED=true` enables candidate discovery through
+`HOME_AI_PROPERTY_SEARCH_BASE_URL`. The URL must be an internal HTTP origin. Only
+returned `complexId` values are accepted; names, addresses, and coordinates are
+re-read from `ai_read` before they can become answer facts.
 `HOME_AI_DEPLOYMENT_TIER=local|offline|staging|production` is required whenever
 the supervisor graph mode is not `off`; a missing or unknown tier fails closed.
 `HOME_AI_SUPERVISOR_GRAPH_MODE=off|shadow|canary|active` defaults to `off`.
@@ -964,7 +968,7 @@ Renderer runtime 변수:
 - `HOME_SEO_SITEMAP_CACHE_TTL=6h`
 - `HOME_SEO_STALE_IF_ERROR=24h`
 
-Chatbot runtime budget은 AI OpenAI 시도 `8s`, AI 전체 query `45s`, chat-bff
+Chatbot runtime budget은 AI OpenAI 시도 `8s`, AI 전체 query `55s`, chat-bff
 upstream `70s`, public Nginx `75s` 순으로 둔다. AI `/health`는 liveness만,
 내부 `/ready`는 property DB·OpenAI 필수 설정과 academy/rail optional source 상태를
 구분한다. optional source만 실패하면 `DEGRADED`/HTTP 200, core 실패는

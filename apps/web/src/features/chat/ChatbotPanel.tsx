@@ -190,7 +190,11 @@ export function ChatbotPanel({ detailState, onOpenChange, onUiAction, store, uiC
   }
 
   async function submit() {
-    const content = question.trim();
+    await submitQuestion(question);
+  }
+
+  async function submitQuestion(rawQuestion: string) {
+    const content = rawQuestion.trim();
     if (selected == null || content.length === 0 || content.length > 2_000 || status === 'sending') return;
     const now = new Date().toISOString();
     const userMessage: ChatMessage = {
@@ -366,6 +370,10 @@ export function ChatbotPanel({ detailState, onOpenChange, onUiAction, store, uiC
     questionRef.current?.focus();
   }
 
+  function submitFollowUpQuestion(followUpQuestion: string) {
+    void submitQuestion(followUpQuestion);
+  }
+
   function executeUiAction(action: ChatAction) {
     if (action.type === 'showNearbyCategory'
       && executedActionIds.has(action.actionId)) return;
@@ -385,7 +393,6 @@ export function ChatbotPanel({ detailState, onOpenChange, onUiAction, store, uiC
       }
       return;
     }
-    if (action.type === 'focusComplex' && window.innerWidth < 1280) closePanel();
     if (action.type === 'showNearbyCategory') {
       setExecutedActionIds((current) => new Set(current).add(action.actionId));
     }
@@ -486,7 +493,7 @@ export function ChatbotPanel({ detailState, onOpenChange, onUiAction, store, uiC
                   message={message}
                   messageRef={message.id === latestMessage?.id ? latestTurnRef : undefined}
                   onUiAction={executeUiAction}
-                  onFollowUp={selectExampleQuestion}
+                  onFollowUp={submitFollowUpQuestion}
                   onRetry={message.role === 'assistant' && message.terminalOutcome?.retryable
                     ? () => void retryQuestion(message.id)
                     : undefined}
@@ -594,7 +601,7 @@ function isNearBottom(element: HTMLElement | null): boolean {
 
 const EXAMPLE_QUESTION_GROUPS = [
   [
-    ['최근 실거래', '마포래미안푸르지오 전용 84㎡의 최근 실거래 5건을 거래일과 층까지 알려줘'],
+    ['최근 실거래', '잠실엘스 전용 84㎡의 최근 실거래 5건을 거래일과 층까지 알려줘'],
     ['가격 흐름', '헬리오시티 전용 59㎡의 최근 1년 월별 가격 흐름과 거래량을 보여줘'],
     ['생활 인프라', '잠실엘스 주변 학원 위치와 가까운 역·노선을 함께 알려줘'],
   ],

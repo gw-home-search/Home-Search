@@ -943,7 +943,18 @@ def _reference_fact_list(
 ) -> dict[str, object] | None:
     items: list[dict[str, object]] = []
     name_keys = ("schoolName", "facilityName", "academyName", "stationName", "centerName")
+    academy_registry_ids: dict[str, list[str]] = {}
+    if plan.capability == "academy_lookup":
+        for fact in facts:
+            facility_id = fact.payload.get("facilityId")
+            if (
+                fact.fact_id.startswith("academy-registry-exact-")
+                and isinstance(facility_id, str)
+            ):
+                academy_registry_ids.setdefault(facility_id, []).append(fact.fact_id)
     for fact in facts:
+        if fact.fact_id.startswith("academy-registry-exact-"):
+            continue
         name = next(
             (fact.payload.get(key) for key in name_keys if isinstance(fact.payload.get(key), str)),
             None,
@@ -966,10 +977,14 @@ def _reference_fact_list(
             details.append({
                 "ELEMENTARY": "초등학교", "MIDDLE": "중학교", "HIGH": "고등학교",
             }.get(level, level))
+        fact_ids = [fact.fact_id]
+        facility_id = fact.payload.get("facilityId")
+        if isinstance(facility_id, str):
+            fact_ids.extend(academy_registry_ids.get(facility_id, ()))
         items.append({
             "label": name.strip(),
             "value": " · ".join(details) if details else "확인된 정보",
-            "factIds": [fact.fact_id],
+            "factIds": fact_ids,
         })
         if len(items) == 10:
             break

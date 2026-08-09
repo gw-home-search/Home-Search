@@ -146,7 +146,9 @@ locals {
       environment = [
         { name = "HOME_AI_JWT_PUBLIC_KEY_PATHS", value = "{\"budget-production-1\":\"/run/keys/public.pem\"}" },
         { name = "HOME_AI_OPENAI_TIMEOUT_SECONDS", value = "8" },
-        { name = "HOME_AI_QUERY_TIMEOUT_SECONDS", value = "45" },
+        { name = "HOME_AI_QUERY_TIMEOUT_SECONDS", value = "55" },
+        { name = "HOME_AI_PROPERTY_SEARCH_FALLBACK_ENABLED", value = "true" },
+        { name = "HOME_AI_PROPERTY_SEARCH_BASE_URL", value = "http://${local.host_gateway}:18080" },
         { name = "HOME_AI_DEPLOYMENT_TIER", value = "production" },
         { name = "HOME_AI_SUPERVISOR_GRAPH_MODE", value = var.ai_supervisor_graph_mode },
         { name = "HOME_AI_SUPERVISOR_GRAPH_CANARY_PERCENT", value = tostring(var.ai_supervisor_graph_canary_percent) },

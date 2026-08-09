@@ -99,12 +99,8 @@ def test_responses_agent_continues_function_loop_without_storage() -> None:
     requester = SequenceRequester([
         _provider([{
             "type": "function_call", "call_id": "pool-1",
-            "name": "get_region_candidate_pool",
-            "arguments": json.dumps({
-                "regionName": "송파구", "limit": 40, "minimumUnitCount": None,
-                "maximumBudgetTenThousandKrw": None,
-                "exclusiveAreaSquareMeters": None,
-            }),
+            "name": "get_recommendation_candidate_pool",
+            "arguments": json.dumps({"limit": 40}),
         }], "resp-1"),
         _provider([{
             "type": "message", "content": [{
@@ -139,7 +135,7 @@ def test_responses_agent_continues_function_loop_without_storage() -> None:
         tools=TOOL_CATALOG, repair_error=None,
     ))
 
-    assert first.tool_calls[0].name == "get_region_candidate_pool"
+    assert first.tool_calls[0].name == "get_recommendation_candidate_pool"
     assert second.decision is not None
     assert second.decision.rows[0].complex_id == 20
     first_body = json.loads(requester.calls[0])

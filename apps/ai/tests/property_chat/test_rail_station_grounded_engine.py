@@ -164,7 +164,7 @@ def test_rail_lookup_uses_1500_meter_default_and_A_grade_citation() -> None:
             "dataAsOf": "2026-06-30",
             "observedAt": None,
             "factIds": [
-                "rail-station-operator|2|잠실",
+                "rail-station-0199edce197f1399",
                 "rail-scope-501-1500",
             ],
         }

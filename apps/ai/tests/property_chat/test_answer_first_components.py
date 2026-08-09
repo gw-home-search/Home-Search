@@ -24,7 +24,11 @@ from ai_service.property_chat.models import (
     QueryPlan,
     QueryPlanBundle,
 )
-from ai_service.property_chat.presentation import _criteria_candidate_interpretation
+from ai_service.property_chat.presentation import (
+    PresentationAssembler,
+    _criteria_candidate_interpretation,
+)
+from ai_service.property_chat.question_normalizer import normalize_question
 
 
 def _fact(
@@ -103,6 +107,101 @@ def test_deterministic_router_builds_overview_and_rejects_unclear_scope() -> Non
     assert router.overview("잠실엘스", "잠실동").fragments[0].region_name == "잠실동"
 
 
+@pytest.mark.parametrize(
+    ("question", "capability"),
+    [
+        ("가락동 헬리오시티 전용 59㎡ 최근 실거래 5건", "recent_trade_lookup"),
+        ("가락동 헬리오시티 전용 59㎡ 월별 가격 흐름", "price_trend"),
+    ],
+)
+def test_deterministic_router_preserves_region_for_direct_fact_queries(
+    question: str, capability: str,
+) -> None:
+    plan = DeterministicQueryRouter(today=date(2026, 8, 8)).plan(
+        ChatbotQueryRequest(question=question)
+    )
+
+    assert isinstance(plan, QueryPlan)
+    assert plan.capability == capability
+    assert plan.complex_name == "헬리오시티"
+    assert plan.region_name == "가락동"
+
+
+def test_question_normalizer_removes_possessive_particle_before_supported_intent() -> None:
+    normalized = normalize_question(
+        "망포동 망포역아이파크의 최근 실거래를 알려줘"
+    )
+
+    assert normalized.entity_candidate == "망포역아이파크"
+    assert normalized.region_hint == "망포동"
+
+    plan = DeterministicQueryRouter(today=date(2026, 8, 9)).plan(
+        ChatbotQueryRequest(question="망포동 망포역아이파크의 최근 실거래를 알려줘")
+    )
+    assert isinstance(plan, QueryPlan)
+    assert plan.capability == "recent_trade_lookup"
+    assert plan.complex_name == "망포역아이파크"
+
+
+@pytest.mark.parametrize(
+    "question",
+    (
+        "의정부역센트럴자이 최근 실거래를 알려줘",
+        "의정부 롯데캐슬 최근 실거래를 알려줘",
+    ),
+)
+def test_question_normalizer_preserves_entity_internal_ui_syllable(
+    question: str,
+) -> None:
+    normalized = normalize_question(question)
+
+    assert normalized.entity_candidate is not None
+    assert "의정부" in normalized.entity_candidate
+
+
+@pytest.mark.parametrize(
+    "area_text",
+    ("59㎡", "59m²", "59m2", "59제곱미터"),
+)
+def test_question_normalizer_accepts_supported_square_meter_spellings(
+    area_text: str,
+) -> None:
+    normalized = normalize_question(f"임의단지 {area_text} 최근 실거래")
+
+    assert normalized.entity_candidate == "임의단지"
+    assert normalized.area_criterion is not None
+    assert normalized.area_criterion.exclusive_area_square_meters == 59
+    assert normalized.area_criterion.requires_exclusive_confirmation is False
+
+
+def test_question_normalizer_converts_explicit_pyeong_and_removes_it_from_entity() -> None:
+    normalized = normalize_question("임의단지 전용 17.85평의 최근 1년 가격 흐름")
+
+    assert normalized.entity_candidate == "임의단지"
+    assert normalized.area_criterion is not None
+    assert normalized.area_criterion.exclusive_area_square_meters == 59.01
+    assert normalized.area_criterion.conversion_note == "전용 17.85평을 59.01㎡로 환산"
+
+    plan = DeterministicQueryRouter(today=date(2026, 8, 8)).plan(
+        ChatbotQueryRequest(question="임의단지 전용 17.85평의 최근 1년 가격 흐름")
+    )
+    assert isinstance(plan, QueryPlan)
+    assert plan.exclusive_area_square_meters == 59.01
+    assert plan.area_conversion_note == "전용 17.85평을 59.01㎡로 환산"
+
+
+@pytest.mark.parametrize("area_text", ("24평", "24평형", "30평대"))
+def test_question_normalizer_requires_confirmation_for_bare_pyeong(
+    area_text: str,
+) -> None:
+    normalized = normalize_question(f"임의단지 {area_text} 최근 실거래")
+
+    assert normalized.entity_candidate == "임의단지"
+    assert normalized.area_criterion is not None
+    assert normalized.area_criterion.exclusive_area_square_meters is None
+    assert normalized.area_criterion.requires_exclusive_confirmation is True
+
+
 def test_deterministic_presenter_writes_property_values_into_answer() -> None:
     presenter = DeterministicAnswerPresenter()
     trade = _fact(
@@ -142,6 +241,34 @@ def test_deterministic_presenter_writes_property_values_into_answer() -> None:
     assert "2026-07-20 전용 84.8㎡ 25억원, 12층" in trade_answer.sentences[0].text
     assert "2026-07 평균 24억 5,000만원, 거래 3건" in trend_answer.sentences[0].text
     assert len(trade_answer.sentences[0].claims) == 2
+
+
+def test_deterministic_presenter_keeps_comparison_copy_for_multiple_complexes() -> None:
+    presenter = DeterministicAnswerPresenter()
+    facts = [
+        _fact(
+            f"property-complex-{complex_id}",
+            {"displayName": name, "address": address},
+            (FactClaim(name, "TEXT"),),
+        )
+        for complex_id, name, address in (
+            (101, "임의단지A", "서울 가구 가동 1"),
+            (102, "임의단지B", "서울 나구 나동 2"),
+        )
+    ]
+
+    answer = presenter.present(
+        plan=QueryPlan(
+            "comparison",
+            "임의단지A",
+            complex_names=("임의단지A", "임의단지B"),
+        ),
+        facts=facts,
+        limitations=[],
+        readiness="partial",
+    )
+
+    assert answer.sentences[0].text == "같은 기준으로 확인 가능한 비교 항목을 정리했습니다."
 
 
 def test_deterministic_presenter_writes_facility_and_verified_zero() -> None:
@@ -228,6 +355,49 @@ def test_deterministic_presenter_preserves_rail_lines_and_academy_context() -> N
         "확인된 주변 정보는 가나다 학원(서울 송파구 올림픽로 300) "
         "직선거리 800m · 기준일 2026-07-20입니다."
     )
+
+
+def test_academy_presentation_merges_registry_evidence_into_facility_item() -> None:
+    location = _fact(
+        "sbiz-academy-location-store-1",
+        {
+            "facilityId": "store-1",
+            "facilityName": "솔바이올린학원",
+            "distanceMeters": 287,
+        },
+        (FactClaim("솔바이올린학원", "TEXT"), FactClaim("287", "METERS")),
+    )
+    registry = _fact(
+        "academy-registry-exact-registry-1",
+        {
+            "facilityId": "store-1",
+            "academyName": "솔바이올린학원",
+            "matchType": "EXACT",
+        },
+        (FactClaim("솔바이올린학원", "TEXT"), FactClaim("EXACT", "MATCH_TYPE")),
+    )
+
+    _, artifacts = PresentationAssembler().present(
+        plan=QueryPlan("academy_lookup", "잠실엘스", radius_meters=800),
+        used_facts=[location, registry],
+        readiness="supported",
+        artifacts=[],
+    )
+
+    assert artifacts == [{
+        "type": "factList",
+        "version": 1,
+        "artifactId": "fact-list-academy_lookup-sbiz-academy-location-store-1",
+        "title": "확인된 시설 정보",
+        "items": [{
+            "label": "솔바이올린학원",
+            "value": "직선거리 287m",
+            "factIds": [
+                "sbiz-academy-location-store-1",
+                "academy-registry-exact-registry-1",
+            ],
+        }],
+    }]
 
 
 def test_answer_quality_gate_rejects_empty_and_request_only_drafts() -> None:

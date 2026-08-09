@@ -30,6 +30,7 @@ export function RecommendationTableArtifactView({
               {artifact.basis.criteriaOrder.map((key) => (
                 <th key={key} scope="col">{metricLabel(key)}</th>
               ))}
+              <th className="chatbot-recommendation-map-column" scope="col">지도</th>
             </tr>
           </thead>
           <tbody>
@@ -37,12 +38,14 @@ export function RecommendationTableArtifactView({
               <tr key={row.complexId}>
                 <th scope="row">
                   {row.order}. {row.complexName}
-                  <ArtifactFocusButton actions={actions} factIds={row.factIds} onAction={onAction} selectedComplexId={selectedComplexId} />
                 </th>
                 <td>{row.unitCount == null ? '확인 불가' : `${row.unitCount.toLocaleString('ko-KR')}세대`}</td>
                 {artifact.basis.criteriaOrder.map((key) => (
                   <td key={key}>{formatMetric(key, row.metrics[key])}</td>
                 ))}
+                <td className="chatbot-recommendation-map-column">
+                  <ArtifactFocusButton actions={actions} factIds={row.factIds} onAction={onAction} selectedComplexId={selectedComplexId} />
+                </td>
               </tr>
             ))}
           </tbody>
@@ -81,9 +84,9 @@ function AgentRecommendationTable({
           <li key={row.complexId}>
             <div className="chatbot-agent-recommendation-heading">
               <strong>{row.order}. {row.complexName}</strong>
-              <span>{roleLabel(row.role)}</span>
+              <ArtifactFocusButton actions={actions} factIds={row.factIds} onAction={onAction} selectedComplexId={selectedComplexId} />
             </div>
-            <ArtifactFocusButton actions={actions} factIds={row.factIds} onAction={onAction} selectedComplexId={selectedComplexId} />
+            <span className="chatbot-agent-recommendation-role">{roleLabel(row.role)}</span>
             <p>{row.summary}</p>
             <div className="chatbot-agent-recommendation-reasons">
               <div>
@@ -91,7 +94,7 @@ function AgentRecommendationTable({
                 <ul>{row.strengths.map((item) => <li key={item.factIds.join(':')}>{item.text}</li>)}</ul>
               </div>
               <div>
-                <strong>tradeoff</strong>
+                <strong>확인할 점</strong>
                 <ul>{row.tradeoffs.map((item) => <li key={item.factIds.join(':')}>{item.text}</li>)}</ul>
               </div>
             </div>

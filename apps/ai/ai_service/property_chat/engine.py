@@ -45,6 +45,7 @@ from .comparison_handler import ComparisonHandler
 from .deterministic_answer import DeterministicAnswerPresenter
 from .deterministic_router import DeterministicQueryRouter
 from .question_normalizer import normalize_question
+from .public_identifiers import public_identifier_token
 from .recommendation_handler import RecommendationHandler
 from .recommendation_errors import RecommendationExecutionError
 from .recommendation_presentation import RecommendationTextPresenter
@@ -101,12 +102,15 @@ class PropertyCoreUnavailable(RuntimeError):
 def _log_capability_terminal(
     request_id: str, capability: str, outcome: str, started_at: float
 ) -> None:
+    elapsed_milliseconds = max(int((time.monotonic() - started_at) * 1000), 0)
+    soft_limit_milliseconds = 8_000 if capability == "recommendation" else 3_000
     _LOGGER.info(json.dumps({
         "event": "chatbot_capability_terminal",
         "requestId": request_id,
         "capability": capability,
         "outcome": outcome,
-        "latencyMs": max(int((time.monotonic() - started_at) * 1000), 0),
+        "latencyMs": elapsed_milliseconds,
+        "softLatencyExceeded": elapsed_milliseconds > soft_limit_milliseconds,
     }, ensure_ascii=False, separators=(",", ":")))
 
 
@@ -341,17 +345,23 @@ class GroundedChatbotEngine:
         )
         try:
             plans = await self.plan_goals(request)
-            shared_complexes = await self._shared_compound_complexes(plans)
+            shared_complexes = await self._shared_compound_complexes(plans, request)
+            capability_slots = asyncio.Semaphore(2)
+
+            async def execute(plan: QueryPlan) -> AnswerDocument:
+                async with capability_slots:
+                    return await self._execute_fragment(
+                        plan,
+                        request,
+                        request_id,
+                        polish_deadline=polish_deadline,
+                        resolved_complexes=shared_complexes.get(
+                            (plan.complex_name, plan.region_name)
+                        ),
+                    )
+
             documents = tuple(await asyncio.gather(*(
-                self._execute_fragment(
-                    plan,
-                    request,
-                    request_id,
-                    polish_deadline=polish_deadline,
-                    resolved_complexes=shared_complexes.get(
-                        (plan.complex_name, plan.region_name)
-                    ),
-                )
+                execute(plan)
                 for plan in plans
             )))
             if len(documents) == 1:
@@ -388,6 +398,7 @@ class GroundedChatbotEngine:
     async def _shared_compound_complexes(
         self,
         plans: tuple[QueryPlan, ...],
+        request: ChatbotQueryRequest,
     ) -> dict[tuple[str, str | None], tuple[ComplexRecord, ...]]:
         if not self._answer_first_enabled or len(plans) < 2:
             return {}
@@ -398,8 +409,12 @@ class GroundedChatbotEngine:
             identity = (plan.complex_name, plan.region_name)
             groups[identity] = groups.get(identity, 0) + 1
         result: dict[tuple[str, str | None], tuple[ComplexRecord, ...]] = {}
+        context_record = await self._verified_context_record(request)
         for identity, plan_count in groups.items():
             if plan_count < 2:
+                continue
+            if context_record is not None:
+                result[identity] = (context_record,)
                 continue
             records = tuple(await asyncio.to_thread(
                 self._repository.find_complexes,
@@ -415,6 +430,18 @@ class GroundedChatbotEngine:
                 continue
             result[identity] = _unambiguous_records(identity, records)
         return result
+
+    async def _verified_context_record(
+        self, request: ChatbotQueryRequest,
+    ) -> ComplexRecord | None:
+        finder = getattr(self._repository, "find_complex_by_id", None)
+        if finder is None:
+            return None
+        for context_id in _context_candidate_ids(request):
+            candidate = await asyncio.to_thread(finder, context_id)
+            if candidate is not None and _context_record_is_valid(request, candidate):
+                return candidate
+        return None
 
     async def plan_goals(self, request: ChatbotQueryRequest) -> tuple[QueryPlan, ...]:
         return await self._plan_goals(
@@ -489,7 +516,9 @@ class GroundedChatbotEngine:
         )
         return tuple(
             _verify_plan(
-                _apply_answer_first_defaults(plan, self._today())
+                _apply_answer_first_defaults(
+                    _apply_normalized_question(plan, normalized), self._today()
+                )
                 if self._answer_first_enabled else plan,
                 request.question,
                 semantic_goal_planner_enabled=self._semantic_goal_planner_enabled,
@@ -614,6 +643,21 @@ class GroundedChatbotEngine:
         operational_outcome: str | None = None
         try:
             if (
+                plan.area_confirmation_required
+                and plan.capability in {"recent_trade_lookup", "price_trend"}
+            ):
+                result = CapabilityResult(
+                    [],
+                    [
+                        f"{plan.area_input_text or '입력한 평수'}가 전용면적인지 "
+                        "확인해 주세요. 공급면적으로 추측하지 않습니다."
+                    ],
+                    "unavailable",
+                    state="UNAVAILABLE",
+                    fallback_steps=("EXCLUSIVE_AREA_CONFIRMATION_REQUIRED",),
+                    recoverable=True,
+                )
+            elif (
                 plan.capability == "price_trend"
                 and plan.exclusive_area_square_meters is None
             ):
@@ -879,13 +923,10 @@ class GroundedChatbotEngine:
         request: ChatbotQueryRequest,
         resolved_complexes: tuple[ComplexRecord, ...] | None = None,
     ) -> CapabilityResult:
-        selected_context_id = _selected_context_id(request, plan)
         context_record = None
         try:
-            if selected_context_id is not None and resolved_complexes is None:
-                finder = getattr(self._repository, "find_complex_by_id", None)
-                if finder is not None:
-                    context_record = await asyncio.to_thread(finder, selected_context_id)
+            if resolved_complexes is None:
+                context_record = await self._verified_context_record(request)
             complexes = (
                 (context_record,)
                 if context_record is not None
@@ -940,7 +981,10 @@ class GroundedChatbotEngine:
             search_ordinal=0,
             match_tier=complexes[0].match_tier,
             explicit_region_match=bool(plan.region_name),
-            selected_context_match=complexes[0].complex_id == selected_context_id,
+            selected_context_match=(
+                context_record is not None
+                and complexes[0].complex_id == context_record.complex_id
+            ),
         )
         try:
             result = await handler.observe(plan, selected_match.complex)
@@ -1022,7 +1066,7 @@ class GroundedChatbotEngine:
 
 def _fragment_timeout_seconds(capability: QueryCapability) -> float:
     # Recommendation handlers combine several independently bounded read queries.
-    return 8.0 if capability == "recommendation" else 3.0
+    return 45.0 if capability == "recommendation" else 20.0
 
 
 def _order_plans_by_question(
@@ -1035,21 +1079,25 @@ def _order_plans_by_question(
     return tuple(sorted(plans, key=lambda plan: capability_order[plan.capability]))
 
 
-def _selected_context_id(
-    request: ChatbotQueryRequest,
-    plan: QueryPlan,
-) -> int | None:
-    if plan.complex_name not in {"이 단지", "여기", "이곳"} and re.search(
-        r"(?:이\s*단지|여기|이곳|거래량도|가격도|추이도)", request.question
-    ) is None:
-        return None
+def _context_candidate_ids(request: ChatbotQueryRequest) -> tuple[int, ...]:
+    values: list[int] = []
     ui_context = request.uiContext
     if ui_context is not None and ui_context.selectedComplex is not None:
-        return ui_context.selectedComplex.complexId
+        values.append(ui_context.selectedComplex.complexId)
     conversation = request.conversationContext
     if conversation is not None and conversation.memory is not None:
-        return conversation.memory.complexId
-    return None
+        values.append(conversation.memory.complexId)
+    return tuple(dict.fromkeys(values))
+
+
+def _context_record_is_valid(
+    request: ChatbotQueryRequest, record: ComplexRecord,
+) -> bool:
+    ui_context = request.uiContext
+    selected = ui_context.selectedComplex if ui_context is not None else None
+    if selected is None or selected.complexId != record.complex_id:
+        return True
+    return record.parcel_id is not None and selected.parcelId == record.parcel_id
 
 
 def _request_context_complex_id(request: ChatbotQueryRequest) -> int | None:
@@ -1461,7 +1509,10 @@ def _academy_exact_match_fact(
     location: AcademyLocation, match: RegistryExactMatch
 ) -> EvidenceFact:
     return EvidenceFact(
-        fact_id=f"academy-registry-exact-{match.registry_fact_id}",
+        fact_id=(
+            "academy-registry-exact-"
+            f"{public_identifier_token(match.registry_fact_id)}"
+        ),
         claims=(
             FactClaim(match.registry_fact_id, "REGISTRY_FACT_ID"),
             FactClaim(match.academy_name, "TEXT"),
@@ -1609,7 +1660,7 @@ def _rail_station_fact(
 ) -> EvidenceFact:
     lines = ",".join(station.lines)
     return EvidenceFact(
-        fact_id=f"rail-station-{station.occurrence_ids[0]}",
+        fact_id=f"rail-station-{public_identifier_token(station.occurrence_ids[0])}",
         claims=(
             FactClaim(station.station_name, "TEXT"),
             FactClaim(lines, "RAIL_LINES"),
@@ -1755,6 +1806,27 @@ def _apply_answer_first_defaults(plan: QueryPlan, today: date) -> QueryPlan:
     return plan
 
 
+def _apply_normalized_question(plan: QueryPlan, normalized) -> QueryPlan:
+    criterion = normalized.area_criterion
+    updates: dict[str, object] = {}
+    if normalized.region_hint is not None and plan.region_name is None:
+        updates["region_name"] = normalized.region_hint
+    if criterion is not None and plan.capability in {
+        "recent_trade_lookup", "price_trend", "comparison", "recommendation"
+    }:
+        updates.update({
+            "exclusive_area_square_meters": (
+                criterion.exclusive_area_square_meters
+            ),
+            "area_input_text": criterion.input_text,
+            "area_conversion_note": criterion.conversion_note,
+            "area_confirmation_required": (
+                criterion.requires_exclusive_confirmation
+            ),
+        })
+    return replace(plan, **updates) if updates else plan
+
+
 def _annotate_answer_first_assumptions(
     result: CapabilityResult,
     plan: QueryPlan,
@@ -1768,6 +1840,8 @@ def _annotate_answer_first_assumptions(
         r"(?:[0-9]+\s*(?:년|개월|일)|[0-9]{4}[.년-]|부터|까지)", question
     ) is None:
         fallback_steps.append("DEFAULT_PERIOD_ONE_YEAR")
+    if plan.area_conversion_note is not None:
+        assumptions.append(plan.area_conversion_note + "했습니다.")
     if plan.capability in {
         "school_location",
         "academy_lookup",

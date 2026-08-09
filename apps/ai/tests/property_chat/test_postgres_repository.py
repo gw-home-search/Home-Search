@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from datetime import date
+from datetime import UTC, date, datetime
 from types import SimpleNamespace
 from time import perf_counter
+from time import sleep
 
 import pytest
 
@@ -11,6 +12,7 @@ from ai_service.property_chat.postgres import (
     PostgresPropertyFactRepository,
     _complex_search_tokens,
 )
+from ai_service.property_chat.models import ComplexRecord
 
 
 @pytest.mark.parametrize(
@@ -58,7 +60,7 @@ def test_property_pool_checks_connection_health_before_checkout(
     assert captured["check"] is FakePool.check_connection
 
 
-def test_complex_lookup_uses_literal_fact_path_before_alias_projection() -> None:
+def test_complex_lookup_uses_direct_exact_fact_path_before_contains_projection() -> None:
     executed_queries: list[str] = []
     executed_parameters: list[object] = []
     row = {
@@ -98,9 +100,187 @@ def test_complex_lookup_uses_literal_fact_path_before_alias_projection() -> None
     assert [record.complex_id for record in records] == [7774]
     assert len(executed_queries) == 1
     assert "FROM ai_read.complex_fact" in executed_queries[0]
-    assert "regexp_replace(display_name" in executed_queries[0]
+    assert "lower(display_name) = lower(%s)" in executed_queries[0]
+    assert "ILIKE" not in executed_queries[0]
+    assert "regexp_replace(display_name" not in executed_queries[0]
     assert "complex_search_fact" not in executed_queries[0]
-    assert "%마포래미안푸르지오1단지%" in executed_parameters[0]
+    assert "%마포래미안푸르지오1단지%" not in executed_parameters[0]
+
+
+def test_complex_lookup_uses_exact_alias_after_direct_exact_miss() -> None:
+    executed_queries: list[str] = []
+    row = {
+        "complex_id": 9001, "parcel_id": 91, "display_name": "임의동 푸른마을",
+        "region_code": "11110101", "region_name": "임의동",
+        "address": "서울 임의구 임의동", "latitude": 37.5, "longitude": 127.0,
+        "marker_safe": True, "data_updated_at": "2026-08-01T00:00:00+00:00",
+        "unit_count": 100, "use_date": date(2020, 1, 1), "match_tier": 2,
+    }
+
+    class FakeResult:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def fetchall(self):
+            return self._rows
+
+    class FakeConnection:
+        def execute(self, query: str, _parameters: object) -> FakeResult:
+            executed_queries.append(query)
+            return FakeResult([row] if "complex_search_fact" in query else [])
+
+    class FakePool:
+        @contextmanager
+        def connection(self):
+            yield FakeConnection()
+
+    repository = object.__new__(PostgresPropertyFactRepository)
+    repository._pool = FakePool()  # type: ignore[attr-defined]
+    repository._candidate_discovery = None  # type: ignore[attr-defined]
+
+    records = repository.find_complexes("푸른별칭", None, 6)
+
+    assert [record.complex_id for record in records] == [9001]
+    assert len(executed_queries) == 2
+    assert "complex_search_fact" not in executed_queries[0]
+    assert "complex_search_fact" in executed_queries[1]
+    assert "ILIKE" not in executed_queries[1]
+
+
+def test_slow_ai_read_uses_property_search_ids_then_revalidates_facts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    external_payload = {"complexName": "신뢰하면 안 되는 외부 이름"}
+
+    class Discovery:
+        def find_complex_ids(self, name: str) -> tuple[int, ...]:
+            assert name == "임의단지"
+            assert external_payload["complexName"] == "신뢰하면 안 되는 외부 이름"
+            return (9001,)
+
+    verified = ComplexRecord(
+        complex_id=9001, parcel_id=19001, display_name="검증된 임의단지",
+        region_code="11110101", region_name="임의동", address="서울 임의구 임의동",
+        latitude=37.5, longitude=127.0, marker_safe=True,
+        data_updated_at=datetime(2026, 8, 1, tzinfo=UTC),
+    )
+    repository = object.__new__(PostgresPropertyFactRepository)
+    repository._candidate_discovery = Discovery()  # type: ignore[attr-defined]
+    repository._find_complexes_by_ids = lambda complex_ids: (  # type: ignore[method-assign]
+        [verified] if complex_ids == (9001,) else []
+    )
+    repository._find_complexes_from_ai_read = lambda *_args: (  # type: ignore[method-assign]
+        sleep(0.05) or []
+    )
+    monkeypatch.setattr(
+        "ai_service.property_chat.postgres._PROPERTY_SEARCH_SOFT_LATENCY_SECONDS",
+        0.01,
+    )
+
+    records = repository.find_complexes("임의단지", None, 6)
+
+    assert records == [verified]
+    assert records[0].display_name != external_payload["complexName"]
+
+
+def test_property_search_ids_are_revalidated_in_one_bounded_batch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executed_queries: list[str] = []
+    rows = [
+        {
+            "complex_id": complex_id,
+            "parcel_id": complex_id + 10_000,
+            "display_name": f"검증단지{complex_id}",
+            "region_code": "11110101",
+            "region_name": "임의동",
+            "address": f"서울 임의구 임의동 {complex_id}",
+            "latitude": 37.5,
+            "longitude": 127.0,
+            "marker_safe": True,
+            "data_updated_at": "2026-08-01T00:00:00+00:00",
+            "unit_count": 100,
+            "use_date": date(2020, 1, 1),
+        }
+        for complex_id in (9003, 9001, 9002)
+    ]
+
+    class Discovery:
+        def find_complex_ids(self, _name: str) -> tuple[int, ...]:
+            return (9003, 9001, 9002)
+
+    class FakeResult:
+        def __init__(self, selected_rows):
+            self._rows = selected_rows
+
+        def fetchall(self):
+            return self._rows
+
+        def fetchone(self):
+            return self._rows[0] if self._rows else None
+
+    class FakeConnection:
+        def execute(self, query: str, parameters: object) -> FakeResult:
+            executed_queries.append(query)
+            if "complex_id = ANY" in query:
+                return FakeResult(rows)
+            complex_id = parameters[0]  # type: ignore[index]
+            return FakeResult([
+                row for row in rows if row["complex_id"] == complex_id
+            ])
+
+    class FakePool:
+        @contextmanager
+        def connection(self):
+            yield FakeConnection()
+
+    repository = object.__new__(PostgresPropertyFactRepository)
+    repository._pool = FakePool()  # type: ignore[attr-defined]
+    repository._candidate_discovery = Discovery()  # type: ignore[attr-defined]
+    repository._find_complexes_from_ai_read = lambda *_args: (  # type: ignore[method-assign]
+        sleep(0.05) or []
+    )
+    monkeypatch.setattr(
+        "ai_service.property_chat.postgres._PROPERTY_SEARCH_SOFT_LATENCY_SECONDS",
+        0.01,
+    )
+
+    records = repository.find_complexes("임의단지", None, 6)
+
+    assert [record.complex_id for record in records] == [9003, 9001, 9002]
+    assert len(executed_queries) == 1
+    assert "complex_id = ANY" in executed_queries[0]
+
+
+def test_property_search_fallback_respects_the_overall_hard_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Discovery:
+        def find_complex_ids(self, _name: str) -> tuple[int, ...]:
+            return (9001,)
+
+    repository = object.__new__(PostgresPropertyFactRepository)
+    repository._candidate_discovery = Discovery()  # type: ignore[attr-defined]
+    repository._find_complexes_from_ai_read = lambda *_args: (  # type: ignore[method-assign]
+        sleep(0.08) or []
+    )
+    repository._find_complexes_by_ids = lambda *_args: (  # type: ignore[method-assign]
+        sleep(0.08) or []
+    )
+    monkeypatch.setattr(
+        "ai_service.property_chat.postgres._PROPERTY_SEARCH_SOFT_LATENCY_SECONDS",
+        0.005,
+    )
+    monkeypatch.setattr(
+        "ai_service.property_chat.postgres._PROPERTY_SEARCH_HARD_TIMEOUT_SECONDS",
+        0.02,
+    )
+
+    started_at = perf_counter()
+    with pytest.raises(TimeoutError):
+        repository.find_complexes("임의단지", None, 6)
+
+    assert perf_counter() - started_at < 0.06
 
 
 def test_complex_lookup_escapes_like_wildcards_and_applies_region(
@@ -220,6 +400,9 @@ def test_comparison_lookup_and_trades_use_two_bounded_batch_queries(
         trades = repository.recent_trades_batch(
             (1, 2), date(2025, 7, 21), date(2026, 7, 20), 84.0, 3
         )
+        latest = repository.latest_trades_for_candidates(
+            (1, 2), date(2025, 7, 21), date(2026, 7, 20), None
+        )
     finally:
         repository.close()
 
@@ -229,6 +412,24 @@ def test_comparison_lookup_and_trades_use_two_bounded_batch_queries(
     assert [record.complex_id for record in district_complexes["잠실엘스"]] == [1]
     assert [record.trade_id for record in trades[1]] == [14, 12, 11]
     assert trades[2] == ()
+    assert latest[1] is not None and latest[1].trade_id == 14
+    assert latest[2] is None
+
+
+def test_agentic_latest_trade_batch_accepts_the_bounded_eligible_pool(
+    property_postgres_dsn: str,
+) -> None:
+    repository = PostgresPropertyFactRepository(
+        property_postgres_dsn, expected_database="test", expected_username="test"
+    )
+    try:
+        result = repository.latest_trades_for_candidates(
+            tuple(range(1, 42)), date(2025, 8, 1), date(2026, 7, 31), None,
+        )
+    finally:
+        repository.close()
+
+    assert len(result) == 41
 
 
 def test_recommendation_candidates_resolve_descendants_and_return_latest_three(

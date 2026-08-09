@@ -5,6 +5,41 @@ import { ChatMessageBody } from './ChatMessageBody';
 import type { ChatMessage } from './storage/chatConversationStore';
 
 describe('복합 구조화 답변', () => {
+  it('추천 리포트는 선정 기준을 primary 후보 목록보다 먼저 표시한다', () => {
+    const message: ChatMessage = {
+      id: 'recommendation-order', role: 'assistant', content: 'fallback',
+      createdAt: '2026-08-08T00:00:00Z',
+      artifacts: [{
+        type: 'recommendationTable', version: 2, artifactId: 'primary-v2',
+        title: 'AI 근거 비교 후보', policyVersion: 'agentic-recommendation-v1',
+        basis: {
+          selectionMode: 'AGENTIC', scopeType: 'STATION_RADIUS',
+          scopeLabel: '망포역 직선거리 1500m', requestedCount: 1,
+          criteriaOrder: ['TRANSIT'], defaultPolicy: 'BALANCED_V1',
+        },
+        rows: [{
+          order: 1, complexId: 20, complexName: '나단지', role: 'TRANSIT',
+          summary: '역 접근성을 확인했습니다.',
+          strengths: [{ text: '직선거리 620m', factIds: ['station-20'] }],
+          tradeoffs: [{ text: '예산 미지정', factIds: ['complex-20'] }],
+          metrics: {}, factIds: ['complex-20', 'station-20'],
+        }],
+      }],
+      report: {
+        version: 1, kind: 'RECOMMENDATION',
+        opening: { text: '검증 후보 중 1곳을 확인했습니다.', factIds: ['complex-20'] },
+        basis: [{ text: '망포역 직선거리 1500m', factIds: ['station-20'] }],
+        primaryArtifactId: 'primary-v2', highlights: [], detailArtifactIds: [],
+        actionIds: [],
+      },
+    };
+
+    const html = renderToStaticMarkup(<ChatMessageBody message={message} />);
+
+    expect(html).toContain('<h4>선정 기준</h4>');
+    expect(html.indexOf('선정 기준')).toBeLessThan(html.indexOf('AI 근거 비교 후보'));
+  });
+
   it('직접 결론을 범위 안내보다 먼저 보이고 후속 질문을 칩으로 나눈다', () => {
     const message: ChatMessage = {
       id: 'message-direct', role: 'assistant', content: 'fallback',

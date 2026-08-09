@@ -76,7 +76,7 @@ class PostgresRailStationRepository:
             max_size=max_pool_size,
             kwargs={
                 "row_factory": dict_row,
-                "options": "-c default_transaction_read_only=on -c statement_timeout=3000",
+                "options": "-c default_transaction_read_only=on -c statement_timeout=20000",
             },
             open=True,
         )
@@ -374,7 +374,7 @@ def merge_station_occurrences(
     for group in groups[:limit]:
         lines = tuple(
             dict.fromkeys(
-                line
+                _line_name(line)
                 for occurrence in group
                 for line in (occurrence.line_name, *occurrence.transfer_lines)
                 if line.strip()
@@ -411,8 +411,9 @@ def _group_occurrences(
             (
                 group
                 for group in groups
-                if _name(group[0].station_name) == _name(occurrence.station_name)
-                and _distance_meters(group[0], occurrence) <= 250
+                if _station_key(group[0].station_name)
+                == _station_key(occurrence.station_name)
+                and _distance_meters(group[0], occurrence) <= 500
             ),
             None,
         )
@@ -425,6 +426,21 @@ def _group_occurrences(
 
 def _name(value: str) -> str:
     return " ".join(unicodedata.normalize("NFKC", value).split())
+
+
+def _station_key(value: str) -> str:
+    normalized = _name(value)
+    return normalized[:-1] if normalized.endswith("역") else normalized
+
+
+def _line_name(value: str) -> str:
+    normalized = _name(value)
+    prefix = "수도권 도시철도 "
+    return (
+        normalized[len(prefix):].strip()
+        if normalized.startswith(prefix)
+        else normalized
+    )
 
 
 def _distance_meters(first: RailOccurrence, second: RailOccurrence) -> float:

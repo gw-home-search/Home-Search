@@ -71,6 +71,9 @@ class QueryPlan:
     criteria_order: tuple[RecommendationCriterion, ...] = ()
     station_name: str | None = None
     clarification_code: RecommendationClarificationCode | None = None
+    area_input_text: str | None = None
+    area_conversion_note: str | None = None
+    area_confirmation_required: bool = False
 
     def __post_init__(self) -> None:
         normalized_name = self.complex_name.strip()
@@ -88,6 +91,18 @@ class QueryPlan:
             0 < self.exclusive_area_square_meters <= 1000
         ):
             raise ValueError("exclusive area is outside the supported range")
+        if self.area_input_text is not None:
+            normalized_area_input = self.area_input_text.strip()
+            if not normalized_area_input or len(normalized_area_input) > 40:
+                raise ValueError("area input text is outside the supported range")
+            object.__setattr__(self, "area_input_text", normalized_area_input)
+        if self.area_conversion_note is not None:
+            normalized_note = self.area_conversion_note.strip()
+            if not normalized_note or len(normalized_note) > 100:
+                raise ValueError("area conversion note is outside the supported range")
+            object.__setattr__(self, "area_conversion_note", normalized_note)
+        if self.area_confirmation_required and self.exclusive_area_square_meters is not None:
+            raise ValueError("ambiguous area must not set an exclusive area")
         if not 1 <= self.limit <= 10:
             raise ValueError("limit must be between 1 and 10")
         if self.capability in {
@@ -280,6 +295,7 @@ def _merge_duplicate_plan(left: QueryPlan, right: QueryPlan) -> QueryPlan:
         "exclusive_area_square_meters", "radius_meters", "place_category",
         "maximum_budget_ten_thousand_krw",
         "recommendation_mode", "minimum_unit_count", "station_name",
+        "area_input_text", "area_conversion_note",
     )
     if any(
         getattr(left, name) is not None
@@ -321,6 +337,11 @@ def _merge_duplicate_plan(left: QueryPlan, right: QueryPlan) -> QueryPlan:
         criteria_order=merged_values(left.criteria_order, right.criteria_order),
         station_name=left.station_name or right.station_name,
         clarification_code=left.clarification_code or right.clarification_code,
+        area_input_text=left.area_input_text or right.area_input_text,
+        area_conversion_note=left.area_conversion_note or right.area_conversion_note,
+        area_confirmation_required=(
+            left.area_confirmation_required or right.area_confirmation_required
+        ),
     )
 
 

@@ -62,10 +62,19 @@ class UserAccessTokenVerifierTest {
 
         assertRejected(() -> verifier.verifyBearer(null));
         assertRejected(() -> verifier.verifyBearer(valid));
-        assertRejected(() -> verifier.verifyBearer("Bearer " + valid.substring(0, valid.length() - 2) + "xx"));
+        String tampered = tamperSignature(valid);
+        assertThat(tampered).isNotEqualTo(valid);
+        assertRejected(() -> verifier.verifyBearer("Bearer " + tampered));
         assertRejected(() -> verifier.verifyBearer("Bearer " + hs256));
         assertRejected(() -> verifier.verifyBearer(
                 "Bearer " + token(active, "unknown", "42", Duration.ofMinutes(15), Map.of("role", "USER"))));
+    }
+
+    private static String tamperSignature(String token) {
+        int signatureStart = token.lastIndexOf('.') + 1;
+        char original = token.charAt(signatureStart);
+        char replacement = original == 'A' ? 'B' : 'A';
+        return token.substring(0, signatureStart) + replacement + token.substring(signatureStart + 1);
     }
 
     @Test

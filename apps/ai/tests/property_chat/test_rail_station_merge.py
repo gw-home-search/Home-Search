@@ -20,12 +20,32 @@ def test_exact_nfkc_name_within_250m_merges_occurrences_and_preserves_lines() ->
     assert stations[0].occurrence_ids == ("operator-a|01|101", "operator-b|04|401")
 
 
-def test_fuzzy_name_or_more_than_250m_never_merges() -> None:
+def test_transfer_station_occurrences_within_500m_merge_and_normalize_lines() -> None:
+    stations = merge_station_occurrences(
+        (
+            _occurrence(
+                "operator-a|02|218", "종합운동장", 127.0729,
+                "수도권 도시철도 2호선", 588,
+            ),
+            _occurrence(
+                "operator-b|09|930", "종합운동장역", 127.0769,
+                "수도권 도시철도 9호선", 393,
+            ),
+        )
+    )
+
+    assert len(stations) == 1
+    assert stations[0].station_name == "종합운동장역"
+    assert stations[0].lines == ("9호선", "2호선")
+    assert stations[0].distance_meters == 393
+
+
+def test_fuzzy_name_or_more_than_500m_never_merges() -> None:
     stations = merge_station_occurrences(
         (
             _occurrence("a", "서울역", 126.9780, "1호선", 100),
             _occurrence("b", "서울 역", 126.9781, "4호선", 110),
-            _occurrence("c", "서울역", 126.9820, "경의선", 120),
+            _occurrence("c", "서울역", 126.9850, "경의선", 120),
         )
     )
 

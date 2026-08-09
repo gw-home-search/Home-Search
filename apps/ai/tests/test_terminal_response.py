@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from ai_service.chat import _mark_minimal_agent_fallback
 from ai_service.terminal_response import safe_final_response, with_terminal_outcome
 
 
@@ -39,4 +40,27 @@ def test_single_ambiguous_result_maps_to_clarification_contract() -> None:
         "status": "CLARIFICATION",
         "reason": "AMBIGUOUS_ENTITY",
         "retryable": False,
+    }
+
+
+def test_minimal_agent_fallback_keeps_terminal_and_legacy_status_consistent() -> None:
+    response = with_terminal_outcome({
+        "success": True,
+        "status": "success",
+        "answer": "확인 가능한 후보를 정리했습니다.",
+        "limitations": [],
+        "evidenceSummary": {"status": "supported"},
+        "conversationResolution": {"version": 1, "answerMode": "COMPLETE"},
+    })
+
+    fallback = _mark_minimal_agent_fallback(response)
+
+    assert fallback["success"] is True
+    assert fallback["status"] == "partial_success"
+    assert fallback["conversationResolution"]["answerMode"] == "PARTIAL"
+    assert fallback["terminalOutcome"] == {
+        "version": 1,
+        "status": "PARTIAL",
+        "reason": "PARTIAL_EVIDENCE",
+        "retryable": True,
     }

@@ -133,6 +133,7 @@
 .chatbot-candidate-map-action small { color: var(--hs-map-color-ink); font-weight: 650; }
 
 .chatbot-artifact-map-action {
+  display: inline-flex;
   min-height: 40px;
   margin: 4px 0 0;
   border: 1px solid var(--hs-map-color-action);
@@ -144,6 +145,8 @@
   font: inherit;
   font-size: 11px;
   font-weight: 750;
+  align-items: center;
+  gap: 5px;
 }
 
 .chatbot-map-unavailable {
@@ -153,8 +156,9 @@
   margin-top: 0.25rem;
 }
 
-.chatbot-artifact-map-action[aria-pressed="true"]::after {
-  content: " · 선택됨";
+.chatbot-artifact-map-action:focus-visible {
+  outline: 2px solid var(--hs-map-color-action);
+  outline-offset: 2px;
 }
 
 @media (max-width: 720px) {
@@ -321,6 +325,11 @@
   background: color-mix(in srgb, var(--hs-map-color-action) 3%, transparent);
 }
 
+.chatbot-recommendation-map-column {
+  width: 72px;
+  min-width: 72px;
+}
+
 .chatbot-agent-recommendation-list {
   display: grid;
   gap: 10px;
@@ -332,9 +341,8 @@
 .chatbot-agent-recommendation-list > li {
   display: grid;
   gap: 8px;
-  border: 1px solid var(--hs-map-color-line);
-  border-radius: 12px;
-  padding: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--hs-map-color-line);
 }
 
 .chatbot-agent-recommendation-list p,
@@ -343,12 +351,18 @@
 }
 
 .chatbot-agent-recommendation-heading {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   gap: 8px;
 }
 
-.chatbot-agent-recommendation-heading > span {
+.chatbot-agent-recommendation-heading > strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.chatbot-agent-recommendation-role {
   color: var(--hs-map-color-action);
   font-size: 11px;
   font-weight: 750;
@@ -363,6 +377,12 @@
 
 .chatbot-agent-recommendation-reasons ul {
   padding-left: 18px;
+}
+
+@media (max-width: 460px) {
+  .chatbot-recommendation-table table { min-width: 400px; }
+  .chatbot-recommendation-table tbody th { max-width: 145px; }
+  .chatbot-recommendation-map-column { width: 68px; min-width: 68px; }
 }
 
 .chatbot-decision-report {

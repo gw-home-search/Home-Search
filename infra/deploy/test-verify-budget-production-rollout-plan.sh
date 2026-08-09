@@ -21,15 +21,33 @@ jq -n --arg before_image '123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home
   {mode:"managed",address:"aws_iam_role_policy.secret_readiness[0]",type:"aws_iam_role_policy",change:{actions:["update"],before:{policy:"without-retained-parameter"},after:{policy:"with-retained-parameter"}}},
   {mode:"managed",address:"aws_iam_role_policy.runtime_feature_audit[0]",type:"aws_iam_role_policy",change:{actions:["create"],before:null,after:{policy:"write-runtime-audit-only"}}},
   {mode:"managed",address:"aws_iam_role_policy.runtime_log_audit[0]",type:"aws_iam_role_policy",change:{actions:["create"],before:null,after:{policy:"read-runtime-logs-write-audit"}}},
+  {mode:"managed",address:"aws_iam_role.rtms_orchestration[0]",type:"aws_iam_role",change:{actions:["create"],before:null,after:{name:"home-search-budget-production-rtms-orchestration"}}},
+  {mode:"managed",address:"aws_iam_role_policy.rtms_orchestration[0]",type:"aws_iam_role_policy",change:{actions:["create"],before:null,after:{policy:"exact-rtms-and-ml-only"}}},
+  {mode:"managed",address:"aws_sfn_state_machine.rtms_refresh[0]",type:"aws_sfn_state_machine",change:{actions:["create"],before:null,after:{name:"home-search-budget-production-rtms-refresh"}}},
+  {mode:"managed",address:"aws_cloudwatch_metric_alarm.rtms_refresh_failure[0]",type:"aws_cloudwatch_metric_alarm",change:{actions:["create"],before:null,after:{alarm_name:"home-search-budget-production-rtms-refresh-failure"}}},
+  {mode:"managed",address:"aws_cloudwatch_metric_alarm.ml_recovery_critical[0]",type:"aws_cloudwatch_metric_alarm",change:{actions:["create"],before:null,after:{alarm_name:"home-search-budget-production-ml-recovery-critical"}}},
   {mode:"managed",address:"aws_iam_role_policy.task_execution[\"market-news-general\"]",type:"aws_iam_role_policy",change:{actions:["create"],before:null,after:{policy:"least-privilege"}}}
 ]}' >"${tmp_dir}/allowed.json"
 bash "${script}" "${tmp_dir}/allowed.json" "${tmp_dir}/live-application-settings.json" >/dev/null
 
 jq -n '{resource_changes:[
-  {mode:"managed",address:"aws_scheduler_schedule.rtms_daily_refresh[0]",type:"aws_scheduler_schedule",change:{actions:["update"],before:{state:"DISABLED"},after:{state:"ENABLED"}}},
-  {mode:"managed",address:"aws_scheduler_schedule.market_news[\"general\"]",type:"aws_scheduler_schedule",change:{actions:["update"],before:{state:"DISABLED"},after:{state:"ENABLED"}}}
+  {mode:"managed",address:"aws_scheduler_schedule.rtms_daily_refresh[0]",type:"aws_scheduler_schedule",change:{actions:["update"],before:{state:"DISABLED"},after:{state:"ENABLED"}}}
 ]}' >"${tmp_dir}/final-schedules.json"
 bash "${script}" "${tmp_dir}/final-schedules.json" "${tmp_dir}/live-application-settings.json" final >/dev/null
+jq -n --arg before_definition 'arn:aws:ecs:ap-northeast-2:123456789012:task-definition/home-search-budget-production-rtms-daily-refresh:22' \
+  --arg after_definition 'arn:aws:ecs:ap-northeast-2:123456789012:task-definition/home-search-budget-production-rtms-daily-refresh:23' \
+  '{resource_changes:[{mode:"managed",address:"aws_sfn_state_machine.rtms_refresh[0]",type:"aws_sfn_state_machine",change:{actions:["update"],
+    before:{name:"home-search-budget-production-rtms-refresh",definition:({States:{RUN_RTMS:{Parameters:{TaskDefinition:$before_definition}}}}|tojson)},
+    after:{name:"home-search-budget-production-rtms-refresh",definition:({States:{RUN_RTMS:{Parameters:{TaskDefinition:$after_definition}}}}|tojson)}}}]}' \
+  >"${tmp_dir}/final-rtms-revision.json"
+bash "${script}" "${tmp_dir}/final-rtms-revision.json" "${tmp_dir}/live-application-settings.json" final >/dev/null
+jq '.resource_changes[0].change.after.definition |= (fromjson | .States.RUN_RTMS.Type = "Pass" | tojson)' \
+  "${tmp_dir}/final-rtms-revision.json" >"${tmp_dir}/final-rtms-mutated-definition.json"
+if bash "${script}" "${tmp_dir}/final-rtms-mutated-definition.json" \
+  "${tmp_dir}/live-application-settings.json" final >/dev/null 2>&1; then
+  echo '상태: Fail - final plan이 RTMS task revision 외 state machine 변경을 허용했습니다.' >&2
+  exit 1
+fi
 if bash "${script}" "${tmp_dir}/allowed.json" "${tmp_dir}/live-application-settings.json" final >/dev/null 2>&1; then
   echo '상태: Fail - final plan이 schedule enable 외 runtime 변경을 허용했습니다.' >&2
   exit 1

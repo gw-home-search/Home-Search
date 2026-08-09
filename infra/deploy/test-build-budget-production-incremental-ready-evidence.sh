@@ -42,17 +42,32 @@ jq --argjson base "${common}" '$base | .checks={allowlist_exact:true,checksums_m
 jq --argjson base "${common}" '$base | .checks={atomic_install:true,uid_10001_readable:true,extra_files:0,symlinks:0}' <<<null >"${evidence}/model-install.json"
 jq --argjson base "${common}" '$base | .checks={ecs_healthy:true,health_http_status:200,prediction_finite_positive:true,model_version_matches:true}' <<<null >"${evidence}/ml-smoke.json"
 jq --argjson base "${common}" '$base | .checks={task_exit_code:0,all_steps_completed:true,raw_first:true,duplicate_normalized_trades:0,nation_snapshot_fresh:true,seoul_snapshot_fresh:true}' <<<null >"${evidence}/rtms-catchup.json"
-jq --argjson base "${common}" '$base | .checks={provider_failures:0,scope_snapshot_count:18,nation_non_empty:true,seoul_non_empty:true,raw_first:true,duplicate_articles:0,quality_policy:"NEWS_V5"}' <<<null >"${evidence}/news-bootstrap.json"
-jq --argjson base "${common}" '$base | .checks={providers:["google","kakao","naver"],redirects_passed:true,invalid_callbacks_controlled:true,full_logins_passed:true,logout_passed:true,cookie_policy_preserved:true}' <<<null >"${evidence}/oauth-smoke.json"
+jq --argjson base "${common}" '$base | .checks={scheduler_state:"ENABLED",schedule_expression:"cron(30 4 * * ? *)",timezone:"Asia/Seoul",delivery_retry_attempts:0,target_type:"StepFunctions",immutable_task_definition:"arn:aws:ecs:ap-northeast-2:123456789012:task-definition/home-search-budget-production-rtms-daily-refresh:23",market_news_schedule_count:4,market_news_schedules_disabled:true}' <<<null >"${evidence}/rtms-schedule.json"
+jq --argjson base "${common}" '$base | .status="skipped" | .reason="market-news collection is disabled during RTMS production stabilization" | .checks={bootstrap_executed:false,schedules_enabled:false}' <<<null >"${evidence}/news-bootstrap.json"
+jq --argjson base "${common}" '$base | .status="skipped" | .reason="routine rollout excludes live provider login acceptance" | .syntheticContractPassed=true | .checks={providers:["google","kakao","naver"],redirects_passed:true,invalid_callbacks_controlled:true}' <<<null >"${evidence}/oauth-smoke.json"
 jq --argjson base "${common}" '$base | .checks={running:true,healthy:true,cleaned_up:true,failure_evidence_capable:true}' <<<null >"${evidence}/ai-canary.json"
 jq --argjson base "${common}" '$base + {order:["ml","property-api","user-api","ai","chat-bff","admin-api","admin-gateway","public-gateway"],services:[{stable:true}]}' <<<null >"${evidence}/service-rollout.json"
-jq --argjson base "${common}" '$base | .checks={news_passed:true,insight_passed:true,prediction_ready:true,oauth_three_providers_passed:true,search_exact_passed:true,search_prefix_passed:true,concurrent_requests:20,concurrent_5xx:0,api_contract_compatible:true,platform_unchanged:true}' <<<null >"${evidence}/feature-smoke.json"
+jq --argjson base "${common}" '$base | .checks={news_contract_passed:true,insight_passed:true,prediction_ready:true,oauth_synthetic_contract_passed:true,search_exact_passed:true,search_prefix_passed:true,concurrent_requests:20,concurrent_5xx:0,api_contract_compatible:true,platform_unchanged:true}' <<<null >"${evidence}/feature-smoke.json"
 printf '%s\n' '{"resource_changes":[]}' >"${evidence}/final-zero-drift-plan.json"
 jq --argjson base "${common}" '$base + {duration_minutes:15,statement_timeouts:0} | .checks={hard_gate_minutes:15,http_failures:0,public_5xx:0,task_crashes:0,readiness_failures:0,secret_exposure_findings:0,platform_changes:0}' <<<null >"${evidence}/observation.json"
 
 SECURITY_AUDIT_RESULT=none bash "${script}" "${evidence}" "${evidence}/BUDGET_PRODUCTION_INCREMENTAL_READY.json" >/dev/null
 jq -e '.status == "BUDGET_PRODUCTION_INCREMENTAL_READY" and .property_migration_target == 40 and .contract_impact == "compatible"
-  and .security_audit == "security-audit: 지적사항 = none" and (.artifacts | length) == 23' "${evidence}/BUDGET_PRODUCTION_INCREMENTAL_READY.json" >/dev/null
+  and .security_audit == "security-audit: 지적사항 = none" and (.artifacts | length) == 24' "${evidence}/BUDGET_PRODUCTION_INCREMENTAL_READY.json" >/dev/null
+
+jq '.commit_sha = ("b" * 40)' "${evidence}/news-bootstrap.json" >"${evidence}/news-bootstrap.next" && mv "${evidence}/news-bootstrap.next" "${evidence}/news-bootstrap.json"
+if SECURITY_AUDIT_RESULT=none bash "${script}" "${evidence}" "${tmp_dir}/wrong-news-sha.json" >/dev/null 2>&1; then
+  echo '상태: Fail - 다른 release의 skipped news evidence를 허용했습니다.' >&2
+  exit 1
+fi
+jq --arg sha "${sha}" '.commit_sha = $sha' "${evidence}/news-bootstrap.json" >"${evidence}/news-bootstrap.next" && mv "${evidence}/news-bootstrap.next" "${evidence}/news-bootstrap.json"
+
+jq '.release_tag = "v9.9.9"' "${evidence}/oauth-smoke.json" >"${evidence}/oauth-smoke.next" && mv "${evidence}/oauth-smoke.next" "${evidence}/oauth-smoke.json"
+if SECURITY_AUDIT_RESULT=none bash "${script}" "${evidence}" "${tmp_dir}/wrong-oauth-tag.json" >/dev/null 2>&1; then
+  echo '상태: Fail - 다른 release의 skipped OAuth evidence를 허용했습니다.' >&2
+  exit 1
+fi
+jq --arg tag "${tag}" '.release_tag = $tag' "${evidence}/oauth-smoke.json" >"${evidence}/oauth-smoke.next" && mv "${evidence}/oauth-smoke.next" "${evidence}/oauth-smoke.json"
 
 jq '.previous_version = 41' "${evidence}/migration-before.json" >"${evidence}/migration-before.next" && mv "${evidence}/migration-before.next" "${evidence}/migration-before.json"
 jq '.previous_version = 41' "${evidence}/migration-after.json" >"${evidence}/migration-after.next" && mv "${evidence}/migration-after.next" "${evidence}/migration-after.json"

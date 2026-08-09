@@ -69,8 +69,11 @@ secret, user ID, JWT, prompt/query/answer, private key는 evidence에 넣지 않
    동일 bucket release evidence suffix를 검증하며 이전 ECS revision은 보존한다.
 9. workflow가 secret bootstrap/readiness, Postgres/Valkey, Flyway, data-only import,
    reconcile, marker projection, logical backup을 순서대로 실행한다.
-   post-cutover schedule이 활성화되면 전국 RTMS daily refresh는 매일 07:30 KST에
-   실행되고 그 실행의 daily/rolling insight와 marker projection을 함께 갱신한다.
+   post-cutover schedule이 활성화되면 전국 RTMS daily refresh orchestration은 매일
+   04:30 KST에 시작되고 그 실행의 daily/rolling insight와 marker projection을 함께
+   갱신한다. 03:30 logical backup이 남아 있으면 5분 간격으로 기다리며 05:30까지
+   종료되지 않으면 RTMS를 시작하지 않는다. capacity가 부족할 때만 ML을 일시 중단하고
+   성공·실패·timeout 뒤 캡처한 exact revision/count로 복구한다.
 10. import 동안만 Unlimited를 사용한다. 실패 여부와 무관하게 다음 step에서
    `standard`를 재설정하는지 확인한다. rollout job timeout까지 대비한 별도
    `budget-production-credit-cleanup` protected job도 host를 다시 찾아 Standard를
@@ -154,7 +157,7 @@ branch에는 권한을 주지 않는다.
    backup, root 8GiB/data 20GiB 여유 공간을 확인한다. release의 application digest만
    사용하고 live PostgreSQL/Valkey digest 두 개는 그대로 tfvars에 넣는다.
 3. plan은 application/one-shot task definition과 application service revision,
-   `rtms-daily-refresh`의 제한된 scheduler/IAM만 허용한다. EC2, EBS, EIP, VPC, S3,
+   `rtms-daily-refresh`의 제한된 Scheduler/Step Functions/IAM/alarm만 허용한다. EC2, EBS, EIP, VPC, S3,
    DNS, platform service 변경 또는 보존형 task definition 외 delete가 있으면 승인하지 않는다.
 4. protected 승인 뒤 기존 application task definition ARN과 desired count를 캡처한다.
    새 backup one-shot의 read-only audit가 V39, V40 또는 V41 exact history와
@@ -170,6 +173,10 @@ branch에는 권한을 주지 않는다.
 7. 남은 inactive application/one-shot revision과 RTMS scheduler/IAM을 reviewed plan으로
    수렴시킨다. refresh-only 뒤 zero-drift plan, 기존 `homesearch.world` DNS의 public
    exact/prefix smoke를 확인한다. DNS record에는 apply하지 않는다.
+   market-news 네 schedule과 bootstrap은 `DISABLED`/`skipped`를 유지한다. public news
+   API 값은 live 설정을 보존하고 저장 snapshot의 `FRESH|STALE|UNAVAILABLE`만 검증한다.
+   OAuth는 실제 provider login을 수행하지 않고 authorization redirect host와 invalid
+   callback controlled 4xx를 synthetic하게 확인한다.
 8. 60분 동안 분당 exact/prefix synthetic 검색을 실행한다. 5xx 0, exact p95 500ms 이하,
    prefix p95 1초 이하, CPU 80% 미만, memory 90% 미만을 만족해야
    `BUDGET_PRODUCTION_INCREMENTAL_READY.json`을 만든다. 지도 p95는 관측만 하고 이

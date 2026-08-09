@@ -37,8 +37,6 @@ infra/deploy/upload-f37-model.sh \
 release_tag=vX.Y.Z
 release_sha=<merged-main-40-hex>
 property_migration_target=41
-enable_market_news_public=true
-enable_market_news_schedules=true
 enable_rtms_refresh_schedule=true
 enable_prediction=true
 enable_ml_service=true
@@ -46,8 +44,10 @@ oauth_enabled_providers=google,kakao,naver
 protected_rollout_approval=true
 security_audit_result=none
 bootstrap_plan_evidence_uri=s3://.../deployment-evidence/bootstrap/<release-sha>/terraform-bootstrap-plan.json
-oauth_acceptance_evidence_uri=s3://.../deployment-evidence/oauth/<release-sha>/oauth-smoke.json
 ```
+
+market-news public enablement는 입력으로 받지 않고 배포 직전 live 값을 보존한다. 네
+schedule은 항상 `false`로 유지하며 bootstrap은 `skipped` evidence로 기록한다.
 
 `rtms_resume_request_id`는 직전 실행과 **같은 KST 날짜 안에서만** 유효하다. daily job의 식별 파라미터는
 `runDate`와 `requestId` 두 개이고 `runDate`는 KST 당일로 결정되므로, KST 자정을 넘긴 뒤 같은 requestId를 넘기면
@@ -105,9 +105,14 @@ commit으로 release를 다시 실행하면 먼저 push된 repository에서
 새 commit이 필요하다. Gradle wrapper 잠금 timeout이나 OIDC token 만료처럼 build 환경
 문제로 실패한 경우에도 동일하다.
 
-prep plan은 현재 application task definition ARN과 desired count를 exact pin하고 schedule을 disabled로 둔다. saved full plan 적용 뒤 V39/V40→V41 migrate 또는 live V41 validate-only, F37 install, ML health, RTMS catch-up, news bootstrap, AI canary 순서로 진행한다. Application 교체 순서는 `ml → property-api → user-api → ai → chat-bff → admin-api → admin-gateway → public-gateway`이다.
+prep plan은 현재 application task definition ARN과 desired count를 exact pin하고 schedule을 disabled로 둔다. saved full plan 적용 뒤 V39/V40→V41 migrate 또는 live V41 validate-only, F37 install, ML health, RTMS first/repeat catch-up, news bootstrap skipped evidence, AI canary 순서로 진행한다. Application 교체 순서는 `ml → property-api → user-api → ai → chat-bff → admin-api → admin-gateway → public-gateway`이다.
 
-Workflow는 backend 교체 후 OAuth evidence를 최대 15분 기다린다. 그 사이 운영자는 Google·Kakao·Naver 각각 실제 login, 현재 사용자 provider, logout, cookie 정책을 확인하고 secret·`code`·`state` 없이 `oauth-smoke.json`을 지정 경로에 올린다. 세 provider 중 하나라도 실패했거나 증거가 도착하지 않으면 public gateway를 교체하지 않고 application-only rollback한다.
+Workflow는 routine rollout에서 Google·Kakao·Naver 실제 login evidence를 기다리지 않는다.
+각 authorization endpoint의 redirect status와 provider host까지만 확인하고 redirect를
+따라가지 않으며, invalid callback이 controlled 4xx인지 확인한다. 생성 evidence는
+`status=skipped`, `reason=routine rollout excludes live provider login acceptance`,
+`syntheticContractPassed=true`를 기록하고 query, `state`, `code`, client id를 저장하지 않는다.
+provider console이나 실제 secret 조합 drift는 잔여 위험으로 남는다.
 
 ## 증거와 중단 조건
 

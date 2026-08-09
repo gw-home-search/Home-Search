@@ -43,31 +43,40 @@ violations="$(jq -c \
     and (.address | test("^aws_ecs_task_definition[.](application|one_shot)\\["));
   def runtime_support_address:
     (.type == "aws_cloudwatch_log_group" and (.address | test("^aws_cloudwatch_log_group[.]runtime\\[")))
-    or (.type == "aws_iam_role" and (.address | test("^aws_iam_role[.](task_execution|task_runtime|market_news_scheduler|rtms_scheduler)")))
+    or (.type == "aws_iam_role" and (.address | test("^aws_iam_role[.](task_execution|task_runtime|market_news_scheduler|rtms_scheduler|rtms_orchestration)")))
     or (.type == "aws_iam_role_policy_attachment" and (.address | test("^aws_iam_role_policy_attachment[.]task_execution\\[")))
-    or (.type == "aws_iam_role_policy" and (.address | test("^aws_iam_role_policy[.](task_execution|secret_readiness|market_news_scheduler|rtms_scheduler|runtime_feature_audit|runtime_log_audit|host_operations)")))
+    or (.type == "aws_iam_role_policy" and (.address | test("^aws_iam_role_policy[.](task_execution|secret_readiness|market_news_scheduler|rtms_scheduler|rtms_orchestration|runtime_feature_audit|runtime_log_audit|host_operations)")))
     or (.type == "aws_ssm_parameter" and (.address | test("^aws_ssm_parameter[.]runtime\\[")))
     or .address == "aws_ssm_document.install_ml_model[0]"
     or .address == "aws_scheduler_schedule_group.market_news[0]"
     or .address == "aws_scheduler_schedule_group.data_refresh[0]"
+    or .address == "aws_sfn_state_machine.rtms_refresh[0]"
     or (.type == "aws_scheduler_schedule" and (.address | test("^aws_scheduler_schedule[.](market_news|rtms_daily_refresh)\\[")))
-    or .address == "aws_cloudwatch_metric_alarm.market_news_scheduler_failure[0]";
+    or (.type == "aws_cloudwatch_metric_alarm" and (.address | test("^aws_cloudwatch_metric_alarm[.](market_news_scheduler_failure|rtms_refresh_failure|ml_recovery_critical)")));
   def forbidden_scope:
     (.type | test("^aws_(route53|ebs|instance|eip|vpc|subnet|security_group|s3_bucket|dlm)"))
-    or (.address | test("platform|data[_-]?import|recovery|rehearsal|logical_backup|backup_scheduler"; "i"));
+    or ((.address | test("platform|data[_-]?import|recovery|rehearsal|logical_backup|backup_scheduler"; "i"))
+      and .address != "aws_cloudwatch_metric_alarm.ml_recovery_critical[0]");
   def final_schedule_update:
     .type == "aws_scheduler_schedule"
-    and (.address == "aws_scheduler_schedule.rtms_daily_refresh[0]"
-      or (.address | test("^aws_scheduler_schedule[.]market_news\\[")))
+    and .address == "aws_scheduler_schedule.rtms_daily_refresh[0]"
     and .change.actions == ["update"]
     and .change.before.state == "DISABLED" and .change.after.state == "ENABLED"
     and ((.change.before | del(.state)) == (.change.after | del(.state)));
+  def final_rtms_revision_update:
+    .address == "aws_sfn_state_machine.rtms_refresh[0]"
+    and .change.actions == ["update"]
+    and ((.change.before | del(.definition)) == (.change.after | del(.definition)))
+    and (((.change.before.definition | fromjson) | .States.RUN_RTMS.Parameters.TaskDefinition = "PINNED")
+      == ((.change.after.definition | fromjson) | .States.RUN_RTMS.Parameters.TaskDefinition = "PINNED"))
+    and ((.change.after.definition | fromjson).States.RUN_RTMS.Parameters.TaskDefinition
+      | test("^arn:aws:ecs:ap-northeast-2:[0-9]{12}:task-definition/home-search-budget-production-rtms-daily-refresh:[1-9][0-9]*$"));
   [.resource_changes[]?
     | select(.mode == "managed")
     | select(.change.actions != ["no-op"] and .change.actions != ["read"])
     | select(
         if $phase == "final" then
-          (final_schedule_update | not)
+          ((final_schedule_update or final_rtms_revision_update) | not)
         else
           forbidden_scope
           or .type == "aws_ecs_service"

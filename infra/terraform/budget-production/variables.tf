@@ -88,13 +88,13 @@ variable "market_news_public_enabled" {
 variable "market_news_schedules_enabled" {
   type        = bool
   default     = false
-  description = "Enables the four reviewed market-news Scheduler targets independently from backups."
+  description = "Reserved for a separately reviewed news reactivation; must remain false during RTMS stabilization."
 }
 
 variable "rtms_refresh_schedule_enabled" {
   type        = bool
   default     = false
-  description = "Enables the 07:30 KST RTMS refresh independently from backup schedules."
+  description = "Enables the guarded 04:30 KST RTMS orchestration independently from backup schedules."
 }
 
 variable "rtms_refresh_task_definition_arn" {

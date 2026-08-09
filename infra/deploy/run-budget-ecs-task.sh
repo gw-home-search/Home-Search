@@ -57,7 +57,11 @@ if [[ -n "${command_override}" ]]; then
       }
       ;;
     rtms-daily-refresh)
-      task_timeout_seconds=10800
+      task_timeout_seconds="${BUDGET_RTMS_TASK_TIMEOUT_SECONDS:-10800}"
+      [[ "${task_timeout_seconds}" == 5400 || "${task_timeout_seconds}" == 10800 ]] || {
+        echo '상태: Fail - RTMS timeout은 first/repeat 90분 또는 단일 운영 3시간만 허용합니다.' >&2
+        exit 2
+      }
       jq -e 'length == 1 and (.[0] | test("^requestId=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"))' \
         <<<"${command_override}" >/dev/null || {
         echo '상태: Fail - RTMS 수동 실행은 canonical requestId 하나만 허용합니다.' >&2

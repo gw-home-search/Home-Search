@@ -81,6 +81,13 @@ check "market_news_schedules_are_post_cutover_only" {
   }
 }
 
+check "market_news_schedules_stay_disabled_during_rtms_stabilization" {
+  assert {
+    condition     = !var.market_news_schedules_enabled
+    error_message = "market_news_schedules_enabled must remain false until a separately reviewed news reactivation rollout."
+  }
+}
+
 check "rtms_refresh_schedule_is_post_cutover_only" {
   assert {
     condition     = !var.rtms_refresh_schedule_enabled || (local.public_enabled && var.data_services_enabled)

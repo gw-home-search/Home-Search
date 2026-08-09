@@ -13,7 +13,7 @@ artifacts=(
   source-baseline.json live-audit.json diagnosis.json first-red.json release-manifest.json
   rollout-preflight.json terraform-bootstrap-plan.json terraform-prep-plan.json
   pre-rollout-services.json pre-rollout-platform.json migration-before.json migration-after.json
-  model-artifact.json model-install.json ml-smoke.json rtms-catchup.json news-bootstrap.json
+  model-artifact.json model-install.json ml-smoke.json rtms-catchup.json rtms-schedule.json news-bootstrap.json
   oauth-smoke.json ai-canary.json service-rollout.json feature-smoke.json
   final-zero-drift-plan.json observation.json
 )
@@ -48,7 +48,7 @@ jq -e '
   and .build_flags.market_news_enabled == true
 ' "${release}" >/dev/null
 
-common_artifacts=(source-baseline live-audit diagnosis first-red rollout-preflight terraform-bootstrap-plan terraform-prep-plan model-artifact model-install ml-smoke rtms-catchup news-bootstrap oauth-smoke ai-canary service-rollout feature-smoke observation)
+common_artifacts=(source-baseline live-audit diagnosis first-red rollout-preflight terraform-bootstrap-plan terraform-prep-plan model-artifact model-install ml-smoke rtms-catchup rtms-schedule ai-canary service-rollout feature-smoke observation)
 for artifact in "${common_artifacts[@]}"; do
   jq -e --arg tag "${tag}" --arg sha "${sha}" '
     .status == "pass"
@@ -97,21 +97,31 @@ jq -e 'if .status == "skipped" then (.skipped_reason | type == "string" and leng
   else .status == "pass" and .checks.task_exit_code == 0 and .checks.all_steps_completed == true
   and .checks.raw_first == true and .checks.duplicate_normalized_trades == 0
   and .checks.nation_snapshot_fresh == true and .checks.seoul_snapshot_fresh == true end' "${evidence_dir}/rtms-catchup.json" >/dev/null
-jq -e 'if .status == "skipped" then (.skipped_reason | type == "string" and length > 0)
-  else .status == "pass" and .checks.provider_failures == 0 and .checks.scope_snapshot_count == 18
-  and .checks.nation_non_empty == true and .checks.seoul_non_empty == true
-  and .checks.raw_first == true and .checks.duplicate_articles == 0 and .checks.quality_policy == "NEWS_V5" end' "${evidence_dir}/news-bootstrap.json" >/dev/null
-jq -e 'if .status == "skipped" then (.skipped_reason | type == "string" and length > 0)
-  else .status == "pass" and (.checks.providers | sort) == ["google","kakao","naver"]
+jq -e '.status == "pass" and .checks.scheduler_state == "ENABLED"
+  and .checks.schedule_expression == "cron(30 4 * * ? *)" and .checks.timezone == "Asia/Seoul"
+  and .checks.delivery_retry_attempts == 0 and .checks.target_type == "StepFunctions"
+  and (.checks.immutable_task_definition | test("^arn:aws:ecs:ap-northeast-2:[0-9]{12}:task-definition/home-search-budget-production-rtms-daily-refresh:[1-9][0-9]*$"))
+  and .checks.market_news_schedule_count == 4 and .checks.market_news_schedules_disabled == true' "${evidence_dir}/rtms-schedule.json" >/dev/null
+jq -e --arg tag "${tag}" --arg sha "${sha}" '.status == "skipped"
+  and .release_tag == $tag and .commit_sha == $sha
+  and (.created_at | type == "string" and length > 0)
+  and .reason == "market-news collection is disabled during RTMS production stabilization"
+  and .checks.bootstrap_executed == false and .checks.schedules_enabled == false
+  and .redactions_applied == true' "${evidence_dir}/news-bootstrap.json" >/dev/null
+jq -e --arg tag "${tag}" --arg sha "${sha}" '.status == "skipped"
+  and .release_tag == $tag and .commit_sha == $sha
+  and (.created_at | type == "string" and length > 0)
+  and .reason == "routine rollout excludes live provider login acceptance"
+  and .syntheticContractPassed == true and (.checks.providers | sort) == ["google","kakao","naver"]
   and .checks.redirects_passed == true and .checks.invalid_callbacks_controlled == true
-  and .checks.full_logins_passed == true and .checks.logout_passed == true and .checks.cookie_policy_preserved == true end' "${evidence_dir}/oauth-smoke.json" >/dev/null
+  and .redactions_applied == true' "${evidence_dir}/oauth-smoke.json" >/dev/null
 jq -e '.status == "pass" and .checks.running == true and .checks.healthy == true
   and .checks.cleaned_up == true and .checks.failure_evidence_capable == true' "${evidence_dir}/ai-canary.json" >/dev/null
 jq -e '.status == "pass"
   and .order == ["ml","property-api","user-api","ai","chat-bff","admin-api","admin-gateway","public-gateway"]
   and all(.services[]; .stable == true)' "${evidence_dir}/service-rollout.json" >/dev/null
-jq -e '.status == "pass" and .checks.news_passed == true and .checks.insight_passed == true
-  and .checks.prediction_ready == true and .checks.oauth_three_providers_passed == true
+jq -e '.status == "pass" and .checks.news_contract_passed == true and .checks.insight_passed == true
+  and .checks.prediction_ready == true and .checks.oauth_synthetic_contract_passed == true
   and .checks.search_exact_passed == true and .checks.search_prefix_passed == true
   and .checks.concurrent_requests == 20 and .checks.concurrent_5xx == 0
   and .checks.api_contract_compatible == true and .checks.platform_unchanged == true' "${evidence_dir}/feature-smoke.json" >/dev/null
@@ -134,7 +144,7 @@ jq -n --arg tag "${tag}" --arg sha "${sha}" --arg created_at "$(date -u +%Y-%m-%
   {status:"BUDGET_PRODUCTION_INCREMENTAL_READY",release_tag:$tag,commit_sha:$sha,created_at:$created_at,
    property_migration_target:40,artifacts:$artifacts,redactions_applied:true,
    contract_impact:"compatible",
-   security_impact:"보안 영향: 검색 단계별 query와 budget-production 증분 rollout에 뉴스·RTMS scheduler·F37 model runtime·Google/Kakao/Naver OAuth를 추가한다. 공개 API shape·기존 trade 식별자·platform DB volume은 변경하지 않으며 RTMS는 raw-first/dedupe 방식으로 신규 행만 갱신한다.",
+   security_impact:"보안 영향: RTMS Scheduler는 exact task revision을 실행하는 제한된 Step Functions orchestration으로 전환한다. 뉴스 수집과 실제 provider login은 중단하고 synthetic OAuth redirect만 검증하며 공개 API shape·기존 trade 식별자·platform DB volume은 변경하지 않는다.",
    security_audit:("security-audit: 지적사항 = " + $security_audit_result)}
 ' >"${temporary}"
 chmod 0600 "${temporary}"

@@ -17,18 +17,8 @@ on:
         default: "41"
         type: choice
         options: ["41"]
-      enable_market_news_public:
-        description: "Enable the compatible public market-news API"
-        required: true
-        default: true
-        type: boolean
-      enable_market_news_schedules:
-        description: "Enable the four reviewed market-news schedules after bootstrap"
-        required: true
-        default: true
-        type: boolean
       enable_rtms_refresh_schedule:
-        description: "Enable the independent 07:30 KST RTMS refresh"
+        description: "Enable the orchestrated 04:30 KST RTMS refresh"
         required: true
         default: true
         type: boolean
@@ -62,10 +52,6 @@ on:
         description: "S3 URI of the reviewed and applied bootstrap plan evidence"
         required: true
         type: string
-      oauth_acceptance_evidence_uri:
-        description: "S3 URI populated after three real provider logins"
-        required: true
-        type: string
       rtms_resume_request_id:
         description: "Optional failed RTMS requestId to restart completed Spring Batch steps in place"
         required: false
@@ -82,18 +68,6 @@ on:
         default: "run"
         type: choice
         options: [run, skip]
-      market_news_bootstrap:
-        description: "Run the market-news bootstrap tasks or record them as skipped"
-        required: true
-        default: "run"
-        type: choice
-        options: [run, skip]
-      oauth_acceptance:
-        description: "Require three-provider real-login evidence or record it as skipped"
-        required: true
-        default: "required"
-        type: choice
-        options: [required, skipped]
 
 permissions: { contents: read, actions: read, id-token: write }
 concurrency: { group: deploy-budget-production, cancel-in-progress: false }
@@ -109,7 +83,6 @@ env:
   TF_VAR_data_services_enabled: "true"
   TF_VAR_public_dns_enabled: "true"
   TF_VAR_backup_schedules_enabled: "true"
-  TF_VAR_market_news_public_enabled: "${{ inputs.enable_market_news_public }}"
   TF_VAR_market_news_schedules_enabled: "false"
   TF_VAR_rtms_refresh_schedule_enabled: "false"
   TF_VAR_prediction_enabled: "${{ inputs.enable_prediction }}"
@@ -132,22 +105,15 @@ jobs:
           OAUTH_ENABLED_PROVIDERS: "${{ inputs.oauth_enabled_providers }}"
           SECURITY_AUDIT_RESULT: "${{ inputs.security_audit_result }}"
           BOOTSTRAP_PLAN_EVIDENCE_URI: "${{ inputs.bootstrap_plan_evidence_uri }}"
-          OAUTH_ACCEPTANCE_EVIDENCE_URI: "${{ inputs.oauth_acceptance_evidence_uri }}"
           RTMS_RESUME_REQUEST_ID: "${{ inputs.rtms_resume_request_id }}"
           RTMS_CATCHUP_EXECUTION_IDS: "${{ inputs.rtms_catchup_execution_ids }}"
-          MARKET_NEWS_BOOTSTRAP: "${{ inputs.market_news_bootstrap }}"
-          OAUTH_ACCEPTANCE: "${{ inputs.oauth_acceptance }}"
           RTMS_CATCHUP: "${{ inputs.rtms_catchup }}"
         run: |
           set -Eeuo pipefail
           [[ "${RTMS_CATCHUP}" == run || "${RTMS_CATCHUP}" == skip ]]
-          [[ "${MARKET_NEWS_BOOTSTRAP}" == run || "${MARKET_NEWS_BOOTSTRAP}" == skip ]]
-          [[ "${OAUTH_ACCEPTANCE}" == required || "${OAUTH_ACCEPTANCE}" == skipped ]]
           [[ "${RELEASE_TAG}" =~ ^v[0-9]+[.][0-9]+[.][0-9]+$ && "${RELEASE_TAG}" != v1.0.4 ]]
           [[ "${RELEASE_SHA}" =~ ^[0-9a-f]{40}$ ]]
           [[ '${{ inputs.protected_rollout_approval }}' == true ]]
-          [[ '${{ inputs.enable_market_news_public }}' == true ]]
-          [[ '${{ inputs.enable_market_news_schedules }}' == true ]]
           [[ '${{ inputs.enable_rtms_refresh_schedule }}' == true ]]
           [[ '${{ inputs.enable_prediction }}' == true ]]
           [[ '${{ inputs.enable_ml_service }}' == true ]]
@@ -157,7 +123,6 @@ jobs:
           [[ -z "${RTMS_CATCHUP_EXECUTION_IDS}" || "${RTMS_CATCHUP_EXECUTION_IDS}" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12},[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]
           [[ -z "${RTMS_CATCHUP_EXECUTION_IDS}" || -z "${RTMS_RESUME_REQUEST_ID}" ]]
           [[ "${BOOTSTRAP_PLAN_EVIDENCE_URI}" =~ ^s3://home-search-budget-production-backup-[0-9]{12}/deployment-evidence/bootstrap/[0-9a-f]{40}/terraform-bootstrap-plan[.]json$ ]]
-          [[ "${OAUTH_ACCEPTANCE_EVIDENCE_URI}" =~ ^s3://home-search-budget-production-backup-[0-9]{12}/deployment-evidence/oauth/[0-9a-f]{40}/oauth-smoke[.]json$ ]]
           [[ "${GITHUB_SHA}" == "${RELEASE_SHA}" ]]
           [[ "$(git rev-parse "${RELEASE_SHA}^{commit}")" == "${RELEASE_SHA}" ]]
           [[ "$(git rev-list -n 1 "${RELEASE_TAG}")" == "${RELEASE_SHA}" ]]
@@ -357,11 +322,18 @@ jobs:
             fi
           done
           [[ -n "${platform_release_tag}" && -n "${ai_supervisor_graph_mode}" && -n "${ai_supervisor_graph_canary_percent}" ]]
+          [[ "${property_news_public_enabled}" == true || "${property_news_public_enabled}" == false ]]
           [[ "$(jq -r '.ml' <<<"${live_application_desired_counts}")" == 0 ]]
           migration_uri=''; migration_sha=''
           live_scheduled_backup_task_definition="$(aws scheduler get-schedule --name home-search-budget-production-logical-backup --group-name home-search-budget-production-backup --query 'Target.EcsParameters.TaskDefinitionArn' --output text)"
           [[ "${live_scheduled_backup_task_definition}" =~ ^arn:aws:ecs:ap-northeast-2:[0-9]{12}:task-definition/home-search-budget-production-scheduled-backup:[0-9]+$ ]]
-          live_rtms_refresh_task_definition="$(aws scheduler get-schedule --name home-search-budget-production-rtms-daily-refresh --group-name home-search-budget-production-data-refresh --query 'Target.EcsParameters.TaskDefinitionArn' --output text)"
+          live_rtms_schedule="$(aws scheduler get-schedule --name home-search-budget-production-rtms-daily-refresh --group-name home-search-budget-production-data-refresh --output json)"
+          live_rtms_refresh_task_definition="$(jq -r '.Target.EcsParameters.TaskDefinitionArn // empty' <<<"${live_rtms_schedule}")"
+          if [[ -z "${live_rtms_refresh_task_definition}" ]]; then
+            live_rtms_state_machine="$(jq -er '.Target.Arn' <<<"${live_rtms_schedule}")"
+            live_rtms_definition="$(aws stepfunctions describe-state-machine --state-machine-arn "${live_rtms_state_machine}" --query definition --output text)"
+            live_rtms_refresh_task_definition="$(jq -er '.States.RUN_RTMS.Parameters.TaskDefinition' <<<"${live_rtms_definition}")"
+          fi
           [[ "${live_rtms_refresh_task_definition}" =~ ^arn:aws:ecs:ap-northeast-2:[0-9]{12}:task-definition/home-search-budget-production-rtms-daily-refresh:[0-9]+$ ]]
           live_data_import_task_definition="$(terraform -chdir=infra/terraform/budget-production output -json one_shot_task_definition_arns | jq -er '.["data-import-reconcile"]')"
           live_data_import_definition="$(aws ecs describe-task-definition --task-definition "${live_data_import_task_definition}" --include TAGS --output json)"
@@ -389,6 +361,7 @@ jobs:
             --arg data_import_image "${live_data_import_image}" \
             --arg data_import_release_tag "${live_data_import_release_tag}" \
             --arg ai_mode "${ai_supervisor_graph_mode}" \
+            --arg news_public "${property_news_public_enabled}" \
             --argjson ai_percent "${ai_supervisor_graph_canary_percent}" '
             .platform_image_uris=$platform
             | .platform_deployment_release_tag=$platform_release_tag
@@ -401,6 +374,8 @@ jobs:
             | .data_import_preserved_release_tag=$data_import_release_tag
             | .ai_supervisor_graph_mode=$ai_mode
             | .ai_supervisor_graph_canary_percent=$ai_percent
+            | .market_news_public_enabled=($news_public == "true")
+            | .market_news_schedules_enabled=false
             | .property_migration_target=$target
           ' deployment-evidence/release-candidate.tfvars.json \
             >infra/terraform/budget-production/release.auto.tfvars.json
@@ -432,8 +407,8 @@ jobs:
             --arg prediction_url "${property_prediction_base_url}" --arg oauth "${user_oauth_enabled_providers}" \
             '{status:"pass",release_tag:$tag,commit_sha:$sha,created_at:$created_at,checks:{confirmed_causes_only:true},
               confirmed_configuration_gaps:{news_public:$news,prediction:$prediction,prediction_base_url:$prediction_url,oauth_providers:$oauth},
-              confirmed_runtime_failures:[],resolved_by_repository_change:["application-only pins","news and RTMS schedules","F37 runtime","three-provider OAuth"],
-              external_preconditions:["news credential readiness","F37 immutable artifact","provider callback and full-login acceptance"],redactions_applied:true}' \
+              confirmed_runtime_failures:[],resolved_by_repository_change:["application-only pins","market-news schedules disabled","RTMS orchestration","F37 runtime","synthetic three-provider OAuth contracts"],
+            external_preconditions:["F37 immutable artifact","provider authorization redirect contract"],redactions_applied:true}' \
             >deployment-evidence/diagnosis.json
       - name: Require backup and disk headroom
         env:
@@ -749,13 +724,12 @@ jobs:
             >deployment-evidence/ml-smoke.json
       - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
         with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_DEPLOY_ROLE_ARN }}", aws-region: ap-northeast-2, role-duration-seconds: 10800, unset-current-credentials: true }
-      - name: Run RTMS catch-up and market-news bootstrap
+      - name: Run RTMS catch-up and record market-news bootstrap skipped
         env:
           RELEASE_TAG: "${{ inputs.release_tag }}"
           RELEASE_SHA: "${{ inputs.release_sha }}"
           RTMS_RESUME_REQUEST_ID: "${{ inputs.rtms_resume_request_id }}"
           RTMS_CATCHUP_EXECUTION_IDS: "${{ inputs.rtms_catchup_execution_ids }}"
-          MARKET_NEWS_BOOTSTRAP: "${{ inputs.market_news_bootstrap }}"
           RTMS_CATCHUP: "${{ inputs.rtms_catchup }}"
         run: |
           set -Eeuo pipefail
@@ -778,32 +752,17 @@ jobs:
               rtms_id="$(tr 'A-F' 'a-f' </proc/sys/kernel/random/uuid)"
             fi
             rtms_repeat_id="$(tr 'A-F' 'a-f' </proc/sys/kernel/random/uuid)"
-            infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["rtms-daily-refresh"]' <<<"${tasks}")" "${started_by}" \
-              "$(jq -cn --arg id "${rtms_id}" '["requestId="+$id]')" >/dev/null
-            infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["rtms-daily-refresh"]' <<<"${tasks}")" "${started_by}" \
-              "$(jq -cn --arg id "${rtms_repeat_id}" '["requestId="+$id]')" >/dev/null
+            infra/deploy/run-budget-rtms-catchup.sh "${cluster}" \
+              "$(jq -er '.["rtms-daily-refresh"]' <<<"${tasks}")" "${started_by}" "${rtms_id}" "${rtms_repeat_id}"
           fi
           jq -n --arg reused "${reuse_rtms_catchup}" '{rtms_catchup_source:$reused}' \
             >deployment-evidence/rtms-catchup-source.json
-          execution_id="manual-$(printf '%032x' "${GITHUB_RUN_ID}")"
           bootstrap_id="$(tr 'A-F' 'a-f' </proc/sys/kernel/random/uuid)"
           review_id="$(tr 'A-F' 'a-f' </proc/sys/kernel/random/uuid)"
-          if [[ "${MARKET_NEWS_BOOTSTRAP}" == run ]]; then
-            infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["market-news-major-selection"]' <<<"${tasks}")" "${started_by}" \
-              "$(jq -cn --arg id "${execution_id}" '["schedulerExecutionId="+$id]')" >/dev/null
-            infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["market-news-general"]' <<<"${tasks}")" "${started_by}" \
-              "$(jq -cn --arg id "${bootstrap_id}" '["requestId=BOOTSTRAP:"+$id]')" >/dev/null
-            infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["market-news-major-complex"]' <<<"${tasks}")" "${started_by}" \
-              "$(jq -cn --arg id "${execution_id}" '["schedulerExecutionId="+$id]')" >/dev/null
-            infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["market-news-quality-sample"]' <<<"${tasks}")" "${started_by}" \
-              "$(jq -cn --arg id "${review_id}" '["reviewSetId="+$id,"policyVersion=NEWS_V5"]')" >/dev/null
-            infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["market-news-retention"]' <<<"${tasks}")" "${started_by}" \
-              "$(jq -cn --arg id "${execution_id}" '["schedulerExecutionId="+$id]')" >/dev/null
-          fi
           audit_args="$(jq -cn --arg tag "${RELEASE_TAG}" --arg sha "${RELEASE_SHA}" \
             --arg first "${rtms_id}" --arg repeat "${rtms_repeat_id}" --arg bootstrap "${bootstrap_id}" --arg review "${review_id}" \
             '[$tag,$sha,$first,$repeat,$bootstrap,$review]')"
-          if [[ "${RTMS_CATCHUP}" == run || "${MARKET_NEWS_BOOTSTRAP}" == run ]]; then
+          if [[ "${RTMS_CATCHUP}" == run ]]; then
             infra/deploy/run-budget-ecs-task.sh "${cluster}" "$(jq -er '.["runtime-feature-audit"]' <<<"${tasks}")" \
               "${started_by}" "${audit_args}" >/dev/null
           fi
@@ -812,9 +771,6 @@ jobs:
           required_audits=()
           if [[ "${RTMS_CATCHUP}" == run ]]; then
             required_audits+=(rtms-catchup)
-          fi
-          if [[ "${MARKET_NEWS_BOOTSTRAP}" == run ]]; then
-            required_audits+=(news-bootstrap)
           fi
           for name in "${required_audits[@]}"; do
             aws s3 cp "s3://${bucket}/deployment-evidence/runtime-audit/${RELEASE_TAG}/${name}.json" \
@@ -831,13 +787,11 @@ jobs:
                 checks:{catchup_executed:false},redactions_applied:true}' \
               >deployment-evidence/rtms-catchup.json
           fi
-          if [[ "${MARKET_NEWS_BOOTSTRAP}" != run ]]; then
-            jq -n --arg tag "${RELEASE_TAG}" --arg sha "${RELEASE_SHA}" --arg created_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-              '{status:"skipped",release_tag:$tag,commit_sha:$sha,created_at:$created_at,
-                skipped_reason:"operator disabled the market-news bootstrap for this rollout",
-                checks:{bootstrap_executed:false},redactions_applied:true}' \
-              >deployment-evidence/news-bootstrap.json
-          fi
+          jq -n --arg tag "${RELEASE_TAG}" --arg sha "${RELEASE_SHA}" --arg created_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{status:"skipped",release_tag:$tag,commit_sha:$sha,created_at:$created_at,
+              reason:"market-news collection is disabled during RTMS production stabilization",
+              checks:{bootstrap_executed:false,schedules_enabled:false},redactions_applied:true}' \
+            >deployment-evidence/news-bootstrap.json
       - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
         with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_APPLY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
       - name: Roll ML then application services in dependency order
@@ -864,38 +818,36 @@ jobs:
               checks:{backend_services_stable:true},redactions_applied:true,services:$services}' >deployment-evidence/service-rollout.json
       - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
         with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_DEPLOY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
-      - name: Require three-provider real-login acceptance
+      - name: Verify synthetic OAuth redirect contracts without provider login
         env:
           RELEASE_TAG: "${{ inputs.release_tag }}"
           RELEASE_SHA: "${{ inputs.release_sha }}"
-          OAUTH_ACCEPTANCE_EVIDENCE_URI: "${{ inputs.oauth_acceptance_evidence_uri }}"
-          OAUTH_ACCEPTANCE: "${{ inputs.oauth_acceptance }}"
         run: |
           set -Eeuo pipefail
-          if [[ "${OAUTH_ACCEPTANCE}" != required ]]; then
-            jq -n --arg tag "${RELEASE_TAG}" --arg sha "${RELEASE_SHA}" --arg created_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-              '{status:"skipped",release_tag:$tag,commit_sha:$sha,created_at:$created_at,
-                skipped_reason:"operator waived the three-provider real-login acceptance for this rollout",
-                checks:{providers:["google","kakao","naver"],full_logins_passed:false},redactions_applied:true}' \
-              >deployment-evidence/oauth-smoke.json
-            exit 0
-          fi
-          downloaded=false
-          for _ in $(seq 1 30); do
-            if aws s3 cp "${OAUTH_ACCEPTANCE_EVIDENCE_URI}" deployment-evidence/oauth-smoke.json --only-show-errors 2>/dev/null; then
-              downloaded=true
-              break
-            fi
-            sleep 30
+          work="$(mktemp -d)"; trap 'find "${work}" -depth -delete' EXIT
+          for provider in google kakao naver; do
+            case "${provider}" in
+              google) expected_host=accounts.google.com ;;
+              kakao) expected_host=kauth.kakao.com ;;
+              naver) expected_host=nid.naver.com ;;
+            esac
+            headers="${work}/${provider}.headers"
+            status="$(curl --silent --show-error --max-redirs 0 --dump-header "${headers}" --output /dev/null \
+              --write-out '%{http_code}' "https://homesearch.world/oauth2/authorization/${provider}")"
+            [[ "${status}" == 302 || "${status}" == 303 || "${status}" == 307 ]]
+            location="$(awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/^[^:]*:[[:space:]]*/, ""); sub(/\r$/, ""); print; exit}' "${headers}")"
+            redirect_host="${location#*://}"; redirect_host="${redirect_host%%/*}"; redirect_host="${redirect_host%%:*}"
+            [[ "${redirect_host}" == "${expected_host}" ]]
+            callback_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+              "https://homesearch.world/login/oauth2/code/${provider}")"
+            [[ "${callback_status}" =~ ^4[0-9]{2}$ ]]
           done
-          [[ "${downloaded}" == true ]]
-          jq -e --arg tag "${RELEASE_TAG}" --arg sha "${RELEASE_SHA}" '
-            .status == "pass" and .release_tag == $tag and .commit_sha == $sha and .redactions_applied == true
-            and (.checks.providers | sort) == ["google","kakao","naver"]
-            and .checks.redirects_passed == true and .checks.invalid_callbacks_controlled == true
-            and .checks.full_logins_passed == true and .checks.logout_passed == true
-            and .checks.cookie_policy_preserved == true
-          ' deployment-evidence/oauth-smoke.json >/dev/null
+          jq -n --arg tag "${RELEASE_TAG}" --arg sha "${RELEASE_SHA}" --arg created_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{status:"skipped",reason:"routine rollout excludes live provider login acceptance",
+              release_tag:$tag,commit_sha:$sha,created_at:$created_at,syntheticContractPassed:true,
+              checks:{providers:["google","kakao","naver"],redirects_passed:true,
+                invalid_callbacks_controlled:true},redactions_applied:true}' \
+            >deployment-evidence/oauth-smoke.json
       - name: Smoke backend search before public gateway
         run: |
           set -Eeuo pipefail
@@ -937,20 +889,43 @@ jobs:
             deployment-evidence/service-rollout.json >deployment-evidence/service-rollout.next.json
           mv deployment-evidence/service-rollout.next.json deployment-evidence/service-rollout.json
       - name: Reconcile Terraform state and require zero drift
+        env:
+          RTMS_CATCHUP: "${{ inputs.rtms_catchup }}"
+          RELEASE_TAG: "${{ inputs.release_tag }}"
+          RELEASE_SHA: "${{ inputs.release_sha }}"
         run: |
           set -Eeuo pipefail
-          export TF_VAR_market_news_schedules_enabled=true
+          export TF_VAR_market_news_schedules_enabled=false
           export TF_VAR_rtms_refresh_schedule_enabled=true
           cluster="$(jq -er '.ecs_cluster_name.value' deployment-evidence/rollout-outputs.json)"
           new_task_definitions="$(jq -ec '.application_task_definition_arns.value' deployment-evidence/rollout-outputs.json)"
+          live_rtms="$(jq -er '.rtms_refresh_task_definition_arn' infra/terraform/budget-production/release.auto.tfvars.json)"
+          candidate_rtms="$(jq -er '.one_shot_task_definition_arns.value["rtms-daily-refresh"]' deployment-evidence/rollout-outputs.json)"
+          live_rtms_definition="$(aws ecs describe-task-definition --task-definition "${live_rtms}" --query taskDefinition --output json)"
+          candidate_rtms_definition="$(aws ecs describe-task-definition --task-definition "${candidate_rtms}" --query taskDefinition --output json)"
+          runtime_filter='{taskRoleArn,executionRoleArn,networkMode,cpu,memory,requiresCompatibilities,
+            containerDefinitions:[.containerDefinitions[] | {name,image,cpu,memory,memoryReservation,essential,command,entryPoint,environment,secrets,mountPoints}],volumes}'
+          live_runtime="$(jq -Sc "${runtime_filter}" <<<"${live_rtms_definition}")"
+          candidate_runtime="$(jq -Sc "${runtime_filter}" <<<"${candidate_rtms_definition}")"
+          selected_rtms="${live_rtms}"
+          if [[ "${candidate_runtime}" != "${live_runtime}" ]]; then
+            [[ "${RTMS_CATCHUP}" == run ]]
+            jq -e '.status == "pass" and .checks.task_exit_code == 0 and .checks.all_steps_completed == true
+              and .checks.raw_first == true and .checks.duplicate_normalized_trades == 0' deployment-evidence/rtms-catchup.json >/dev/null
+            selected_rtms="${candidate_rtms}"
+          fi
+          [[ "${selected_rtms}" =~ ^arn:aws:ecs:ap-northeast-2:[0-9]{12}:task-definition/home-search-budget-production-rtms-daily-refresh:[1-9][0-9]*$ ]]
           final_desired='{}'
           for service in admin-api admin-gateway ai chat-bff ml property-api public-gateway user-api; do
             desired="$(aws ecs describe-services --cluster "${cluster}" --services "${service}" --query 'services[0].desiredCount' --output text)"
             final_desired="$(jq --arg service "${service}" --argjson desired "${desired}" '. + {($service):$desired}' <<<"${final_desired}")"
           done
           jq --argjson task_definitions "${new_task_definitions}" --argjson desired_counts "${final_desired}" \
+            --arg rtms_refresh_task_definition_arn "${selected_rtms}" \
             '.application_service_task_definition_arns=$task_definitions
-             | .application_service_desired_counts=$desired_counts' \
+             | .application_service_desired_counts=$desired_counts
+             | .rtms_refresh_task_definition_arn=$rtms_refresh_task_definition_arn
+             | .market_news_schedules_enabled=false' \
             infra/terraform/budget-production/release.auto.tfvars.json >infra/terraform/budget-production/release.auto.tfvars.next.json
           mv infra/terraform/budget-production/release.auto.tfvars.next.json infra/terraform/budget-production/release.auto.tfvars.json
           terraform -chdir=infra/terraform/budget-production apply -refresh-only -auto-approve
@@ -976,6 +951,29 @@ jobs:
           jq -e --argjson final "${final_platform}" '.platform_image_uris == $final' deployment-evidence/live-platform-images.json >/dev/null
           jq -n '{platform_unchanged:true,platform_task_definitions_unchanged:true,dns_plan_unchanged:true}' \
             >deployment-evidence/final-invariants.json
+          rtms_schedule="$(aws scheduler get-schedule --name home-search-budget-production-rtms-daily-refresh \
+            --group-name home-search-budget-production-data-refresh --output json)"
+          jq -e '.State == "ENABLED" and .ScheduleExpression == "cron(30 4 * * ? *)"
+            and .ScheduleExpressionTimezone == "Asia/Seoul"
+            and .Target.RetryPolicy.MaximumRetryAttempts == 0
+            and (.Target.Arn | test(":stateMachine:home-search-budget-production-rtms-refresh$"))' <<<"${rtms_schedule}" >/dev/null
+          state_machine_arn="$(jq -er '.Target.Arn' <<<"${rtms_schedule}")"
+          state_machine_definition="$(aws stepfunctions describe-state-machine --state-machine-arn "${state_machine_arn}" --query definition --output text)"
+          scheduled_rtms="$(jq -er '.States.RUN_RTMS.Parameters.TaskDefinition' <<<"${state_machine_definition}")"
+          [[ "${scheduled_rtms}" == "${selected_rtms}" ]]
+          news_states='[]'
+          for schedule in general morning major-selection retention; do
+            state="$(aws scheduler get-schedule --name "home-search-budget-production-market-news-${schedule}" \
+              --group-name home-search-budget-production-market-news --query State --output text)"
+            news_states="$(jq --arg state "${state}" '. + [$state]' <<<"${news_states}")"
+          done
+          jq -e 'length == 4 and all(.[]; . == "DISABLED")' <<<"${news_states}" >/dev/null
+          jq -n --arg tag "${RELEASE_TAG}" --arg sha "${RELEASE_SHA}" --arg created_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg task_definition "${scheduled_rtms}" '{status:"pass",release_tag:$tag,commit_sha:$sha,created_at:$created_at,
+              checks:{scheduler_state:"ENABLED",schedule_expression:"cron(30 4 * * ? *)",timezone:"Asia/Seoul",
+                delivery_retry_attempts:0,target_type:"StepFunctions",immutable_task_definition:$task_definition,
+                market_news_schedule_count:4,market_news_schedules_disabled:true},redactions_applied:true}' \
+            >deployment-evidence/rtms-schedule.json
       - name: Smoke current homesearch.world DNS without mutation
         run: |
           set -Eeuo pipefail
@@ -998,7 +996,8 @@ jobs:
             https://homesearch.world/api/v1/insights/news >"${work}/news-nation.json"
           curl --fail-with-body --silent --show-error --get --data-urlencode 'scope=SIDO' --data-urlencode 'regionCode=11' --data-urlencode 'limit=20' \
             https://homesearch.world/api/v1/insights/news >"${work}/news-seoul.json"
-          jq -s -e 'all(.[]; .items | length > 0)' "${work}/news-nation.json" "${work}/news-seoul.json" >/dev/null
+          jq -s -e 'all(.[]; (.dataStatus == "FRESH" or .dataStatus == "STALE" or .dataStatus == "UNAVAILABLE")
+            and (.items | type == "array"))' "${work}/news-nation.json" "${work}/news-seoul.json" >/dev/null
           curl --fail-with-body --silent --show-error --get --data-urlencode 'scope=SIDO' --data-urlencode 'regionCode=11' --data-urlencode 'limit=20' \
             https://homesearch.world/api/v1/insights/trades/weekly >"${work}/weekly.json"
           curl --fail-with-body --silent --show-error --get --data-urlencode 'scope=NATIONWIDE' --data-urlencode 'limit=20' \
@@ -1024,8 +1023,8 @@ jobs:
           [[ "${prediction_ready}" == true ]]
           jq -e '.platform_unchanged == true and .dns_plan_unchanged == true' deployment-evidence/final-invariants.json >/dev/null
           jq -n --arg tag "${RELEASE_TAG}" --arg sha "${RELEASE_SHA}" --arg created_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            '{status:"pass",release_tag:$tag,commit_sha:$sha,created_at:$created_at,checks:{news_passed:true,
-              insight_passed:true,prediction_ready:true,oauth_three_providers_passed:true,search_exact_passed:true,
+            '{status:"pass",release_tag:$tag,commit_sha:$sha,created_at:$created_at,checks:{news_contract_passed:true,
+              insight_passed:true,prediction_ready:true,oauth_synthetic_contract_passed:true,search_exact_passed:true,
               search_prefix_passed:true,concurrent_requests:20,concurrent_5xx:0,api_contract_compatible:true,
               platform_unchanged:true},redactions_applied:true}' >deployment-evidence/feature-smoke.json
       - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2

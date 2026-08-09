@@ -34,7 +34,7 @@ locals {
     "iam:Get*", "iam:List*", "logs:Describe*", "logs:List*", "route53:Get*", "route53:List*",
     "s3:GetBucket*", "s3:GetEncryptionConfiguration", "s3:GetLifecycleConfiguration", "s3:ListBucket",
     "scheduler:GetSchedule", "scheduler:GetScheduleGroup", "scheduler:ListTagsForResource",
-    "sns:Get*", "sns:List*", "ssm:Describe*", "ssm:GetDocument", "ssm:List*", "tag:GetResources",
+    "sns:Get*", "sns:List*", "ssm:Describe*", "ssm:GetDocument", "ssm:List*", "states:DescribeStateMachine", "states:ListTagsForResource", "tag:GetResources",
   ]
   budget_apply_actions = [
     "acm:AddTagsToCertificate", "acm:DeleteCertificate", "acm:RemoveTagsFromCertificate", "acm:RequestCertificate",
@@ -51,6 +51,7 @@ locals {
     "logs:CreateLogGroup", "logs:DeleteLogGroup", "logs:DeleteMetricFilter", "logs:PutMetricFilter", "logs:PutRetentionPolicy", "logs:TagResource", "logs:UntagResource",
     "sns:CreateTopic", "sns:DeleteTopic", "sns:SetTopicAttributes", "sns:Subscribe", "sns:TagResource", "sns:Unsubscribe", "sns:UntagResource",
     "ssm:AddTagsToResource", "ssm:CreateAssociation", "ssm:CreateDocument", "ssm:DeleteAssociation", "ssm:DeleteDocument", "ssm:DeleteParameter", "ssm:PutParameter", "ssm:RemoveTagsFromResource", "ssm:UpdateAssociation",
+    "states:CreateStateMachine", "states:DeleteStateMachine", "states:TagResource", "states:UntagResource", "states:UpdateStateMachine",
   ]
   budget_apply_explicit_deny_actions = [
     "ec2:DeleteVolume", "ec2:DetachVolume", "s3:DeleteBucket", "ssm:DeleteParameter",
@@ -62,10 +63,10 @@ locals {
   budget_deploy_actions = [
     "cloudwatch:DescribeAlarms", "cloudwatch:GetMetricData", "cloudwatch:GetMetricStatistics", "ec2:DescribeImages", "ec2:DescribeInstances", "ec2:DescribeInstanceCreditSpecifications", "ec2:DescribeInstanceStatus",
     "ec2:DescribeSnapshots", "ec2:DescribeSubnets", "ec2:DescribeTags", "ec2:DescribeVolumes",
-    "ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer", "ecs:DescribeServices", "ecs:DescribeTaskDefinition", "ecs:DescribeTasks",
+    "ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer", "ecs:DescribeContainerInstances", "ecs:DescribeServices", "ecs:DescribeTaskDefinition", "ecs:DescribeTasks",
     "ecs:ListContainerInstances", "ecs:ListTasks",
     "ssm:DescribeInstanceInformation", "ssm:GetCommandInvocation",
-    "ssm:ListCommandInvocations",
+    "ssm:ListCommandInvocations", "states:DescribeStateMachine",
   ]
 }
 
@@ -500,7 +501,7 @@ resource "aws_iam_role_policy" "github_budget_apply" {
       {
         Sid    = "DenyCrossEnvironmentControlPlaneMutation"
         Effect = "Deny"
-        Action = ["cloudwatch:DeleteAlarms", "cloudwatch:PutMetricAlarm", "logs:CreateLogGroup", "logs:DeleteLogGroup", "logs:DeleteMetricFilter", "logs:PutMetricFilter", "logs:PutRetentionPolicy", "logs:TagResource", "logs:UntagResource", "events:DeleteRule", "events:PutRule", "events:PutTargets", "events:RemoveTargets", "events:TagResource", "events:UntagResource", "sns:CreateTopic", "sns:DeleteTopic", "sns:SetTopicAttributes", "sns:Subscribe", "sns:TagResource", "sns:Unsubscribe", "sns:UntagResource", "ssm:AddTagsToResource", "ssm:CreateAssociation", "ssm:CreateDocument", "ssm:DeleteAssociation", "ssm:DeleteDocument", "ssm:DeleteParameter", "ssm:PutParameter", "ssm:RemoveTagsFromResource", "ssm:UpdateAssociation"]
+        Action = ["cloudwatch:DeleteAlarms", "cloudwatch:PutMetricAlarm", "logs:CreateLogGroup", "logs:DeleteLogGroup", "logs:DeleteMetricFilter", "logs:PutMetricFilter", "logs:PutRetentionPolicy", "logs:TagResource", "logs:UntagResource", "events:DeleteRule", "events:PutRule", "events:PutTargets", "events:RemoveTargets", "events:TagResource", "events:UntagResource", "sns:CreateTopic", "sns:DeleteTopic", "sns:SetTopicAttributes", "sns:Subscribe", "sns:TagResource", "sns:Unsubscribe", "sns:UntagResource", "ssm:AddTagsToResource", "ssm:CreateAssociation", "ssm:CreateDocument", "ssm:DeleteAssociation", "ssm:DeleteDocument", "ssm:DeleteParameter", "ssm:PutParameter", "ssm:RemoveTagsFromResource", "ssm:UpdateAssociation", "states:CreateStateMachine", "states:DeleteStateMachine", "states:TagResource", "states:UntagResource", "states:UpdateStateMachine"]
         NotResource = [
           "arn:aws:cloudwatch:${var.aws_region}:${data.aws_caller_identity.current.account_id}:alarm:home-search-budget-production-*",
           "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*",
@@ -510,6 +511,7 @@ resource "aws_iam_role_policy" "github_budget_apply" {
           "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:association/*",
           "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:document/home-search-budget-production-*",
           "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/home-search/budget-production/*",
+          "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:home-search-budget-production-rtms-refresh",
         ]
       },
       {
@@ -671,6 +673,15 @@ resource "aws_iam_role_policy" "github_budget_deploy" {
         Effect   = "Allow"
         Action   = ["ecs:StopTask"]
         Resource = ["arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:task/home-search-budget-production/*"]
+        Condition = {
+          ArnEquals = { "ecs:cluster" = "arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:cluster/home-search-budget-production" }
+        }
+      },
+      {
+        Sid      = "QuiesceExactMlForRtms"
+        Effect   = "Allow"
+        Action   = ["ecs:UpdateService"]
+        Resource = ["arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:service/home-search-budget-production/ml"]
         Condition = {
           ArnEquals = { "ecs:cluster" = "arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:cluster/home-search-budget-production" }
         }

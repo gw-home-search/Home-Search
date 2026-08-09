@@ -983,5 +983,19 @@ safe-final 건수·비율, contract failure, upstream timeout, 전체 p95 latenc
 `TREND`는 10초, `RECOMMENDATION`은 20초 p95 alarm을 별도로 둔다.
 
 `rtms_refresh_schedule_enabled`는 누락일 first/repeat runtime audit가 모두 통과한
-뒤에만 `true`로 apply한다. Schedule 계약은 매일 `cron(30 7 * * ? *)`,
-`Asia/Seoul`, event age 3,600초, retry 1회다.
+뒤에만 `true`로 apply한다. Schedule 계약은 매일 `cron(30 4 * * ? *)`,
+`Asia/Seoul`, event age 3,600초, delivery retry 0회다. Scheduler는 ECS task를 직접
+시작하지 않고 Step Functions orchestration을 시작한다. orchestration은 03:30 logical
+backup의 `RUNNING|PENDING` task가 없어질 때까지 5분 간격으로 기다리고 05:30에도
+남아 있으면 RTMS를 실행하지 않고 `RTMS_FAILURE` alarm을 발생시킨다. 실행 직전
+single-host ECS remaining CPU 512 unit와 memory 1,024MiB를 요구하며, 부족할 때만
+ML의 exact task definition/desired count를 캡처해 일시 중단한다. RTMS 성공·실패·
+3시간 timeout과 무관하게 ML을 캡처 상태로 복구하며 복구 실패는
+`ML_RECOVERY_CRITICAL` alarm으로 분리한다.
+
+market-news 네 schedule은 RTMS 안정화 기간에 `DISABLED`를 유지하고 bootstrap/provider
+smoke를 실행하지 않는다. public news API enablement는 rollout 직전 live 값을 보존하며
+저장 snapshot의 `dataStatus=FRESH|STALE|UNAVAILABLE` 계약만 확인한다. routine rollout의
+OAuth 검증은 provider authorization redirect status/host와 invalid callback controlled
+4xx까지만 확인하며 실제 Google·Kakao·Naver login이나 `code`/`state` evidence를 요구하지
+않는다. 이 방식은 provider console과 live secret 조합 drift를 완전히 탐지하지 못한다.

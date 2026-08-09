@@ -221,9 +221,7 @@ locals {
           Cluster         = local.rtms_cluster_arn
           TaskDefinition  = var.rtms_refresh_task_definition_arn
           LaunchType      = "EC2"
-          Count           = 1
           "ClientToken.$" = "$.schedulerExecutionId"
-          "StartedBy.$"   = "$.schedulerExecutionId"
           Overrides = { ContainerOverrides = [{
             Name        = "rtms-daily-refresh"
             "Command.$" = "States.Array(States.Format('schedulerExecutionId={}', $.schedulerExecutionId))"

@@ -463,9 +463,23 @@ run "budget_roles_are_separated_and_state_isolated" {
       && aws_iam_role_policy_attachment.github_budget_plan_step_functions_read.role == aws_iam_role.github_budget_production_plan.name
       && aws_iam_role_policy_attachment.github_budget_apply_step_functions_read.role == aws_iam_role.github_budget_production_apply.name
       && aws_iam_role_policy_attachment.github_budget_apply_step_functions.role == aws_iam_role.github_budget_production_apply.name
-      && one(jsondecode(aws_iam_policy.github_budget_step_functions_read.policy).Statement).Resource == [local.budget_rtms_state_machine_arn]
+      && one([
+        for statement in jsondecode(aws_iam_policy.github_budget_step_functions_read.policy).Statement : statement
+        if statement.Sid == "ReadExactRtmsStateMachine"
+      ]).Resource == [local.budget_rtms_state_machine_arn]
+      && one([
+        for statement in jsondecode(aws_iam_policy.github_budget_step_functions_read.policy).Statement : statement
+        if statement.Sid == "ValidateRtmsStateMachineDefinition"
+      ]).Resource == "*"
       && one(jsondecode(aws_iam_policy.github_budget_apply_step_functions.policy).Statement).Resource == [local.budget_rtms_state_machine_arn]
-      && one(jsondecode(aws_iam_policy.github_budget_step_functions_read.policy).Statement).Action == ["states:DescribeStateMachine", "states:ListTagsForResource"]
+      && one([
+        for statement in jsondecode(aws_iam_policy.github_budget_step_functions_read.policy).Statement : statement
+        if statement.Sid == "ReadExactRtmsStateMachine"
+      ]).Action == ["states:DescribeStateMachine", "states:ListTagsForResource"]
+      && one([
+        for statement in jsondecode(aws_iam_policy.github_budget_step_functions_read.policy).Statement : statement
+        if statement.Sid == "ValidateRtmsStateMachineDefinition"
+      ]).Action == ["states:ValidateStateMachineDefinition"]
       && one(jsondecode(aws_iam_policy.github_budget_apply_step_functions.policy).Statement).Action == ["states:CreateStateMachine", "states:DeleteStateMachine", "states:TagResource", "states:UntagResource", "states:UpdateStateMachine"]
       && one(jsondecode(aws_iam_policy.github_budget_apply_regional.policy).Statement).Sid == "ManageTaggedBudgetResources"
       && one(jsondecode(aws_iam_policy.github_budget_apply_regional.policy).Statement).Action == local.budget_apply_actions

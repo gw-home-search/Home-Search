@@ -23,6 +23,9 @@ _REGION_PREFIX = re.compile(r"^([가-힣]{1,20}(?:동|읍|면|구|군|시))\s+(.
 _QUESTION_SPLIT = re.compile(
     r"\s+(?:전용|최근|월별|가격|실거래|거래|위치|주소|기본정보|어디|주변|가까운|전체적|전반적)"
 )
+_POSSESSIVE_SUPPORTED_INTENT = re.compile(
+    r"의\s+(?:전용|최근|월별|가격|실거래|거래|위치|주소|기본정보|어디|주변|가까운|전체적|전반적)"
+)
 
 
 @dataclass(frozen=True)
@@ -61,6 +64,8 @@ def normalize_question(question: str) -> NormalizedQuestion:
     else:
         candidate = _QUESTION_SPLIT.split(entity_source, maxsplit=1)[0]
     candidate = re.sub(r"\s+", " ", candidate).strip(" ?!,.\"")
+    if candidate.endswith("의") and _POSSESSIVE_SUPPORTED_INTENT.search(entity_source):
+        candidate = candidate.removesuffix("의").strip()
 
     if candidate in {"이 단지", "여기", "이곳"}:
         return NormalizedQuestion(

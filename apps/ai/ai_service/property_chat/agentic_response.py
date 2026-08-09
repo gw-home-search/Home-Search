@@ -120,8 +120,8 @@ def build_agentic_response(
         "headline": {"text": lead, "factIds": headline_fact_ids},
         "criteria": [], "interpretations": interpretations,
         "followUp": (
-            f"{decision.rows[0].complex_name}의 최근 실거래를 알려줘 · "
-            "상위 후보의 학원과 역 접근성을 비교해줘"
+            f"{decision.rows[0].complex_name} 최근 실거래 5건을 알려줘 · "
+            f"{decision.rows[0].complex_name} 주변 학원 위치와 가까운 역·노선을 알려줘"
             if decision.rows else None
         ),
         "fragmentSummaries": [],

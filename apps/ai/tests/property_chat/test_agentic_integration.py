@@ -14,7 +14,9 @@ from ai_service.property_chat.agentic import (
 )
 from ai_service.property_chat.agentic_response import build_agentic_response
 from ai_service.property_chat.models import ComplexRecord, QueryPlan
+from ai_service.property_chat.models import QueryPlanBundle
 from ai_service.property_chat.criteria_recommendation import CriteriaCandidateScope
+from ai_service.property_chat.deterministic_router import DeterministicQueryRouter
 from ai_service.terminal_response import with_terminal_outcome
 
 
@@ -150,6 +152,24 @@ def test_agentic_station_response_emits_verified_scope_and_focus_action() -> Non
         "선정 범위: 망포역 직선거리 1500m", "예산 미지정",
         "전용면적 미지정 · 거래금액 후보 간 비교 제외",
     ]
+    follow_ups = response["uiSummary"]["followUp"].split(" · ")
+    assert follow_ups == [
+        "나단지 최근 실거래 5건을 알려줘",
+        "나단지 주변 학원 위치와 가까운 역·노선을 알려줘",
+    ]
+
+    routed = [
+        DeterministicQueryRouter(today=datetime(2026, 8, 9, tzinfo=UTC).date()).plan(
+            ChatbotQueryRequest(question=follow_up)
+        )
+        for follow_up in follow_ups
+    ]
+    assert isinstance(routed[0], QueryPlan)
+    assert routed[0].capability == "recent_trade_lookup"
+    assert isinstance(routed[1], QueryPlanBundle)
+    assert {plan.capability for plan in routed[1].fragments} == {
+        "academy_lookup", "rail_station_lookup",
+    }
 
 
 def test_partial_evidence_keeps_grounded_rows_and_focus_action() -> None:

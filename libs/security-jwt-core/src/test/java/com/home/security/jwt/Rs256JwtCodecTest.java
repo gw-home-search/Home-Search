@@ -78,8 +78,9 @@ class Rs256JwtCodecTest {
                                 Duration.ofSeconds(60),
                                 keyId -> keyPair.getPublic())))
                 .isInstanceOf(JwtVerificationException.class);
-        assertThatThrownBy(() -> codec.verify(token.substring(0, token.length() - 2) + "xx", valid))
-                .isInstanceOf(JwtVerificationException.class);
+        String tampered = tamperSignature(token);
+        assertThat(tampered).isNotEqualTo(token);
+        assertThatThrownBy(() -> codec.verify(tampered, valid)).isInstanceOf(JwtVerificationException.class);
         assertThatThrownBy(() -> codec.verify(
                         token,
                         new JwtVerificationPolicy(
@@ -97,6 +98,13 @@ class Rs256JwtCodecTest {
                         Map.of()),
                 keyPair.getPrivate());
         assertThatThrownBy(() -> codec.verify(longLived, valid)).isInstanceOf(JwtVerificationException.class);
+    }
+
+    private static String tamperSignature(String token) {
+        int signatureStart = token.lastIndexOf('.') + 1;
+        char original = token.charAt(signatureStart);
+        char replacement = original == 'A' ? 'B' : 'A';
+        return token.substring(0, signatureStart) + replacement + token.substring(signatureStart + 1);
     }
 
     @Test

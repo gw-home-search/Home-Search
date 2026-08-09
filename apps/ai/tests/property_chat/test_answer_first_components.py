@@ -127,6 +127,38 @@ def test_deterministic_router_preserves_region_for_direct_fact_queries(
     assert plan.region_name == "가락동"
 
 
+def test_question_normalizer_removes_possessive_particle_before_supported_intent() -> None:
+    normalized = normalize_question(
+        "망포동 망포역아이파크의 최근 실거래를 알려줘"
+    )
+
+    assert normalized.entity_candidate == "망포역아이파크"
+    assert normalized.region_hint == "망포동"
+
+    plan = DeterministicQueryRouter(today=date(2026, 8, 9)).plan(
+        ChatbotQueryRequest(question="망포동 망포역아이파크의 최근 실거래를 알려줘")
+    )
+    assert isinstance(plan, QueryPlan)
+    assert plan.capability == "recent_trade_lookup"
+    assert plan.complex_name == "망포역아이파크"
+
+
+@pytest.mark.parametrize(
+    "question",
+    (
+        "의정부역센트럴자이 최근 실거래를 알려줘",
+        "의정부 롯데캐슬 최근 실거래를 알려줘",
+    ),
+)
+def test_question_normalizer_preserves_entity_internal_ui_syllable(
+    question: str,
+) -> None:
+    normalized = normalize_question(question)
+
+    assert normalized.entity_candidate is not None
+    assert "의정부" in normalized.entity_candidate
+
+
 @pytest.mark.parametrize(
     "area_text",
     ("59㎡", "59m²", "59m2", "59제곱미터"),

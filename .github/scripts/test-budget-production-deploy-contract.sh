@@ -125,7 +125,7 @@ grep -Fq 'deployment-evidence/data-dark-plan.json data "${current_phase}"' <<<"$
 grep -Fq 'if [[ "${code}" == 2 ]]; then' <<<"${data_dark_block}"
 grep -Fq 'infra/deploy/wait-budget-platform-services-healthy.sh "${cluster}"' "${workflow}"
 grep -Fq 'role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_DEPLOY_ROLE_ARN }}"' "${workflow}"
-for scoped_sid in ManageBudgetBucketsOnly DenyCrossEnvironmentEc2Mutation DenyCrossEnvironmentEcsMutation DenyCrossEnvironmentEcrMutation DenyCrossEnvironmentControlPlaneMutation LaunchTaggedRecoveryInstance TerminateTaggedRecoveryInstance PassBudgetRuntimeRolesOnly RunBudgetOneShotTasks StopBudgetOneShotTasks SendCommandToTaggedRecoveryOnly ReadBudgetBackupEvidence; do
+for scoped_sid in ManageBudgetBucketsOnly DenyCrossEnvironmentEc2Mutation DenyCrossEnvironmentEcsMutation DenyCrossEnvironmentEcrMutation DenyCrossEnvironmentControlPlaneMutation LaunchTaggedRecoveryInstance TerminateTaggedRecoveryInstance PassBudgetRuntimeRolesOnly RunBudgetOneShotTasks StopBudgetOneShotTasks QuiesceExactMlForRtms SendCommandToTaggedRecoveryOnly ReadBudgetBackupEvidence; do
   grep -Fq "${scoped_sid}" "${bootstrap_policy}"
 done
 budget_deploy_actions_block="$(sed -n '/budget_deploy_actions = \[/,/^  ]/p' "${bootstrap_policy}")"
@@ -138,14 +138,20 @@ for forbidden_actions in \
     exit 1
   fi
 done
+budget_apply_actions_block="$(sed -n '/budget_apply_actions = \[/,/^  ]/p' "${bootstrap_policy}")"
+if grep -Fq 'states:' <<<"${budget_apply_actions_block}"; then
+  echo '상태: Fail - aggregate apply action에 Step Functions mutation을 포함했습니다.' >&2
+  exit 1
+fi
+grep -Fq 'budget_rtms_state_machine_arn = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:home-search-budget-production-rtms-refresh"' "${bootstrap_policy}"
+grep -Fq 'Sid      = "ReadExactRtmsStateMachine"' "${bootstrap_policy}"
+grep -Fq 'Sid      = "ManageExactRtmsStateMachine"' "${bootstrap_policy}"
 [[ -f "${rollout_workflow}" ]]
 for required in \
   'name: Rollout budget production' \
   'release_tag:' \
   'release_sha:' \
   'property_migration_target:' \
-  'enable_market_news_public:' \
-  'enable_market_news_schedules:' \
   'enable_rtms_refresh_schedule:' \
   'enable_prediction:' \
   'enable_ml_service:' \
@@ -153,7 +159,6 @@ for required in \
   'protected_rollout_approval:' \
   'security_audit_result:' \
   'bootstrap_plan_evidence_uri:' \
-  'oauth_acceptance_evidence_uri:' \
   'rtms_resume_request_id:' \
   'runtime-feature-audit' \
   'environment: budget-production-plan' \
@@ -175,6 +180,19 @@ for required in \
   'BUDGET_PRODUCTION_INCREMENTAL_READY.json'; do
   grep -Fq -- "${required}" "${rollout_workflow}"
 done
+require_absent_literal 'oauth_acceptance_evidence_uri:' "${rollout_workflow}"
+require_absent_literal 'enable_market_news_public:' "${rollout_workflow}"
+require_absent_literal 'enable_market_news_schedules:' "${rollout_workflow}"
+require_absent_literal 'full_logins_passed' "${rollout_workflow}"
+require_absent_literal 'oauth_three_providers_passed' "${rollout_workflow}"
+require_absent_literal 'export TF_VAR_market_news_schedules_enabled=true' "${rollout_workflow}"
+grep -Fq 'Enable the orchestrated 04:30 KST RTMS refresh' "${rollout_workflow}"
+grep -Fq 'routine rollout excludes live provider login acceptance' "${rollout_workflow}"
+grep -Fq 'syntheticContractPassed:true' "${rollout_workflow}"
+grep -Fq 'TF_VAR_market_news_schedules_enabled: "false"' "${rollout_workflow}"
+grep -Fq '[[ "${property_news_public_enabled}" == true || "${property_news_public_enabled}" == false ]]' "${rollout_workflow}"
+grep -Fq '| .market_news_public_enabled=($news_public == "true")' "${rollout_workflow}"
+grep -Fq 'market-news schedules disabled' "${rollout_workflow}"
 grep -Fq 'RTMS_RESUME_REQUEST_ID: "${{ inputs.rtms_resume_request_id }}"' "${rollout_workflow}"
 grep -Fq '[[ -z "${RTMS_RESUME_REQUEST_ID}" || "${RTMS_RESUME_REQUEST_ID}" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]' "${rollout_workflow}"
 grep -Fq 'if [[ -n "${RTMS_RESUME_REQUEST_ID}" ]]; then' "${rollout_workflow}"
@@ -267,7 +285,7 @@ apply_prep_line="$(grep -nF 'name: Apply reviewed dark prep saved plan' "${rollo
 register_ai_canary_line="$(grep -nF 'name: Register isolated AI canary revision' "${rollout_workflow}" | cut -d: -f1)"
 run_ai_canary_line="$(grep -nF 'name: Run isolated AI canary' "${rollout_workflow}" | cut -d: -f1)"
 start_ml_line="$(grep -nF 'name: Start and verify ML before data bootstrap' "${rollout_workflow}" | cut -d: -f1)"
-run_data_bootstrap_line="$(grep -nF 'name: Run RTMS catch-up and market-news bootstrap' "${rollout_workflow}" | cut -d: -f1)"
+run_data_bootstrap_line="$(grep -nF 'name: Run RTMS catch-up and record market-news bootstrap skipped' "${rollout_workflow}" | cut -d: -f1)"
 rtms_credentials_window="$(sed -n "$((run_data_bootstrap_line - 3)),$((run_data_bootstrap_line - 1))p" "${rollout_workflow}")"
 grep -Fq 'role-duration-seconds: 10800' <<<"${rtms_credentials_window}"
 rollout_timeout="$(awk '/^  rollout:/{found=1} found && /timeout-minutes:/{print $2; exit}' "${rollout_workflow}")"
@@ -280,12 +298,9 @@ grep -Fq 'jq -n --arg reused "${reuse_rtms_catchup}"' "${rollout_workflow}"
 grep -Fq 'rtms_catchup:' "${rollout_workflow}"
 grep -Fq 'RTMS_CATCHUP: "${{ inputs.rtms_catchup }}"' "${rollout_workflow}"
 grep -Fq 'if [[ "${RTMS_CATCHUP}" != run ]]; then' "${rollout_workflow}"
-grep -Fq 'market_news_bootstrap:' "${rollout_workflow}"
-grep -Fq 'oauth_acceptance:' "${rollout_workflow}"
-grep -Fq 'MARKET_NEWS_BOOTSTRAP: "${{ inputs.market_news_bootstrap }}"' "${rollout_workflow}"
-grep -Fq 'OAUTH_ACCEPTANCE: "${{ inputs.oauth_acceptance }}"' "${rollout_workflow}"
-grep -Fq 'if [[ "${MARKET_NEWS_BOOTSTRAP}" == run ]]; then' "${rollout_workflow}"
-grep -Fq 'if [[ "${OAUTH_ACCEPTANCE}" != required ]]; then' "${rollout_workflow}"
+require_absent_literal 'market_news_bootstrap:' "${rollout_workflow}"
+require_absent_literal 'oauth_acceptance:' "${rollout_workflow}"
+grep -Fq 'name: Verify synthetic OAuth redirect contracts without provider login' "${rollout_workflow}"
 grep -Fq 'if [[ -n "${RTMS_CATCHUP_EXECUTION_IDS}" ]]; then' "${rollout_workflow}"
 [[ "${register_ai_canary_line}" -lt "${run_ai_canary_line}" ]]
 [[ "${run_ai_canary_line}" -lt "${start_ml_line}" ]]

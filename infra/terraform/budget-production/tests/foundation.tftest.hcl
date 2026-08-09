@@ -287,12 +287,37 @@ run "data_phase_keeps_platform_services_dark_before_secret_bootstrap" {
       && jsondecode(aws_ecs_task_definition.one_shot["secret-bootstrap"].container_definitions)[0].memoryReservation == 256
       && jsondecode(aws_ecs_task_definition.one_shot["secret-bootstrap"].container_definitions)[0].memory == 512
       && length(aws_scheduler_schedule.rtms_daily_refresh) == 1
-      && aws_scheduler_schedule.rtms_daily_refresh[0].schedule_expression == "cron(30 7 * * ? *)"
+      && aws_scheduler_schedule.rtms_daily_refresh[0].schedule_expression == "cron(30 4 * * ? *)"
       && aws_scheduler_schedule.rtms_daily_refresh[0].schedule_expression_timezone == "Asia/Seoul"
       && aws_scheduler_schedule.rtms_daily_refresh[0].state == "DISABLED"
-      && jsondecode(aws_scheduler_schedule.rtms_daily_refresh[0].target[0].input).containerOverrides[0].command == [
-        "schedulerExecutionId=<aws.scheduler.execution-id>",
-      ]
+      && length(aws_sfn_state_machine.rtms_refresh) == 1
+      && length(aws_scheduler_schedule.rtms_daily_refresh[0].target[0].ecs_parameters) == 0
+      && aws_scheduler_schedule.rtms_daily_refresh[0].target[0].retry_policy[0].maximum_retry_attempts == 0
+      && jsondecode(aws_scheduler_schedule.rtms_daily_refresh[0].target[0].input).schedulerExecutionId == "<aws.scheduler.execution-id>"
+      && strcontains(jsonencode(local.rtms_refresh_definition), "CHECK_BACKUP")
+      && strcontains(jsonencode(local.rtms_refresh_definition), "OPTIONAL_STOP_ML")
+      && strcontains(jsonencode(local.rtms_refresh_definition), "RUN_RTMS")
+      && strcontains(jsonencode(local.rtms_refresh_definition), "RESTORE_ML")
+      && !contains(keys(local.rtms_refresh_definition.States), "CAPTURE_PENDING_TASKS")
+      && strcontains(jsonencode(local.rtms_refresh_definition), "DESCRIBE_ACTIVE_TASKS")
+      && strcontains(jsonencode(local.rtms_refresh_definition), "RTMS_EXIT_SUCCESS")
+      && local.rtms_refresh_definition.States.CAPTURE_ACTIVE_TASKS.Parameters.DesiredStatus == "RUNNING"
+      && local.rtms_refresh_definition.States.WAIT_BACKUP.Seconds == 300
+      && local.rtms_refresh_definition.States.BACKUP_WAIT_LIMIT.Choices[0].NumericGreaterThanEquals == 12
+      && local.rtms_refresh_definition.States.CAPACITY_SUFFICIENT.Choices[0].And[1].NumericGreaterThanEquals == 512
+      && local.rtms_refresh_definition.States.CAPACITY_SUFFICIENT.Choices[0].And[3].NumericGreaterThanEquals == 1024
+      && local.rtms_refresh_definition.States.CAPACITY_SUFFICIENT.Choices[0].Next == "RUN_RTMS"
+      && local.rtms_refresh_definition.States.ML_CAN_STOP.Choices[0].Next == "MARK_ML_STOP_REQUESTED"
+      && local.rtms_refresh_definition.States.RUN_RTMS.TimeoutSeconds == 10800
+      && local.rtms_refresh_definition.States.RUN_RTMS.Parameters["ClientToken.$"] == "$.schedulerExecutionId"
+      && local.rtms_refresh_definition.States.RUN_RTMS.Catch[0].Next == "SET_RTMS_FAILURE"
+      && local.rtms_refresh_definition.States.RTMS_EXIT_SUCCESS.Choices[0].NumericEquals == 0
+      && local.rtms_refresh_definition.States.SET_RTMS_FAILURE.Next == "RESTORE_IF_STOPPED"
+      && local.rtms_refresh_definition.States.RESTORE_ML.Catch[0].Next == "EMIT_ML_RECOVERY_CRITICAL"
+      && local.rtms_refresh_definition.States.EMIT_RTMS_FAILURE.Parameters.MetricData[0].MetricName == "RtmsRefreshFailure"
+      && local.rtms_refresh_definition.States.EMIT_ML_RECOVERY_CRITICAL.Parameters.MetricData[0].MetricName == "MlRecoveryCritical"
+      && length(aws_cloudwatch_metric_alarm.rtms_refresh_failure) == 1
+      && length(aws_cloudwatch_metric_alarm.ml_recovery_critical) == 1
     )
     error_message = "Data phase must define digest-pinned platform tasks but keep them stopped before secret bootstrap."
   }

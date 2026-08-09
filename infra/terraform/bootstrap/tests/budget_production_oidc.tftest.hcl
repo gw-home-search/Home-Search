@@ -457,7 +457,16 @@ run "budget_roles_are_separated_and_state_isolated" {
       && length(aws_iam_policy.github_budget_apply_service_linked_roles.policy) <= 6144
       && length(aws_iam_policy.github_budget_apply_schedules.policy) <= 6144
       && length(aws_iam_policy.github_budget_apply_ssm_documents.policy) <= 6144
+      && length(aws_iam_policy.github_budget_step_functions_read.policy) <= 6144
+      && length(aws_iam_policy.github_budget_apply_step_functions.policy) <= 6144
       && aws_iam_role_policy_attachment.github_budget_apply_regional.role == aws_iam_role.github_budget_production_apply.name
+      && aws_iam_role_policy_attachment.github_budget_plan_step_functions_read.role == aws_iam_role.github_budget_production_plan.name
+      && aws_iam_role_policy_attachment.github_budget_apply_step_functions_read.role == aws_iam_role.github_budget_production_apply.name
+      && aws_iam_role_policy_attachment.github_budget_apply_step_functions.role == aws_iam_role.github_budget_production_apply.name
+      && one(jsondecode(aws_iam_policy.github_budget_step_functions_read.policy).Statement).Resource == [local.budget_rtms_state_machine_arn]
+      && one(jsondecode(aws_iam_policy.github_budget_apply_step_functions.policy).Statement).Resource == [local.budget_rtms_state_machine_arn]
+      && one(jsondecode(aws_iam_policy.github_budget_step_functions_read.policy).Statement).Action == ["states:DescribeStateMachine", "states:ListTagsForResource"]
+      && one(jsondecode(aws_iam_policy.github_budget_apply_step_functions.policy).Statement).Action == ["states:CreateStateMachine", "states:DeleteStateMachine", "states:TagResource", "states:UntagResource", "states:UpdateStateMachine"]
       && one(jsondecode(aws_iam_policy.github_budget_apply_regional.policy).Statement).Sid == "ManageTaggedBudgetResources"
       && one(jsondecode(aws_iam_policy.github_budget_apply_regional.policy).Statement).Action == local.budget_apply_actions
       && one(jsondecode(aws_iam_policy.github_budget_apply_regional.policy).Statement).Condition.StringEqualsIfExists["aws:RequestedRegion"] == "ap-northeast-2"

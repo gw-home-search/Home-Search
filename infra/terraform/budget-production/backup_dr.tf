@@ -147,31 +147,15 @@ resource "aws_iam_role" "rtms_scheduler" {
 
 resource "aws_iam_role_policy" "rtms_scheduler" {
   count = local.data_enabled ? 1 : 0
-  name  = "run-reviewed-rtms-daily-refresh"
+  name  = "start-reviewed-rtms-orchestration"
   role  = aws_iam_role.rtms_scheduler[0].id
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
-      {
-        Effect   = "Allow"
-        Action   = ["ecs:RunTask"]
-        Resource = [aws_ecs_task_definition.one_shot["rtms-daily-refresh"].arn]
-        Condition = {
-          ArnEquals = { "ecs:cluster" = aws_ecs_cluster.this[0].arn }
-        }
-      },
-      {
-        Effect = "Allow"
-        Action = ["iam:PassRole"]
-        Resource = [
-          aws_iam_role.task_execution["rtms-daily-refresh"].arn,
-          aws_iam_role.task_runtime["rtms-daily-refresh"].arn,
-        ]
-        Condition = {
-          StringEquals = { "iam:PassedToService" = "ecs-tasks.amazonaws.com" }
-        }
-      },
-    ]
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["states:StartExecution"]
+      Resource = [aws_sfn_state_machine.rtms_refresh[0].arn]
+    }]
   })
 }
 
@@ -191,27 +175,23 @@ resource "aws_scheduler_schedule" "rtms_daily_refresh" {
   }
   name                         = "${local.name}-rtms-daily-refresh"
   group_name                   = aws_scheduler_schedule_group.data_refresh[0].name
-  schedule_expression          = "cron(30 7 * * ? *)"
+  schedule_expression          = "cron(30 4 * * ? *)"
   schedule_expression_timezone = "Asia/Seoul"
   state                        = var.rtms_refresh_schedule_enabled ? "ENABLED" : "DISABLED"
   flexible_time_window { mode = "OFF" }
   target {
-    arn      = aws_ecs_cluster.this[0].arn
+    arn      = aws_sfn_state_machine.rtms_refresh[0].arn
     role_arn = aws_iam_role.rtms_scheduler[0].arn
     input = jsonencode({
-      containerOverrides = [{
-        name    = "rtms-daily-refresh"
-        command = ["schedulerExecutionId=<aws.scheduler.execution-id>"]
-      }]
+      schedulerExecutionId = "<aws.scheduler.execution-id>"
+      wait                 = { attempt = 0 }
+      mlStopWait           = { attempt = 0 }
+      mlRestoreWait        = { attempt = 0 }
+      mlStopped            = false
     })
-    ecs_parameters {
-      task_definition_arn = var.rtms_refresh_task_definition_arn != "" ? var.rtms_refresh_task_definition_arn : "arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:task-definition/${local.name}-rtms-daily-refresh:1"
-      launch_type         = "EC2"
-      task_count          = 1
-    }
     retry_policy {
       maximum_event_age_in_seconds = 3600
-      maximum_retry_attempts       = 1
+      maximum_retry_attempts       = 0
     }
   }
 }

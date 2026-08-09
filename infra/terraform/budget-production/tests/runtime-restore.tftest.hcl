@@ -95,7 +95,7 @@ run "runtime_restore_enables_only_approved_features" {
     public_dns_enabled            = true
     backup_schedules_enabled      = true
     market_news_public_enabled    = true
-    market_news_schedules_enabled = true
+    market_news_schedules_enabled = false
     rtms_refresh_schedule_enabled = true
     prediction_enabled            = true
     ml_service_enabled            = true
@@ -104,8 +104,10 @@ run "runtime_restore_enables_only_approved_features" {
 
   assert {
     condition = (
-      aws_scheduler_schedule.rtms_daily_refresh[0].target[0].ecs_parameters[0].task_definition_arn
-      == var.rtms_refresh_task_definition_arn
+      strcontains(
+        jsonencode(local.rtms_refresh_definition),
+        var.rtms_refresh_task_definition_arn,
+      )
     )
     error_message = "RTMS Scheduler must preserve the explicitly reviewed immutable task definition revision."
   }
@@ -148,12 +150,12 @@ run "runtime_restore_enables_only_approved_features" {
     condition = (
       aws_scheduler_schedule.rtms_daily_refresh[0].state == "ENABLED"
       && length(aws_scheduler_schedule.market_news) == 4
-      && alltrue([for schedule in aws_scheduler_schedule.market_news : schedule.state == "ENABLED"])
+      && alltrue([for schedule in aws_scheduler_schedule.market_news : schedule.state == "DISABLED"])
       && toset([for name in keys(local.one_shot_specs) : name if startswith(name, "market-news-")]) == toset([
         "market-news-general", "market-news-morning", "market-news-major-complex",
         "market-news-major-selection", "market-news-retention", "market-news-quality-sample", "market-news-withdrawal",
       ])
     )
-    error_message = "RTMS and four market-news schedules must be independently enabled with seven reviewed one-shot tasks."
+    error_message = "RTMS must be enabled while all four market-news schedules remain disabled."
   }
 }

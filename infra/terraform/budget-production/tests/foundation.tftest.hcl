@@ -310,6 +310,8 @@ run "data_phase_keeps_platform_services_dark_before_secret_bootstrap" {
       && local.rtms_refresh_definition.States.ML_CAN_STOP.Choices[0].Next == "MARK_ML_STOP_REQUESTED"
       && local.rtms_refresh_definition.States.RUN_RTMS.TimeoutSeconds == 10800
       && local.rtms_refresh_definition.States.RUN_RTMS.Parameters["ClientToken.$"] == "$.schedulerExecutionId"
+      && !contains(keys(local.rtms_refresh_definition.States.RUN_RTMS.Parameters), "Count")
+      && !contains(keys(local.rtms_refresh_definition.States.RUN_RTMS.Parameters), "StartedBy.$")
       && local.rtms_refresh_definition.States.RUN_RTMS.Catch[0].Next == "SET_RTMS_FAILURE"
       && local.rtms_refresh_definition.States.RTMS_EXIT_SUCCESS.Choices[0].NumericEquals == 0
       && local.rtms_refresh_definition.States.SET_RTMS_FAILURE.Next == "RESTORE_IF_STOPPED"

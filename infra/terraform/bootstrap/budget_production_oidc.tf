@@ -366,12 +366,20 @@ resource "aws_iam_policy" "github_budget_step_functions_read" {
   name = "home-search-budget-production-step-functions-read"
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Sid      = "ReadExactRtmsStateMachine"
-      Effect   = "Allow"
-      Action   = ["states:DescribeStateMachine", "states:ListTagsForResource"]
-      Resource = [local.budget_rtms_state_machine_arn]
-    }]
+    Statement = [
+      {
+        Sid      = "ReadExactRtmsStateMachine"
+        Effect   = "Allow"
+        Action   = ["states:DescribeStateMachine", "states:ListTagsForResource"]
+        Resource = [local.budget_rtms_state_machine_arn]
+      },
+      {
+        Sid      = "ValidateRtmsStateMachineDefinition"
+        Effect   = "Allow"
+        Action   = ["states:ValidateStateMachineDefinition"]
+        Resource = "*"
+      },
+    ]
   })
   tags = {
     Project     = "home-search"

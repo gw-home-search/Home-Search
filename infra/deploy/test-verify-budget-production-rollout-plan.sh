@@ -30,6 +30,28 @@ jq -n --arg before_image '123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/home
 ]}' >"${tmp_dir}/allowed.json"
 bash "${script}" "${tmp_dir}/allowed.json" "${tmp_dir}/live-application-settings.json" >/dev/null
 
+jq -n --arg state_machine 'arn:aws:states:ap-northeast-2:399291871263:stateMachine:home-search-budget-production-rtms-refresh' \
+  '{resource_changes:[{mode:"managed",address:"aws_iam_role_policy.rtms_scheduler[0]",type:"aws_iam_role_policy",change:{actions:["delete","create"],
+    before:{name:"run-reviewed-rtms-task",policy:"legacy-direct-ecs"},
+    after:{name:"start-reviewed-rtms-orchestration",role:"home-search-budget-production-rtms-scheduler",policy:({Version:"2012-10-17",Statement:[{Effect:"Allow",Action:["states:StartExecution"],Resource:[$state_machine]}]}|tojson)}}}]}' \
+  >"${tmp_dir}/rtms-scheduler-policy-replacement.json"
+bash "${script}" "${tmp_dir}/rtms-scheduler-policy-replacement.json" \
+  "${tmp_dir}/live-application-settings.json" >/dev/null
+jq '.resource_changes[0].change.after.policy |= (fromjson | .Statement[0].Action += ["ecs:RunTask"] | tojson)' \
+  "${tmp_dir}/rtms-scheduler-policy-replacement.json" >"${tmp_dir}/rtms-scheduler-policy-broadened.json"
+if bash "${script}" "${tmp_dir}/rtms-scheduler-policy-broadened.json" \
+  "${tmp_dir}/live-application-settings.json" >/dev/null 2>&1; then
+  echo '상태: Fail - RTMS Scheduler policy replacement가 states:StartExecution 외 권한을 허용했습니다.' >&2
+  exit 1
+fi
+jq '.resource_changes[0].change.after.role = "unrelated-role"' \
+  "${tmp_dir}/rtms-scheduler-policy-replacement.json" >"${tmp_dir}/rtms-scheduler-policy-wrong-role.json"
+if bash "${script}" "${tmp_dir}/rtms-scheduler-policy-wrong-role.json" \
+  "${tmp_dir}/live-application-settings.json" >/dev/null 2>&1; then
+  echo '상태: Fail - RTMS Scheduler policy replacement가 unrelated role 부착을 허용했습니다.' >&2
+  exit 1
+fi
+
 jq -n '{resource_changes:[
   {mode:"managed",address:"aws_scheduler_schedule.rtms_daily_refresh[0]",type:"aws_scheduler_schedule",change:{actions:["update"],before:{state:"DISABLED"},after:{state:"ENABLED"}}}
 ]}' >"${tmp_dir}/final-schedules.json"

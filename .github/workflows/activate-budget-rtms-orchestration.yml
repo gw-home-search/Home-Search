@@ -1,0 +1,227 @@
+name: Activate budget production RTMS orchestration
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_plan_run_id:
+        description: "Run containing the reviewed v1.0.73 production tfvars"
+        required: true
+        default: "31321021796"
+        type: string
+      protected_activation_approval:
+        description: "Current-task approval for the exact RTMS-only protected mutation"
+        required: true
+        default: false
+        type: boolean
+      security_audit_result:
+        description: "Resolved mandatory security checkpoint"
+        required: true
+        default: "none"
+        type: choice
+        options: [none, listed]
+
+permissions: { contents: read, actions: read, id-token: write }
+concurrency: { group: deploy-budget-production, cancel-in-progress: false }
+
+env:
+  AWS_REGION: ap-northeast-2
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  TF_STATE_KEY: home-search/budget-production/terraform.tfstate
+  TF_VAR_deployment_phase: public
+  TF_VAR_data_services_enabled: "true"
+  TF_VAR_public_dns_enabled: "true"
+  TF_VAR_backup_schedules_enabled: "true"
+  TF_VAR_market_news_schedules_enabled: "false"
+  TF_VAR_prediction_enabled: "true"
+  TF_VAR_ml_service_enabled: "true"
+  TF_VAR_user_oauth_enabled_providers: '["google","kakao","naver"]'
+
+jobs:
+  plan:
+    name: budget-production-rtms-dark-plan
+    environment: budget-production-plan
+    runs-on: ubuntu-latest
+    env:
+      TF_VAR_rtms_refresh_schedule_enabled: "false"
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Require exact reviewed source and current-task approval
+        run: |
+          set -Eeuo pipefail
+          [[ '${{ inputs.protected_activation_approval }}' == true ]]
+          [[ '${{ inputs.security_audit_result }}' == none ]]
+          [[ '${{ inputs.source_plan_run_id }}' == 31321021796 ]]
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: budget-production-incremental-plan-v1.0.73
+          path: reviewed
+          github-token: "${{ github.token }}"
+          run-id: "${{ inputs.source_plan_run_id }}"
+      - name: Validate reviewed v1.0.73 inputs
+        run: |
+          set -Eeuo pipefail
+          jq -e '
+            .status == "pass"
+            and .release_tag == "v1.0.73"
+            and .commit_sha == "f67d3d9d28b2e6dd961196a9eb5da8e0c7bf8e31"
+            and .redactions_applied == true
+          ' reviewed/deployment-evidence/live-audit.json >/dev/null
+          jq -e '
+            .rtms_refresh_task_definition_arn == "arn:aws:ecs:ap-northeast-2:399291871263:task-definition/home-search-budget-production-rtms-daily-refresh:23"
+            and .market_news_schedules_enabled == false
+          ' reviewed/infra/terraform/budget-production/release.auto.tfvars.json >/dev/null
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_PLAN_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+        with: { terraform_version: 1.15.8, terraform_wrapper: false }
+      - name: Create and verify exact dark prep saved plan
+        env:
+          TF_STATE_BUCKET: "${{ vars.BUDGET_PRODUCTION_TF_STATE_BUCKET }}"
+          TF_STATE_KMS_ARN: "${{ vars.BUDGET_PRODUCTION_TF_STATE_KMS_ARN }}"
+        run: |
+          set -Eeuo pipefail
+          mkdir -p deployment-evidence
+          cp reviewed/infra/terraform/budget-production/foundation.auto.tfvars.json infra/terraform/budget-production/
+          cp reviewed/infra/terraform/budget-production/release.auto.tfvars.json infra/terraform/budget-production/
+          cp reviewed/deployment-evidence/live-application-settings.json deployment-evidence/
+          terraform -chdir=infra/terraform/budget-production init \
+            -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="key=${TF_STATE_KEY}" \
+            -backend-config="region=${AWS_REGION}" -backend-config="kms_key_id=${TF_STATE_KMS_ARN}" \
+            -backend-config="use_lockfile=true"
+          terraform -chdir=infra/terraform/budget-production fmt -check
+          terraform -chdir=infra/terraform/budget-production validate
+          targets=(
+            -target='aws_iam_role.rtms_orchestration[0]'
+            -target='aws_iam_role_policy.rtms_orchestration[0]'
+            -target='aws_sfn_state_machine.rtms_refresh[0]'
+            -target='aws_cloudwatch_metric_alarm.rtms_refresh_failure[0]'
+            -target='aws_cloudwatch_metric_alarm.ml_recovery_critical[0]'
+            -target='aws_iam_role.rtms_scheduler[0]'
+            -target='aws_iam_role_policy.rtms_scheduler[0]'
+            -target='aws_scheduler_schedule_group.data_refresh[0]'
+            -target='aws_scheduler_schedule.rtms_daily_refresh[0]'
+          )
+          code=0
+          terraform -chdir=infra/terraform/budget-production plan -input=false -out=rtms-dark.tfplan -detailed-exitcode "${targets[@]}" || code=$?
+          [[ "${code}" == 0 || "${code}" == 2 ]]
+          terraform -chdir=infra/terraform/budget-production show -json rtms-dark.tfplan >deployment-evidence/rtms-dark-plan.json
+          infra/deploy/verify-budget-production-rollout-plan.sh \
+            deployment-evidence/rtms-dark-plan.json deployment-evidence/live-application-settings.json prep
+          jq -e '
+            [.resource_changes[]? | select(.change.actions != ["no-op"] and .change.actions != ["read"])] as $changes
+            | all($changes[];
+                (.address | test("^aws_(iam_role|iam_role_policy)[.](rtms_orchestration|rtms_scheduler)\\[0\\]$"))
+                or .address == "aws_sfn_state_machine.rtms_refresh[0]"
+                or (.address | test("^aws_cloudwatch_metric_alarm[.](rtms_refresh_failure|ml_recovery_critical)\\[0\\]$"))
+                or .address == "aws_scheduler_schedule_group.data_refresh[0]"
+                or .address == "aws_scheduler_schedule.rtms_daily_refresh[0]")
+            and all($changes[]; (.type | test("^aws_(route53|instance|ebs|eip|vpc|subnet|security_group|ecs_service)$") | not))
+          ' deployment-evidence/rtms-dark-plan.json >/dev/null
+          (cd infra/terraform/budget-production && sha256sum rtms-dark.tfplan) \
+            >deployment-evidence/rtms-dark.tfplan.sha256
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: "budget-production-rtms-activation-${{ github.run_id }}"
+          path: |
+            deployment-evidence/
+            infra/terraform/budget-production/foundation.auto.tfvars.json
+            infra/terraform/budget-production/release.auto.tfvars.json
+            infra/terraform/budget-production/rtms-dark.tfplan
+          if-no-files-found: error
+          retention-days: 365
+
+  activate:
+    name: budget-production-rtms-activate
+    needs: plan
+    environment: budget-production
+    runs-on: ubuntu-latest
+    env:
+      TF_VAR_rtms_refresh_schedule_enabled: "false"
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: "budget-production-rtms-activation-${{ github.run_id }}"
+          path: reviewed
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with: { role-to-assume: "${{ vars.AWS_BUDGET_PRODUCTION_APPLY_ROLE_ARN }}", aws-region: ap-northeast-2, unset-current-credentials: true }
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+        with: { terraform_version: 1.15.8, terraform_wrapper: false }
+      - name: Apply reviewed dark prep saved plan
+        env:
+          TF_STATE_BUCKET: "${{ vars.BUDGET_PRODUCTION_TF_STATE_BUCKET }}"
+          TF_STATE_KMS_ARN: "${{ vars.BUDGET_PRODUCTION_TF_STATE_KMS_ARN }}"
+        run: |
+          set -Eeuo pipefail
+          cp reviewed/infra/terraform/budget-production/foundation.auto.tfvars.json infra/terraform/budget-production/
+          cp reviewed/infra/terraform/budget-production/release.auto.tfvars.json infra/terraform/budget-production/
+          cp reviewed/infra/terraform/budget-production/rtms-dark.tfplan infra/terraform/budget-production/
+          cp -R reviewed/deployment-evidence deployment-evidence
+          terraform -chdir=infra/terraform/budget-production init \
+            -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="key=${TF_STATE_KEY}" \
+            -backend-config="region=${AWS_REGION}" -backend-config="kms_key_id=${TF_STATE_KMS_ARN}" \
+            -backend-config="use_lockfile=true"
+          (cd infra/terraform/budget-production && sha256sum --check ../../../deployment-evidence/rtms-dark.tfplan.sha256)
+          terraform -chdir=infra/terraform/budget-production apply -auto-approve rtms-dark.tfplan
+      - name: Verify dark orchestration before enabling Scheduler
+        run: |
+          set -Eeuo pipefail
+          schedule="$(aws scheduler get-schedule --name home-search-budget-production-rtms-daily-refresh \
+            --group-name home-search-budget-production-data-refresh --output json)"
+          jq -e '
+            .State == "DISABLED"
+            and .ScheduleExpression == "cron(30 4 * * ? *)"
+            and .ScheduleExpressionTimezone == "Asia/Seoul"
+            and .Target.RetryPolicy.MaximumRetryAttempts == 0
+            and (.Target.Arn | test(":stateMachine:home-search-budget-production-rtms-refresh$"))
+          ' <<<"${schedule}" >/dev/null
+          state_machine_arn="$(jq -er '.Target.Arn' <<<"${schedule}")"
+          state_machine="$(aws stepfunctions describe-state-machine --state-machine-arn "${state_machine_arn}" --output json)"
+          jq -e '
+            .status == "ACTIVE"
+            and (.definition | fromjson).States.RUN_RTMS.Parameters.TaskDefinition
+              == "arn:aws:ecs:ap-northeast-2:399291871263:task-definition/home-search-budget-production-rtms-daily-refresh:23"
+          ' <<<"${state_machine}" >/dev/null
+      - name: Create, verify, and apply exact Scheduler enable saved plan
+        env:
+          TF_VAR_rtms_refresh_schedule_enabled: "true"
+        run: |
+          set -Eeuo pipefail
+          targets=(
+            -target='aws_sfn_state_machine.rtms_refresh[0]'
+            -target='aws_iam_role.rtms_scheduler[0]'
+            -target='aws_iam_role_policy.rtms_scheduler[0]'
+            -target='aws_scheduler_schedule_group.data_refresh[0]'
+            -target='aws_scheduler_schedule.rtms_daily_refresh[0]'
+          )
+          code=0
+          terraform -chdir=infra/terraform/budget-production plan -input=false -out=rtms-enable.tfplan -detailed-exitcode "${targets[@]}" || code=$?
+          [[ "${code}" == 2 ]]
+          terraform -chdir=infra/terraform/budget-production show -json rtms-enable.tfplan >deployment-evidence/rtms-enable-plan.json
+          infra/deploy/verify-budget-production-rollout-plan.sh \
+            deployment-evidence/rtms-enable-plan.json deployment-evidence/live-application-settings.json final
+          terraform -chdir=infra/terraform/budget-production apply -auto-approve rtms-enable.tfplan
+          zero_code=0
+          terraform -chdir=infra/terraform/budget-production plan -input=false -detailed-exitcode "${targets[@]}" >/dev/null || zero_code=$?
+          [[ "${zero_code}" == 0 ]]
+      - name: Verify enabled 04:30 KST immutable RTMS target
+        run: |
+          set -Eeuo pipefail
+          schedule="$(aws scheduler get-schedule --name home-search-budget-production-rtms-daily-refresh \
+            --group-name home-search-budget-production-data-refresh --output json)"
+          jq -e '
+            .State == "ENABLED"
+            and .ScheduleExpression == "cron(30 4 * * ? *)"
+            and .ScheduleExpressionTimezone == "Asia/Seoul"
+            and .Target.RetryPolicy.MaximumRetryAttempts == 0
+            and (.Target.Arn | test(":stateMachine:home-search-budget-production-rtms-refresh$"))
+          ' <<<"${schedule}" >/dev/null
+          state_machine_arn="$(jq -er '.Target.Arn' <<<"${schedule}")"
+          state_machine_definition="$(aws stepfunctions describe-state-machine --state-machine-arn "${state_machine_arn}" --query definition --output text)"
+          [[ "$(jq -er '.States.RUN_RTMS.Parameters.TaskDefinition' <<<"${state_machine_definition}")" == \
+            'arn:aws:ecs:ap-northeast-2:399291871263:task-definition/home-search-budget-production-rtms-daily-refresh:23' ]]
+          ml="$(aws ecs describe-services --cluster home-search-budget-production --services ml --output json)"
+          jq -e '.services[0].desiredCount == 1 and .services[0].runningCount == 1 and .services[0].pendingCount == 0' <<<"${ml}" >/dev/null
+          curl --fail-with-body --silent --show-error --get --data-urlencode 'q=마포래미안푸르지오' \
+            https://homesearch.world/api/v1/search/complexes | jq -e 'type == "array"' >/dev/null

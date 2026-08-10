@@ -53,6 +53,20 @@ violations="$(jq -c \
     or .address == "aws_sfn_state_machine.rtms_refresh[0]"
     or (.type == "aws_scheduler_schedule" and (.address | test("^aws_scheduler_schedule[.](market_news|rtms_daily_refresh)\\[")))
     or (.type == "aws_cloudwatch_metric_alarm" and (.address | test("^aws_cloudwatch_metric_alarm[.](market_news_scheduler_failure|rtms_refresh_failure|ml_recovery_critical)")));
+  def exact_rtms_scheduler_policy_replacement:
+    .address == "aws_iam_role_policy.rtms_scheduler[0]"
+    and .type == "aws_iam_role_policy"
+    and .change.actions == ["delete","create"]
+    and .change.after.name == "start-reviewed-rtms-orchestration"
+    and .change.after.role == "home-search-budget-production-rtms-scheduler"
+    and ((.change.after.policy | fromjson) as $policy
+      | $policy.Version == "2012-10-17"
+      and ($policy.Statement | length) == 1
+      and $policy.Statement[0].Effect == "Allow"
+      and $policy.Statement[0].Action == ["states:StartExecution"]
+      and ($policy.Statement[0].Resource | length) == 1
+      and ($policy.Statement[0].Resource[0]
+        == "arn:aws:states:ap-northeast-2:399291871263:stateMachine:home-search-budget-production-rtms-refresh"));
   def forbidden_scope:
     (.type | test("^aws_(route53|ebs|instance|eip|vpc|subnet|security_group|s3_bucket|dlm)"))
     or ((.address | test("platform|data[_-]?import|recovery|rehearsal|logical_backup|backup_scheduler"; "i"))
@@ -83,7 +97,8 @@ violations="$(jq -c \
           or (runtime_task_address and (task_change_safe | not))
           or ((runtime_task_address or runtime_support_address) | not)
           or ((.change.actions | index("delete")) != null
-            and ((runtime_task_address and .change.actions == ["delete","create"] and .change.after.skip_destroy == true) | not))
+            and (((runtime_task_address and .change.actions == ["delete","create"] and .change.after.skip_destroy == true)
+              or exact_rtms_scheduler_policy_replacement) | not))
           or ((.change.after // {} | tostring) | test("home-search-(staging|production)([^-]|$)"))
         end
       )

@@ -321,6 +321,7 @@ grep -Fq 'https://homesearch.world/api/v1/search/complexes' "${rollout_workflow}
 "${root}/infra/deploy/test-wait-budget-platform-services-healthy.sh"
 bash "${root}/infra/deploy/test-run-budget-ecs-task.sh"
 bash "${root}/infra/deploy/test-verify-budget-production-rollout-plan.sh"
+bash "${root}/infra/deploy/test-activate-budget-rtms-orchestration-contract.sh"
 bash "${root}/infra/deploy/test-run-ai-canary.sh"
 bash "${root}/infra/deploy/test-build-budget-production-incremental-ready-evidence.sh"
 bash "${root}/infra/budget/test-run-property-search-audit.sh"
